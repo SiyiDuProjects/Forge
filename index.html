@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Y 工作台</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="project-sidebar" aria-label="Y 工作台导航">
+        <div class="mac-controls" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+
+        <nav class="primary-nav" aria-label="工作台视图">
+          <button class="nav-row active" type="button" data-view="build">
+            <span class="nav-icon">+</span>
+            <span>开始打样</span>
+          </button>
+          <button class="nav-row" id="showModules" type="button" data-view="parts">
+            <span class="nav-icon">#</span>
+            <span>零件架</span>
+          </button>
+          <button class="nav-row" id="showReview" type="button" data-view="dfm">
+            <span class="nav-icon">></span>
+            <span>DFM 队列</span>
+          </button>
+          <button class="nav-row" id="showRuntime" type="button" data-view="firmware">
+            <span class="nav-icon">~</span>
+            <span>固件规则</span>
+          </button>
+        </nav>
+
+        <div class="project-group">
+          <span class="sidebar-label">工作台</span>
+          <div class="project-row open" aria-label="当前工作台">
+            <span class="folder-icon"></span>
+            <span>Y 实验室</span>
+          </div>
+
+          <div class="thread-list" aria-label="打样场景">
+            <button class="thread-row active" type="button" data-scenario="walnut">
+              <span>
+                <strong>核桃木桌面屏</strong>
+                <small>通过，DFM L1</small>
+              </span>
+              <em>就绪</em>
+            </button>
+            <button class="thread-row" type="button" data-scenario="motion">
+              <span>
+                <strong>运动陪伴屏</strong>
+                <small>舵机警告</small>
+              </span>
+              <em>L3</em>
+            </button>
+            <button class="thread-row" type="button" data-scenario="booth">
+              <span>
+                <strong>展台计数屏</strong>
+                <small>手动报价</small>
+              </span>
+              <em>报价</em>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="footer-row" id="openSettings" type="button">
+            <span class="gear-icon"></span>
+            <span>工作台设置</span>
+          </button>
+          <span id="apiStatus" class="api-status">界面原型</span>
+        </div>
+      </aside>
+
+      <main class="thread-shell">
+        <header class="thread-topbar">
+          <button class="topbar-menu" id="openThreadMenu" type="button" aria-label="打样菜单">...</button>
+          <div class="topbar-title">
+            <strong id="topbarTitle">Y 工作台</strong>
+            <span id="draftStatus">完整界面流程</span>
+          </div>
+          <div class="topbar-actions">
+            <button class="compact-button" id="copySpec" type="button">预览打样包</button>
+            <button class="compact-button primary" id="submitReview" type="button">加入 DFM 模拟</button>
+          </div>
+        </header>
+
+        <section class="conversation" aria-label="工作台内容">
+          <div id="workspaceView" class="conversation-inner workspace-view" aria-live="polite"></div>
+        </section>
+
+        <form id="promptForm" class="composer" aria-label="模拟打样输入框">
+          <div class="goal-strip">
+            <span class="goal-dot"></span>
+            <span id="composerSummary" class="goal-text">模拟流程：需求、范围、BOM、护栏、报价、固件、DFM 打样包</span>
+            <span id="scopeLevel" class="goal-meta">DFM L1</span>
+          </div>
+
+          <textarea id="ideaInput" rows="3" spellcheck="true"></textarea>
+
+          <div class="composer-toolbar">
+            <button id="openAttach" type="button" class="toolbar-icon" aria-label="添加打样输入">+</button>
+            <button id="openScope" type="button" class="toolbar-chip">范围</button>
+            <button id="openBom" type="button" class="toolbar-chip">BOM</button>
+            <button id="openGuardrails" type="button" class="toolbar-chip">护栏</button>
+            <button id="openDfm" type="button" class="toolbar-chip">DFM</button>
+
+            <button id="runChain" class="send-button" type="submit" aria-label="运行模拟打样链路">
+              <span></span>
+            </button>
+          </div>
+        </form>
+      </main>
+
+      <aside class="inspector" aria-label="打样输出检查器">
+        <div id="inspectorContent" class="inspector-content"></div>
+      </aside>
+    </div>
+
+    <div id="floatingLayer" class="floating-layer" hidden>
+      <section class="floating-card settings-dialog" data-dialog="settings" hidden aria-label="工作台设置">
+        <div class="floating-head">
+          <strong>工作台设置</strong>
+          <button class="close-floating" type="button" aria-label="关闭工作台设置">x</button>
+        </div>
+        <div class="settings-grid">
+          <nav class="settings-nav" aria-label="设置分区">
+            <button class="active" type="button" data-settings-tab="studio">工作室</button>
+            <button type="button" data-settings-tab="parts">零件</button>
+            <button type="button" data-settings-tab="dfm">DFM</button>
+            <button type="button" data-settings-tab="firmware">固件</button>
+            <button type="button" data-settings-tab="language">语言</button>
+          </nav>
+          <div class="settings-content">
+            <section class="settings-panel" data-settings-panel="studio">
+              <label class="settings-row">
+                <span>
+                  <strong>仅原型模式</strong>
+                  <small>所有按钮只打开模拟视图，不调用真实制造服务。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+              <label class="settings-row">
+                <span>
+                  <strong>紧凑输出</strong>
+                  <small>线程和右侧检查器保持适合反复审阅的密度。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+            </section>
+
+            <section class="settings-panel" data-settings-panel="parts" hidden>
+              <label class="settings-row">
+                <span>
+                  <strong>显示延期零件</strong>
+                  <small>始终把摄像头和电池显示为 v1 被阻止模块。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+              <label class="settings-row">
+                <span>
+                  <strong>库存状态标签</strong>
+                  <small>显示库存、已选、警告和延期状态。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+            </section>
+
+            <section class="settings-panel" data-settings-panel="dfm" hidden>
+              <label class="settings-row">
+                <span>
+                  <strong>必须经过 DFM 门禁</strong>
+                  <small>只有护栏通过的模拟打样包才能进入队列。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+              <label class="settings-row">
+                <span>
+                  <strong>显示阻塞队列</strong>
+                  <small>在 DFM 队列里保留范围修正建议。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+            </section>
+
+            <section class="settings-panel" data-settings-panel="firmware" hidden>
+              <label class="settings-row">
+                <span>
+                  <strong>仅预览规则</strong>
+                  <small>固件面板只展示计划行为，不生成可部署代码。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+              <label class="settings-row">
+                <span>
+                  <strong>约束标签</strong>
+                  <small>始终显示 USB-C 供电、无摄像头、无电池的 v1 约束。</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+            </section>
+
+            <section class="settings-panel" data-settings-panel="language" hidden>
+              <label class="settings-row">
+                <span>
+                  <strong>界面语言</strong>
+                  <small>保留中文和 English 两套文案；新增功能必须同步维护。</small>
+                </span>
+                <select id="languageSelect" aria-label="界面语言">
+                  <option value="zh" selected>简体中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label class="settings-row">
+                <span>
+                  <strong>文案维护规则</strong>
+                  <small>按钮、状态、弹窗、文档和后续功能说明都要同步更新中英文。</small>
+                </span>
+                <input type="checkbox" checked disabled />
+              </label>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="floating-card mini-popover thread-popover" data-dialog="thread" hidden aria-label="打样菜单">
+        <button type="button" data-action="rename">重命名打样</button>
+        <button type="button" data-action="duplicate">复制场景</button>
+        <button type="button" data-action="export">导出打样包预览</button>
+        <button type="button" data-action="archive">归档草稿</button>
+      </section>
+
+      <section class="floating-card mini-popover" data-dialog="attach" hidden aria-label="添加打样输入">
+        <button type="button" data-action="sketch">产品草图</button>
+        <button type="button" data-action="reference">参考产品</button>
+        <button type="button" data-action="constraints">约束说明</button>
+        <button type="button" data-action="behavior">固件行为</button>
+      </section>
+
+      <section class="floating-card detail-popover" data-dialog="scope" hidden aria-label="MVP 范围">
+        <div id="scopePopover"></div>
+      </section>
+
+      <section class="floating-card detail-popover" data-dialog="bom" hidden aria-label="已选 BOM">
+        <div id="bomPopover"></div>
+      </section>
+
+      <section class="floating-card detail-popover" data-dialog="guardrails" hidden aria-label="护栏">
+        <div id="guardrailsPopover"></div>
+      </section>
+
+      <section class="floating-card detail-popover" data-dialog="dfm" hidden aria-label="DFM 等级">
+        <div id="dfmPopover"></div>
+      </section>
+    </div>
+
+    <script src="app.js?v=y-workbench-flow-bilingual"></script>
+  </body>
+</html>

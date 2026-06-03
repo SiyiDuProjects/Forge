@@ -1,0 +1,174 @@
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+import { API_CONTRACT, CONTRACT_VERSION, WORKBENCH_CHAIN } from "./src/contracts/workbench_contract.mjs";
+import { createLogger, durationMs } from "./src/core/observability.mjs";
+import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
+
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const port = Number(process.env.PORT || 8765);
+const host = process.env.HOST || "127.0.0.1";
+const logger = createLogger({ service: "vibe-hardware-workbench" });
+
+const mimeTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml"
+};
+
+const server = createServer(async (request, response) => {
+  const startedAt = Date.now();
+  let pathname = request.url || "/";
+  try {
+    const url = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
+    pathname = url.pathname;
+
+    if (url.pathname.startsWith("/api/")) {
+      await handleApi(request, response, url);
+      return;
+    }
+
+    await serveStatic(response, url.pathname);
+  } catch (error) {
+    const statusCode = Number(error?.statusCode || 500);
+    logger.error("request_failed", {
+      method: request.method,
+      path: pathname,
+      status: statusCode,
+      message: error instanceof Error ? error.message : "Unknown server error"
+    });
+    sendJson(response, statusCode, {
+      error: {
+        code: statusCode === 400 ? "bad_request" : "internal_error",
+        message: error instanceof Error ? error.message : "Unknown server error"
+      }
+    });
+  } finally {
+    logger.info("http_request", {
+      method: request.method,
+      path: pathname,
+      status: response.statusCode,
+      duration_ms: durationMs(startedAt)
+    });
+  }
+});
+
+async function handleApi(request, response, url) {
+  if (request.method === "GET" && url.pathname === "/api/health") {
+    sendJson(response, 200, {
+      ok: true,
+      service: "vibe-hardware-workbench",
+      contractVersion: CONTRACT_VERSION,
+      chain: WORKBENCH_CHAIN,
+      api: API_CONTRACT
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/modules") {
+    sendJson(response, 200, {
+      modules: listCatalogModules()
+    });
+    return;
+  }
+
+  if (request.method === "POST" && ["/api/pipeline/draft", "/api/spec/generate"].includes(url.pathname)) {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, createDraft({
+      requestText: body.request || body.requestText || "",
+      overrides: body.overrides || {}
+    }));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/device-config/generate") {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, createDeviceConfig({
+      spec: body.spec,
+      behaviorText: body.behaviorText || ""
+    }));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/review/submit") {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, await submitReview({
+      draft: body.draft,
+      behaviorConfig: body.behaviorConfig
+    }));
+    return;
+  }
+
+  sendJson(response, 404, {
+    error: {
+      code: "not_found",
+      message: `No route for ${request.method} ${url.pathname}`
+    }
+  });
+}
+
+async function serveStatic(response, pathname) {
+  const requestedPath = pathname === "/" ? "/index.html" : pathname;
+  const normalizedPath = normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
+  const absolutePath = join(rootDir, normalizedPath);
+
+  if (!absolutePath.startsWith(rootDir)) {
+    sendJson(response, 403, {
+      error: {
+        code: "forbidden",
+        message: "Path escapes project root"
+      }
+    });
+    return;
+  }
+
+  try {
+    const content = await readFile(absolutePath);
+    const contentType = mimeTypes[extname(absolutePath)] || "application/octet-stream";
+    response.writeHead(200, {
+      "content-type": contentType,
+      "cache-control": "no-store"
+    });
+    response.end(content);
+  } catch {
+    sendJson(response, 404, {
+      error: {
+        code: "asset_not_found",
+        message: `Missing asset ${pathname}`
+      }
+    });
+  }
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const error = new Error("Request body must be valid JSON");
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+function sendJson(response, status, payload) {
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(JSON.stringify(payload, null, 2));
+}
+
+server.listen(port, host, () => {
+  console.log(`Y Workbench running at http://${host}:${port}`);
+});
