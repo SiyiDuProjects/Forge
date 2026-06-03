@@ -4,9 +4,9 @@ Project notes for future Codex/agent work in this repository.
 
 ## Project
 
-This repo is `Y Workbench`, a Codex-style hardware MVP planning workbench.
+This repo is `Forge`, a Codex-style hardware MVP planning workbench.
 
-It is not a generic Codex clone. Codex is the interaction reference: left workspace sidebar, central thread, bottom composer, right inspector, settings dialog, and floating menus. The product content, labels, outputs, and workflow belong to Y Workbench.
+It is not a generic Codex clone. Codex is the interaction reference: left workspace sidebar, central thread, bottom composer, right inspector, settings dialog, and floating menus. The product content, labels, outputs, and workflow belong to Forge.
 
 Primary job:
 
@@ -68,7 +68,7 @@ Current known local limitation:
 
 ## Product Language
 
-Use plain-language-first Y Workbench hardware workflow language. Put the understandable label first, with the industry acronym in parentheses when useful:
+Use plain-language-first Forge hardware workflow language. Put the understandable label first, with the industry acronym in parentheses when useful:
 
 - 原型方案包
 - 零件清单（BOM）
@@ -88,7 +88,7 @@ Avoid inherited generic Codex labels unless there is a strong product reason:
 - Generic goal labels with no product-specific scope surface
 - Sidebar labels that do not map to parts, manufacturing check, device behavior, or build flow
 
-A button should exist only if it maps to a real hardware-build workflow. If a Codex reference button has no useful Y Workbench equivalent, remove it instead of keeping a vague placeholder.
+A button should exist only if it maps to a real hardware-build workflow. If a Codex reference button has no useful Forge equivalent, remove it instead of keeping a vague placeholder.
 
 ## Language And Copy
 

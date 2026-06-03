@@ -2,13 +2,13 @@ const SUPPORTED_LANGUAGES = ["zh", "en"];
 
 const copy = {
   zh: {
-    appTitle: "Y 工作台",
+    appTitle: "Forge",
     navChat: "对话生成",
     navHistory: "项目历史",
     navReview: "审核包",
     projectLabel: "内部草稿",
-    projectName: "Y 实验室",
-    settingsButton: "工作台设置",
+    projectName: "Forge 实验室",
+    settingsButton: "Forge 设置",
     uiPrototype: "内部 MVP",
     topbarStatus: "ProductPlan 实时方案",
     submitOrder: "提交审核下单",
@@ -22,7 +22,7 @@ const copy = {
     riskChip: "风险",
     runChainAria: "发送需求并更新方案",
     inspectorAria: "实时方案包",
-    settingsTitle: "工作台设置",
+    settingsTitle: "Forge 设置",
     language: "语言",
     langZh: "简体中文",
     langEn: "English",
@@ -77,12 +77,12 @@ const copy = {
       "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电，夜间自动变暗。"
   },
   en: {
-    appTitle: "Y Workbench",
+    appTitle: "Forge",
     navChat: "Conversation",
     navHistory: "Project history",
     navReview: "Review packet",
     projectLabel: "Internal drafts",
-    projectName: "Y Lab",
+    projectName: "Forge Lab",
     settingsButton: "Workbench settings",
     uiPrototype: "Internal MVP",
     topbarStatus: "Live ProductPlan",

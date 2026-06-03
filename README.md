@@ -1,8 +1,8 @@
-# Y Workbench
+# Forge
 
-Y Workbench is a Codex-style hardware MVP planning workbench. It turns an ongoing hardware conversation into a `ProductPlan`: scope, parts list (BOM), risk limits, model/3D placeholder, electronics layout placeholder, quote assumptions, and a local human review packet.
+Forge is a Codex-style hardware MVP planning workbench. It turns an ongoing hardware conversation into a `ProductPlan`: scope, parts list (BOM), risk limits, model/3D placeholder, electronics layout placeholder, quote assumptions, and a local human review packet.
 
-当前原型保留中英两套界面文案。默认语言是简体中文，可在 `工作台设置 -> 语言` 切换到 English。
+当前原型保留中英两套界面文案。默认语言是简体中文，可在 `Forge 设置 -> 语言` 切换到 English。
 
 Current enclosure boundary: every MVP shell is treated as a standardized 3D printed enclosure. Woodgrain, sage, graphite, and branded looks are finish treatments on that shell path, not separate manufacturing processes.
 

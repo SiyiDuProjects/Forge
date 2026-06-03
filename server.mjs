@@ -12,7 +12,7 @@ import { addProductPlanTurn, createProductPlan, getProductPlan, submitProductPla
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 8765);
 const host = process.env.HOST || "127.0.0.1";
-const logger = createLogger({ service: "vibe-hardware-workbench" });
+const logger = createLogger({ service: "forge-hardware-workbench" });
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -63,7 +63,7 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") {
     sendJson(response, 200, {
       ok: true,
-      service: "vibe-hardware-workbench",
+      service: "forge-hardware-workbench",
       contractVersion: CONTRACT_VERSION,
       chain: WORKBENCH_CHAIN,
       api: API_CONTRACT
@@ -308,5 +308,5 @@ function sendJson(response, status, payload) {
 }
 
 server.listen(port, host, () => {
-  console.log(`Y Workbench running at http://${host}:${port}`);
+  console.log(`Forge running at http://${host}:${port}`);
 });

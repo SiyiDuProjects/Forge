@@ -1,5 +1,5 @@
 export function createLogger({ service, stream = console } = {}) {
-  const serviceName = service || "vibe-hardware-workbench";
+  const serviceName = service || "forge-hardware-workbench";
 
   function write(level, event, fields = {}) {
     const payload = {

@@ -1,6 +1,6 @@
 # Architecture
 
-Y Workbench is intentionally small: one static UI shell plus a Node core pipeline used by the local API and tests.
+Forge is intentionally small: one static UI shell plus a Node core pipeline used by the local API and tests.
 
 ## Runtime Shape
 

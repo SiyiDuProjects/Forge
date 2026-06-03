@@ -1,8 +1,8 @@
-# Y Workbench Project Plan
+# Forge Project Plan
 
 ## 1. Project Goal
 
-Y Workbench is a hardware-build workbench inspired by Codex's product experience, but it is not a clone of Codex content.
+Forge is a hardware-build workbench inspired by Codex's product experience, but it is not a clone of Codex content.
 
 The product should let a user describe a custom desk hardware idea, then convert that request into a practical MVP prototype plan packet:
 
@@ -33,11 +33,11 @@ The initial requirement was:
 
 Current interpretation:
 
-Codex is the interaction reference. Y Workbench is the product. The implementation should borrow structure, density, and behaviors, but the information architecture should be for hardware prototyping.
+Codex is the interaction reference. Forge is the product. The implementation should borrow structure, density, and behaviors, but the information architecture should be for hardware prototyping.
 
 ## 3. Product Positioning
 
-Y Workbench is for early hardware MVP planning.
+Forge is for early hardware MVP planning.
 
 Primary user:
 
@@ -76,9 +76,9 @@ Current direction:
 - `对话生成`
 - `项目历史`
 - `审核包`
-- Workbench project: `Y Lab`
+- Forge project: `Forge Lab`
 - Drafts such as `木纹桌面屏` and `人工扩展草案`
-- `工作台设置`
+- `Forge 设置`
 
 Avoid:
 
@@ -137,7 +137,7 @@ Required floating surfaces:
 - 零件清单（BOM）popover
 - 风险限制 popover
 - 结构/3D 预览 popover
-- 工作台设置 dialog
+- Forge 设置 dialog
 
 Settings sections:
 
@@ -301,7 +301,7 @@ Required:
 The project should not be considered done until:
 
 - The first viewport looks like a coherent Codex-style workbench.
-- All visible buttons use Y Workbench hardware language.
+- All visible buttons use Forge hardware language.
 - Unneeded Codex-style buttons are removed.
 - Settings and floating menus open, close, and show useful product-specific content.
 - Right inspector reads as a live build output surface, not a generic dashboard.
