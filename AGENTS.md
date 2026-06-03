@@ -13,6 +13,8 @@ Primary job:
 - Convert a natural-language hardware idea into a practical prototype plan packet.
 - Produce parsed intent, scope, parts list (BOM), risk limits, quote band, device behavior rules, and a manufacturing check (DFM) packet.
 - Keep camera and battery outside the first MVP unless the product plan changes.
+- Keep all MVP enclosures on the standardized 3D printed shell path; surface requests such as woodgrain, sage, graphite, or brand color are finish treatments, not different manufacturing processes.
+- Treat `ProductPlan` as the central object. Conversation, revisions, assets, jobs, model preview, electronics layout, quote assumptions, and review submission should hang off the plan or a plan revision.
 
 Product planning source:
 
@@ -24,6 +26,7 @@ Current product boundary:
 
 - Build a complete clickable UI prototype.
 - Do not add real manufacturing, real upload, real CAD, real checkout, real supplier ordering, or real export behavior unless the user explicitly changes the product direction.
+- Do not broaden the enclosure path beyond standardized 3D printing. Do not add woodwork, CNC, injection molding, metal casing, or real CAD generation unless the product direction changes.
 - Every visible button must open a concrete view, state, panel, popover, filter, or mock flow result.
 
 ## Commands
@@ -45,6 +48,12 @@ Current known local limitation:
 - `app.js`: browser-side UI-only mock state, rendering, canvas preview, and UI interactions.
 - `server.mjs`: static server and JSON API routes.
 - `src/contracts/workbench_contract.mjs`: shared contract constants for chain steps, API routes, statuses, and supported languages.
+- `src/core/product_plan.mjs`: ProductPlan creation, turn handling, revision creation, and local review submission orchestration.
+- `src/core/jobs.mjs`: unified generation job system for model generation, electronics layout, quote estimate, review packet, and AI chat reserved capability.
+- `src/core/assets.mjs`: metadata-only asset registration for text, images, references, and generated placeholder assets.
+- `src/core/model_preview.mjs`: placeholder 3D/model preview output and future preview/GLB/CAD asset slots.
+- `src/core/electronics_layout.mjs`: placeholder electronics positions, interface directions, cable notes, and conflict checks.
+- `src/core/quote_plan.mjs`: pre-review estimate assumptions without fake low/mid/high tiers.
 - `src/core/text_interpreter.mjs`: natural-language request interpretation.
 - `src/core/module_catalog.mjs`: stocked/deferred module catalog and matching.
 - `src/core/risk_gate.mjs`: MVP guardrails and blocked-scope rules.
@@ -67,6 +76,7 @@ Use plain-language-first Y Workbench hardware workflow language. Put the underst
 - 报价区间
 - 生产可行性（DFM）
 - 设备行为规则（固件）
+- 3D 打印标准外壳
 - 范围
 - USB-C 桌面供电
 
@@ -102,10 +112,9 @@ Preserve Codex-like interaction structure:
 
 Required UI-only views:
 
-- `开始做原型`: central request, agent response, and six-step mock flow.
-- `零件清单（BOM）`: selected, stocked, and deferred parts.
-- `生产可行性（DFM）`: ready, blocked, and queued packets.
-- `设备行为规则（固件）`: rules, display modes, and constraints.
+- `对话生成`: central continuous conversation and ProductPlan revision flow.
+- `项目历史`: left-side internal drafts/history.
+- `审核包`: local human review packet status.
 
 Right inspector guidance:
 
@@ -115,8 +124,8 @@ Right inspector guidance:
 
 Composer guidance:
 
-- Keep actions hardware-specific and understandable, such as `范围`, `零件`, `风险`, and `可行性`.
-- The send button runs the build chain.
+- Keep actions hardware-specific and understandable, such as `范围`, `零件`, `风险`, and `模型`.
+- The send button creates or updates a ProductPlan revision through the backend API when available.
 - The `+` menu is for adding build inputs such as sketches, product references, and CAD outlines.
 - Do not keep voice, generic goal, or vague guard buttons unless they have a real UI-only flow in this product.
 
@@ -125,24 +134,31 @@ Composer guidance:
 The expected flow is:
 
 1. User describes a hardware idea.
-2. Parser extracts product type, finish, screen size, and options.
+2. Parser extracts product type, 3D printed enclosure finish, screen size, and options.
 3. Module matcher builds a parts list (BOM) from known modules.
 4. Risk-limit gate blocks deferred modules such as camera and battery.
 5. Quote estimator creates hardware/build/manufacturing-check cost bands.
-6. Blueprint JSON is rendered.
-7. Device behavior rules (firmware preview) are compiled from behavior text.
-8. Manufacturing check (DFM) packet can be queued when risk limits pass.
+6. ProductPlan creates a new revision and unified generation jobs.
+7. Placeholder model preview and electronics layout are attached to the revision.
+8. Local human review packet can be written after name/email are provided.
 
 Do not broaden the MVP into real checkout, real supplier ordering, CAD generation, user accounts, or certification workflows unless the user explicitly asks for that product direction change.
 
+Enclosure-specific rule:
+
+- The MVP only supports standardized 3D printed enclosures.
+- Treat walnut/woodgrain, sage, graphite, and brand looks as colors or textures on that standard shell.
+- The DFM mock should check module fit, screen opening, board standoffs, connector access, print tolerance, and assembly only.
+- Motion structures are outside the standard path and should become blocked/manual expansion, not a normal ready packet.
+
 ## UI-Only Runtime
 
-The current frontend is a complete clickable UI prototype and should not require a backend request to render the main workflow. Keep this behavior because visual checks should not collapse into a blank `Failed to fetch` state when the local server cannot run inside the sandbox.
+The current frontend prefers backend ProductPlan APIs but should keep a local fallback ProductPlan so visual checks do not collapse into a blank `Failed to fetch` state when the local server cannot run inside the sandbox.
 
 The mock UI should stay aligned with the product workflow:
 
 - It should produce request intent, modules, risk limits, quote, blueprint, and device behavior rules.
-- It should block camera and battery.
+- It should block camera, battery, and motion structures from the standard path.
 - It should show clear UI-only status text in both supported languages.
 
 ## Verification
@@ -163,6 +179,7 @@ For broader UI or behavior changes, also verify:
 - Old generic button labels have not returned.
 - `src/contracts/workbench_contract.mjs` still matches API routes and core statuses.
 - Bilingual UI assets still include Simplified Chinese and English.
+- ProductPlan revisions, jobs, and local review packets remain covered by tests when changing core APIs.
 
 Useful checks:
 

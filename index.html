@@ -16,52 +16,41 @@
         </div>
 
         <nav class="primary-nav" aria-label="工作台视图">
-          <button class="nav-row active" type="button" data-view="build">
+          <button class="nav-row active" type="button" data-view="chat">
             <span class="nav-icon">+</span>
-            <span>开始做原型</span>
+            <span>对话生成</span>
           </button>
-          <button class="nav-row" id="showModules" type="button" data-view="parts">
+          <button class="nav-row" id="showModules" type="button" data-view="history">
             <span class="nav-icon">#</span>
-            <span>零件清单（BOM）</span>
+            <span>项目历史</span>
           </button>
-          <button class="nav-row" id="showReview" type="button" data-view="dfm">
+          <button class="nav-row" id="showReview" type="button" data-view="review">
             <span class="nav-icon">></span>
-            <span>生产可行性（DFM）</span>
-          </button>
-          <button class="nav-row" id="showRuntime" type="button" data-view="firmware">
-            <span class="nav-icon">~</span>
-            <span>设备行为规则（固件）</span>
+            <span>审核包</span>
           </button>
         </nav>
 
         <div class="project-group">
-          <span class="sidebar-label">工作台</span>
+          <span class="sidebar-label">内部草稿</span>
           <div class="project-row open" aria-label="当前工作台">
             <span class="folder-icon"></span>
             <span>Y 实验室</span>
           </div>
 
-          <div class="thread-list" aria-label="原型场景">
-            <button class="thread-row active" type="button" data-scenario="walnut">
+          <div class="thread-list" aria-label="ProductPlan 草稿">
+            <button class="thread-row active" type="button" data-history="current">
               <span>
-                <strong>核桃木桌面屏</strong>
-                <small>通过，生产检查 L1</small>
+                <strong>木纹桌面屏</strong>
+                <small>标准 3D 打印外壳</small>
               </span>
-              <em>就绪</em>
+              <em>r1</em>
             </button>
-            <button class="thread-row" type="button" data-scenario="motion">
+            <button class="thread-row" type="button" data-history="manual">
               <span>
-                <strong>运动陪伴屏</strong>
-                <small>舵机警告</small>
+                <strong>人工扩展草案</strong>
+                <small>非标准产品内部评估</small>
               </span>
-              <em>L3</em>
-            </button>
-            <button class="thread-row" type="button" data-scenario="booth">
-              <span>
-                <strong>展台计数屏</strong>
-                <small>手动报价</small>
-              </span>
-              <em>报价</em>
+              <em>hold</em>
             </button>
           </div>
         </div>
@@ -83,8 +72,8 @@
             <span id="draftStatus">完整界面流程</span>
           </div>
           <div class="topbar-actions">
-            <button class="compact-button" id="copySpec" type="button">预览原型方案包</button>
-            <button class="compact-button primary" id="submitReview" type="button">加入可行性检查</button>
+            <button class="compact-button" id="copySpec" type="button">预览方案快照</button>
+            <button class="compact-button primary" id="submitReview" type="button">提交审核下单</button>
           </div>
         </header>
 
@@ -95,8 +84,8 @@
         <form id="promptForm" class="composer" aria-label="模拟原型输入框">
           <div class="goal-strip">
             <span class="goal-dot"></span>
-            <span id="composerSummary" class="goal-text">模拟流程：需求、范围、零件清单（BOM）、风险限制、报价、设备行为、生产可行性（DFM）</span>
-            <span id="scopeLevel" class="goal-meta">生产检查 L1</span>
+            <span id="composerSummary" class="goal-text">持续对话会更新右侧 ProductPlan、零件、模型占位、估算和审核状态</span>
+            <span id="scopeLevel" class="goal-meta">标准桌面屏</span>
           </div>
 
           <textarea id="ideaInput" rows="3" spellcheck="true"></textarea>
@@ -106,7 +95,7 @@
             <button id="openScope" type="button" class="toolbar-chip">范围</button>
             <button id="openBom" type="button" class="toolbar-chip">零件</button>
             <button id="openGuardrails" type="button" class="toolbar-chip">风险</button>
-            <button id="openDfm" type="button" class="toolbar-chip">可行性</button>
+            <button id="openDfm" type="button" class="toolbar-chip">模型</button>
 
             <button id="runChain" class="send-button" type="submit" aria-label="运行模拟原型链路">
               <span></span>
@@ -129,75 +118,35 @@
         <div class="settings-grid">
           <nav class="settings-nav" aria-label="设置分区">
             <button class="active" type="button" data-settings-tab="studio">工作室</button>
-            <button type="button" data-settings-tab="parts">零件</button>
-            <button type="button" data-settings-tab="dfm">生产检查</button>
-            <button type="button" data-settings-tab="firmware">设备行为</button>
             <button type="button" data-settings-tab="language">语言</button>
           </nav>
           <div class="settings-content">
             <section class="settings-panel" data-settings-panel="studio">
               <label class="settings-row">
                 <span>
-                  <strong>仅原型模式</strong>
-                  <small>所有按钮只打开模拟视图，不调用真实制造服务。</small>
+                  <strong>内部原型模式</strong>
+                  <small>提交只生成本地人工审核包，不付款、不生产、不接供应商。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
               <label class="settings-row">
                 <span>
-                  <strong>紧凑输出</strong>
-                  <small>线程和右侧检查器保持适合反复审阅的密度。</small>
-                </span>
-                <input type="checkbox" checked />
-              </label>
-            </section>
-
-            <section class="settings-panel" data-settings-panel="parts" hidden>
-              <label class="settings-row">
-                <span>
-                  <strong>显示延期零件</strong>
-                  <small>始终把摄像头和电池显示为 v1 被阻止模块。</small>
+                  <strong>对话优先</strong>
+                  <small>用户持续聊天，右侧 ProductPlan 实时更新。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
               <label class="settings-row">
                 <span>
-                  <strong>库存状态标签</strong>
-                  <small>显示库存、已选、警告和延期状态。</small>
-                </span>
-                <input type="checkbox" checked />
-              </label>
-            </section>
-
-            <section class="settings-panel" data-settings-panel="dfm" hidden>
-              <label class="settings-row">
-                <span>
-                  <strong>必须经过生产可行性检查</strong>
-                  <small>只有风险限制通过的模拟方案包才能进入队列。</small>
+                  <strong>标准 3D 打印外壳</strong>
+                  <small>木纹、鼠尾草绿、石墨黑都只是标准外壳的表面效果。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
               <label class="settings-row">
                 <span>
-                  <strong>显示阻塞队列</strong>
-                  <small>在生产可行性队列里保留范围修正建议。</small>
-                </span>
-                <input type="checkbox" checked />
-              </label>
-            </section>
-
-            <section class="settings-panel" data-settings-panel="firmware" hidden>
-              <label class="settings-row">
-                <span>
-                  <strong>仅预览规则</strong>
-                  <small>设备行为面板只展示计划行为，不生成可部署代码。</small>
-                </span>
-                <input type="checkbox" checked />
-              </label>
-              <label class="settings-row">
-                <span>
-                  <strong>约束标签</strong>
-                  <small>始终显示 USB-C 供电、无摄像头、无电池的 v1 约束。</small>
+                  <strong>生成能力占位</strong>
+                  <small>3D、电子布局和 AI provider 都通过 job 接口预留。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
@@ -207,7 +156,7 @@
               <label class="settings-row">
                 <span>
                   <strong>界面语言</strong>
-                  <small>保留中文和 English 两套文案；新增功能必须同步维护。</small>
+                  <small>保留中文和 English 两套文案。</small>
                 </span>
                 <select id="languageSelect" aria-label="界面语言">
                   <option value="zh" selected>简体中文</option>
@@ -217,7 +166,7 @@
               <label class="settings-row">
                 <span>
                   <strong>文案维护规则</strong>
-                  <small>按钮、状态、弹窗、文档和后续功能说明都要同步更新中英文。</small>
+                  <small>新增按钮、状态、弹窗、文档都要同步更新中英文。</small>
                 </span>
                 <input type="checkbox" checked disabled />
               </label>
@@ -257,6 +206,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=y-workbench-flow-bilingual"></script>
+    <script src="app.js?v=y-workbench-productplan-v1"></script>
   </body>
 </html>

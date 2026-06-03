@@ -276,6 +276,8 @@ pre {
 }
 
 .thread-topbar {
+  position: relative;
+  z-index: 3;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
@@ -1339,6 +1341,23 @@ pre {
   line-height: 1.4;
 }
 
+.contact-row {
+  display: grid;
+  gap: 5px;
+  color: #656b66;
+  font-size: 12px;
+}
+
+.contact-row input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  padding: 7px 9px;
+}
+
 .packet-status {
   margin-bottom: 8px;
   border: 1px solid var(--border);
@@ -1630,6 +1649,10 @@ pre {
 @media (max-width: 760px) {
   .app-shell {
     display: block;
+  }
+
+  .thread-shell {
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .project-sidebar,

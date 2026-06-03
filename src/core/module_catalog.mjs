@@ -122,8 +122,8 @@ function enclosureModule(finish) {
   return {
     id: `enclosure.${finish}`,
     category: "Shell",
-    name: `${titleCase(finish)} enclosure`,
-    detail: "Parameterized 3D printed shell",
+    name: `${titleCase(finish)} 3D printed shell`,
+    detail: "Standard parameterized enclosure; finish is color or texture only",
     capabilities: ["enclosure"],
     unitCost: 24,
     status: "approved"

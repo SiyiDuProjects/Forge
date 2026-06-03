@@ -4,7 +4,10 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_CONTRACT, CONTRACT_VERSION, WORKBENCH_CHAIN } from "./src/contracts/workbench_contract.mjs";
 import { createLogger, durationMs } from "./src/core/observability.mjs";
+import { registerAsset } from "./src/core/assets.mjs";
+import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
+import { addProductPlanTurn, createProductPlan, getProductPlan, submitProductPlanReview } from "./src/core/product_plan.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 8765);
@@ -75,6 +78,123 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/plans") {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, createProductPlan({
+      message: body.message,
+      initialMessage: body.initialMessage,
+      assets: body.assets || [],
+      language: body.language
+    }));
+    return;
+  }
+
+  const planTurnMatch = url.pathname.match(/^\/api\/plans\/([^/]+)\/turns$/);
+  if (request.method === "POST" && planTurnMatch) {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, addProductPlanTurn({
+      planId: planTurnMatch[1],
+      message: body.message,
+      assetIds: body.assetIds || [],
+      assets: body.assets || [],
+      overrides: body.overrides || {}
+    }));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/assets/register") {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, {
+      asset: registerAsset(body)
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/jobs") {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, {
+      job: createGenerationJob({
+        planId: body.planId,
+        revisionId: body.revisionId,
+        capability: body.capability,
+        provider: body.provider,
+        input: body.input || {}
+      })
+    });
+    return;
+  }
+
+  const jobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)$/);
+  if (request.method === "GET" && jobMatch) {
+    const job = getGenerationJob(jobMatch[1]);
+    sendJson(response, job ? 200 : 404, job ? { job } : {
+      error: {
+        code: "not_found",
+        message: `Unknown job ${jobMatch[1]}`
+      }
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/model/generate") {
+    const body = await readJsonBody(request);
+    const job = createGenerationJob({
+      planId: body.planId,
+      revisionId: body.revisionId,
+      capability: "model_generation",
+      input: {
+        spec: body.spec,
+        modules: body.modules || []
+      }
+    });
+    sendJson(response, 200, {
+      job,
+      modelPreview: job.output?.modelPreview
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/layout/electronics") {
+    const body = await readJsonBody(request);
+    const job = createGenerationJob({
+      planId: body.planId,
+      revisionId: body.revisionId,
+      capability: "electronics_layout",
+      input: {
+        spec: body.spec,
+        modules: body.modules || [],
+        modelJob: body.modelJob,
+        modelPreview: body.modelPreview
+      }
+    });
+    sendJson(response, 200, {
+      job,
+      electronicsLayout: job.output?.electronicsLayout
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/quote/estimate") {
+    const body = await readJsonBody(request);
+    const job = createGenerationJob({
+      planId: body.planId,
+      revisionId: body.revisionId,
+      capability: "quote_estimate",
+      input: {
+        draft: body.draft,
+        spec: body.spec,
+        modules: body.modules || [],
+        riskReport: body.riskReport,
+        quote: body.quote
+      }
+    });
+    sendJson(response, 200, {
+      job,
+      quoteEstimate: job.output?.quoteEstimate
+    });
+    return;
+  }
+
   if (request.method === "POST" && ["/api/pipeline/draft", "/api/spec/generate"].includes(url.pathname)) {
     const body = await readJsonBody(request);
     sendJson(response, 200, createDraft({
@@ -95,6 +215,24 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/review/submit") {
     const body = await readJsonBody(request);
+    if (body.planId) {
+      const plan = getProductPlan(body.planId);
+      if (!plan) {
+        sendJson(response, 404, {
+          error: {
+            code: "not_found",
+            message: `Unknown ProductPlan ${body.planId}`
+          }
+        });
+        return;
+      }
+      sendJson(response, 200, await submitProductPlanReview({
+        planId: body.planId,
+        revisionId: body.revisionId,
+        contactInfo: body.contactInfo || {}
+      }));
+      return;
+    }
     sendJson(response, 200, await submitReview({
       draft: body.draft,
       behaviorConfig: body.behaviorConfig

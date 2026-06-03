@@ -32,10 +32,11 @@ export function evaluateRisk(interpreted, modules) {
   }
 
   if (interpreted.options.motor) {
-    reviewLevel = Math.max(reviewLevel, 3);
+    reviewLevel = Math.max(reviewLevel, 4);
+    blocked = true;
     items.push({
-      level: "warn",
-      text: "Motion adds mechanical tolerance and durability review."
+      level: "block",
+      text: "Motion structures are outside the first version standard desktop screen scope."
     });
   }
 

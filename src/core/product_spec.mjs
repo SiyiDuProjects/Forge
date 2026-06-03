@@ -12,6 +12,7 @@ export function createProductSpec(interpreted, modules, riskReport, quote) {
     target_mvp_slice: "indoor_desktop_display_device",
     enclosure: {
       method: "parameterized_3d_printed_shell",
+      standardization: "3d_print_only",
       finish: interpreted.finish,
       screen_size_in: interpreted.screenSize,
       mounting: "standard_core_board_standoffs"

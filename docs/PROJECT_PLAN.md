@@ -13,6 +13,9 @@ The product should let a user describe a custom desk hardware idea, then convert
 - Quote band
 - Device behavior rules (firmware preview)
 - Manufacturing check (DFM) packet for human review
+- Standardized 3D printed enclosure plan
+- ProductPlan revisions created from ongoing conversation
+- Placeholder 3D/model and electronics-layout generation jobs
 
 The UI should preserve the Codex interaction model: left workspace sidebar, center thread, bottom composer, right-side live output/inspector, settings dialog, and floating menus. The visible labels, buttons, workflows, and output content must be our own hardware-build language.
 
@@ -53,21 +56,28 @@ Non-goals for the first MVP:
 - CAD generation
 - Real supplier ordering
 - User accounts and team permissions
+- Real AI memory or external data integrations
+
+Enclosure boundary:
+
+- All MVP enclosures use standardized 3D printing only.
+- Woodgrain, sage, graphite, brand color, and similar requests are treated as surface finish or texture choices on the same 3D printed enclosure family.
+- Do not represent walnut, wood, metal, CNC, injection molding, or other enclosure processes as available MVP manufacturing paths.
+- Enclosure review should focus on screen fit, board standoffs, connector access, print tolerance, and assembly, not real CAD generation.
 
 ## 4. Interface Scope
 
 ### Left Sidebar
 
-Purpose: Navigate build sessions and hardware workbench areas.
+Purpose: Navigate project history and internal ProductPlan drafts.
 
 Current direction:
 
-- `开始做原型`
-- `零件清单（BOM）`
-- `生产可行性（DFM）`
-- `设备行为规则（固件）`
+- `对话生成`
+- `项目历史`
+- `审核包`
 - Workbench project: `Y Lab`
-- Sessions such as `核桃木桌面屏`, `运动陪伴屏`, `展台计数屏`
+- Drafts such as `木纹桌面屏` and `人工扩展草案`
 - `工作台设置`
 
 Avoid:
@@ -83,7 +93,7 @@ Required content:
 
 - User request bubble
 - Bench agent response
-- Chain/run log
+- ProductPlan revision run log
 - Bottom composer with hardware-specific controls
 
 Composer actions:
@@ -92,8 +102,8 @@ Composer actions:
 - `范围`
 - `零件`
 - `风险`
-- `可行性`
-- Run build chain button
+- `模型`
+- Send/update ProductPlan button
 
 ### Right Inspector
 
@@ -103,10 +113,11 @@ Current sections:
 
 - `范围`
 - `零件清单（BOM）`
+- `结构/3D 预览占位`
+- `电子零件布局`
+- `估算+假设`
 - `风险限制`
-- `报价`
-- `设备行为`
-- `生产检查包（DFM）`
+- `审核提交状态`
 
 Visual direction:
 
@@ -125,7 +136,7 @@ Required floating surfaces:
 - MVP 范围 popover
 - 零件清单（BOM）popover
 - 风险限制 popover
-- 生产可行性等级（DFM）popover
+- 结构/3D 预览 popover
 - 工作台设置 dialog
 
 Settings sections:
@@ -150,14 +161,20 @@ Implemented:
 - Product blueprint generation
 - Firmware rule generation
 - Review/manufacturing-check submission path
+- ProductPlan center object with conversation, revisions, assets, jobs, and review submission
+- Unified generation jobs for model placeholder, electronics layout placeholder, quote estimate, review packet, and AI chat reserved capability
+- Asset metadata registration for text, image, and reference URL inputs
+- Placeholder model preview with future preview/GLB/CAD asset slots
+- Placeholder electronics layout with positions, interface directions, cable notes, and conflict checks
+- Conversation-first UI that calls the backend ProductPlan pipeline and falls back locally if needed
 - Codex-like shell layout
 - Floating layer and popovers
 - Bench settings dialog
 - Hardware-specific button labels
 - Right inspector changed toward flat section styling
 - Local fallback when API fetch fails, so the UI can still render a complete bench draft
-- Full mock UI flow with four workspace views: Start prototype, Parts list (BOM), Manufacturing check (DFM), and Device behavior rules
-- Three complete mock scenarios: Walnut desk display, Motion companion, and Booth counter unit
+- Conversation-first ProductPlan flow with project history, center chat, and live right-side plan packet
+- Three complete mock scenarios: Woodgrain desk display, Motion companion, and Booth counter unit
 - Expanded UI-only flow states for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet
 - Popovers for add input, scope, parts list (BOM), risk limits, manufacturing check (DFM), thread actions, and bench settings
 - Bilingual UI copy across the shell, mock scenarios, popovers, inspector, and settings
@@ -171,7 +188,7 @@ Implemented:
 Implementation boundary:
 
 - The current UI is a complete clickable prototype, not a real manufacturing workflow.
-- Mock actions should change visible UI state, view, queue filter, or popover content.
+- Actions should change visible UI state, ProductPlan revision, popover content, contact state, or local review submission state.
 - Current visible UI language supports Simplified Chinese and English.
 - Do not add real upload, real CAD, real checkout, real supplier ordering, or real manufacturing calls without a product direction change.
 
@@ -214,13 +231,14 @@ Language rule:
 ## 7. MVP Flow
 
 1. User describes a hardware idea.
-2. Parser extracts product type, finish, screen size, and options.
+2. Parser extracts product type, 3D printed enclosure finish, screen size, and options.
 3. Module matcher builds a parts list (BOM) from known modules.
-4. Risk-limit gate blocks deferred modules such as camera and battery.
+4. Risk-limit gate blocks deferred modules such as camera, battery, and motion structures from the standard path.
 5. Quote estimator creates hardware/build/manufacturing-check cost bands.
-6. Blueprint JSON is rendered.
-7. Device behavior rules (firmware preview) are compiled from behavior text.
-8. Manufacturing check (DFM) packet can be queued when risk limits pass.
+6. ProductPlan creates a new revision from the conversation turn.
+7. Generation jobs attach a placeholder 3D/model preview, electronics layout, and quote assumptions.
+8. User enters name and email, then clicks `提交审核下单`.
+9. The app writes a local human review packet; no payment or manufacturing starts.
 
 ## 8. Engineering Plan
 
@@ -248,19 +266,18 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: first UI-only pass complete.
+Status: ProductPlan API and conversation-first v1 pass complete.
 
-- Make `Parts list (BOM)` show a focused parts/library view
-- Make `Manufacturing check (DFM)` show queued packets and blocked packets
-- Make `Device behavior rules` focus the firmware preview section and expose compiled rules
-- Add editable assumptions for quote band
-- Add clear state for blocked modules with suggested scope edits
+- Keep user turns creating ProductPlan revisions.
+- Keep 3D/model, electronics layout, quote, and review submission on unified jobs.
+- Keep model/layout as placeholder outputs until a provider adapter or skill integration is selected.
+- Keep non-standard hardware in `manual_expansion_draft`.
 
 Next:
 
 - Tune visual density after real Browser screenshot verification.
-- Convert any remaining text-only mock surfaces into richer, inspectable UI states when the flow needs it.
-- Decide later whether any mock action should become real functionality.
+- Add richer contact/review affordances after internal testing.
+- Decide later which AI/skill provider adapter should back model generation.
 
 ### Phase 4: Verification
 
@@ -274,9 +291,9 @@ Required:
 - Test thread menu
 - Test add-build-input menu
 - Test MVP scope popover
-- Test manufacturing check (DFM) popover
+- Test 3D/model placeholder popover
 - Test blocked camera/battery flow
-- Test successful manufacturing check (DFM) packet flow
+- Test successful local human review packet flow
 - Compare right inspector against the intended Codex-style density
 
 ## 9. Acceptance Criteria
@@ -288,15 +305,17 @@ The project should not be considered done until:
 - Unneeded Codex-style buttons are removed.
 - Settings and floating menus open, close, and show useful product-specific content.
 - Right inspector reads as a live build output surface, not a generic dashboard.
-- A normal request produces a complete blueprint, parts list (BOM), quote, device behavior, and manufacturing check (DFM) packet.
+- A normal request produces a ProductPlan revision with scope, parts list (BOM), model placeholder, electronics layout, quote assumptions, and risk limits.
 - A camera/battery request is blocked with clear risk-limit messaging.
+- A motion request is blocked from the standard desktop screen path.
+- `提交审核下单` writes a local human review packet and states that no payment or manufacturing has started.
 - Browser screenshot verification has been completed after local server access is available.
 
 ## 10. Immediate Next Steps
 
 1. Review the updated interface visually once Browser/local server access is available.
 2. Tune right inspector spacing and density from the screenshot.
-3. Deepen the existing `零件清单（BOM）`, `生产可行性（DFM）`, and `设备行为规则（固件）` views only as UI-only workflow surfaces unless the product boundary changes.
+3. Deepen the ProductPlan right-side sections only as UI-only workflow surfaces unless the product boundary changes.
 4. Audit every visible button after each UI pass; no button should remain if it has no visible result.
 5. Add focused tests around blocked-module behavior and bilingual-copy regression.
 6. Keep `src/contracts/workbench_contract.mjs` updated when API routes, statuses, languages, or chain steps change.

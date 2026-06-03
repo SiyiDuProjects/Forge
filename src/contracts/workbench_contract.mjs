@@ -6,6 +6,8 @@ export const WORKBENCH_CHAIN = [
   "match_bom",
   "run_guardrails",
   "estimate_quote",
+  "draft_model_preview",
+  "draft_electronics_layout",
   "draft_firmware",
   "draft_dfm_packet"
 ];
@@ -14,6 +16,47 @@ export const RISK_STATUS = {
   READY: "ready_for_engineer_review",
   BLOCKED: "blocked_until_scope_change"
 };
+
+export const PRODUCT_PLAN_STATUS = {
+  STANDARD_SUPPORTED: "standard_supported",
+  MANUAL_EXPANSION_DRAFT: "manual_expansion_draft",
+  SUBMITTED_FOR_REVIEW: "submitted_for_review"
+};
+
+export const JOB_CAPABILITY = {
+  MODEL_GENERATION: "model_generation",
+  ELECTRONICS_LAYOUT: "electronics_layout",
+  QUOTE_ESTIMATE: "quote_estimate",
+  REVIEW_PACKET: "review_packet",
+  AI_CHAT_RESERVED: "ai_chat_reserved"
+};
+
+export const JOB_PROVIDER = {
+  INTERNAL_RULES: "internal_rules",
+  PROVIDER_ADAPTER: "provider_adapter",
+  MANUAL_PLACEHOLDER: "manual_placeholder"
+};
+
+export const JOB_STATUS = {
+  QUEUED: "queued",
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+  NEEDS_INPUT: "needs_input",
+  CANCELLED: "cancelled"
+};
+
+export const ASSET_TYPES = [
+  "text",
+  "image",
+  "reference_url",
+  "model_preview",
+  "glb",
+  "cad_placeholder",
+  "render"
+];
+
+export const ASSET_SOURCES = ["user", "generated", "provider"];
 
 export const REVIEW_STATUS = {
   QUEUED: "queued_for_human_review"
@@ -34,6 +77,53 @@ export const API_CONTRACT = [
   },
   {
     method: "POST",
+    path: "/api/plans",
+    body: ["message", "initialMessage", "assets", "language"],
+    response: ["productPlan", "revision"]
+  },
+  {
+    method: "POST",
+    path: "/api/plans/:planId/turns",
+    body: ["message", "assetIds", "assets", "overrides"],
+    response: ["productPlan", "revision", "assistantMessage"]
+  },
+  {
+    method: "POST",
+    path: "/api/assets/register",
+    body: ["type", "source", "url", "localPath", "caption", "linkedJobId"],
+    response: ["asset"]
+  },
+  {
+    method: "POST",
+    path: "/api/jobs",
+    body: ["planId", "revisionId", "capability", "provider", "input"],
+    response: ["job"]
+  },
+  {
+    method: "GET",
+    path: "/api/jobs/:jobId",
+    response: ["job"]
+  },
+  {
+    method: "POST",
+    path: "/api/model/generate",
+    body: ["planId", "revisionId", "spec", "modules"],
+    response: ["job", "modelPreview"]
+  },
+  {
+    method: "POST",
+    path: "/api/layout/electronics",
+    body: ["planId", "revisionId", "spec", "modules", "modelJob"],
+    response: ["job", "electronicsLayout"]
+  },
+  {
+    method: "POST",
+    path: "/api/quote/estimate",
+    body: ["planId", "revisionId", "draft", "spec", "modules", "riskReport", "quote"],
+    response: ["job", "quoteEstimate"]
+  },
+  {
+    method: "POST",
     path: "/api/pipeline/draft",
     body: ["request", "requestText", "overrides"],
     response: ["requestText", "interpreted", "modules", "riskReport", "quote", "spec"]
@@ -47,8 +137,8 @@ export const API_CONTRACT = [
   {
     method: "POST",
     path: "/api/review/submit",
-    body: ["draft", "behaviorConfig"],
-    response: ["accepted", "reviewId", "status", "manufacturingPacket"]
+    body: ["draft", "behaviorConfig", "planId", "revisionId", "contactInfo"],
+    response: ["accepted", "reviewId", "status", "manufacturingPacket", "productPlan", "submission"]
   }
 ];
 

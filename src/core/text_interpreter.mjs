@@ -16,7 +16,7 @@ export function interpretRequest(requestText, overrides = {}) {
     requestText: text,
     productType: "display",
     screenSize: 5,
-    finish: "walnut",
+    finish: "woodgrain",
     options: { ...baseOptions },
     dataSources: [],
     functions: []
@@ -40,7 +40,7 @@ export function interpretRequest(requestText, overrides = {}) {
     interpreted.screenSize = 5;
   }
 
-  if (includesAny(lower, ["wood", "walnut", "retro"])) interpreted.finish = "walnut";
+  if (includesAny(lower, ["wood", "walnut", "retro"])) interpreted.finish = "woodgrain";
   if (includesAny(lower, ["black", "graphite", "dark"])) interpreted.finish = "graphite";
   if (includesAny(lower, ["green", "sage"])) interpreted.finish = "sage";
   if (includesWholeWordAny(lower, ["coral", "orange", "red"])) interpreted.finish = "coral";
