@@ -1,6 +1,6 @@
 # Y Workbench
 
-Y Workbench is a Codex-style hardware MVP planning workbench. It turns a natural-language hardware idea into a UI-only bench packet: scope, BOM, guardrails, quote band, firmware rules, and a DFM packet preview.
+Y Workbench is a Codex-style hardware MVP planning workbench. It turns a natural-language hardware idea into a UI-only prototype plan packet: scope, parts list (BOM), risk limits, quote band, device behavior rules, and a manufacturing check (DFM) packet preview.
 
 当前原型保留中英两套界面文案。默认语言是简体中文，可在 `工作台设置 -> 语言` 切换到 English。
 

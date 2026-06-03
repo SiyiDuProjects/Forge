@@ -22,7 +22,7 @@ test("draft pipeline creates a reviewable walnut desktop display packet", () => 
   assert.match(draft.quote.range, /^\$\d+-\$\d+$/);
 });
 
-test("camera and battery requests are blocked before DFM queueing", async () => {
+test("camera and battery requests are blocked before manufacturing check queueing", async () => {
   const draft = createDraft({
     requestText: "A portable wireless display with camera recognition and battery power."
   });
@@ -39,7 +39,7 @@ test("camera and battery requests are blocked before DFM queueing", async () => 
   assert.equal(submission.reason, "Draft is blocked by risk gate");
 });
 
-test("servo motion remains reviewable but escalates to DFM level 3", () => {
+test("servo motion remains reviewable but escalates to manufacturing check level 3", () => {
   const draft = createDraft({
     requestText: "A friendly companion display with weather, speaker alerts, and a small servo motion."
   });
@@ -82,7 +82,12 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /id="languageSelect"/);
   assert.match(html, /value="zh"/);
   assert.match(html, /value="en"/);
+  assert.match(html, /开始做原型/);
+  assert.match(html, /零件清单（BOM）/);
+  assert.match(html, /生产可行性（DFM）/);
   assert.match(app, /核桃木桌面屏/);
   assert.match(app, /Walnut desk display/);
+  assert.match(app, /Parts list \(BOM\)/);
+  assert.match(app, /Manufacturing check \(DFM\)/);
   assert.match(app, /SUPPORTED_LANGUAGES|langZh/);
 });

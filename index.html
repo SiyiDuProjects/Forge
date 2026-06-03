@@ -18,19 +18,19 @@
         <nav class="primary-nav" aria-label="工作台视图">
           <button class="nav-row active" type="button" data-view="build">
             <span class="nav-icon">+</span>
-            <span>开始打样</span>
+            <span>开始做原型</span>
           </button>
           <button class="nav-row" id="showModules" type="button" data-view="parts">
             <span class="nav-icon">#</span>
-            <span>零件架</span>
+            <span>零件清单（BOM）</span>
           </button>
           <button class="nav-row" id="showReview" type="button" data-view="dfm">
             <span class="nav-icon">></span>
-            <span>DFM 队列</span>
+            <span>生产可行性（DFM）</span>
           </button>
           <button class="nav-row" id="showRuntime" type="button" data-view="firmware">
             <span class="nav-icon">~</span>
-            <span>固件规则</span>
+            <span>设备行为规则（固件）</span>
           </button>
         </nav>
 
@@ -41,11 +41,11 @@
             <span>Y 实验室</span>
           </div>
 
-          <div class="thread-list" aria-label="打样场景">
+          <div class="thread-list" aria-label="原型场景">
             <button class="thread-row active" type="button" data-scenario="walnut">
               <span>
                 <strong>核桃木桌面屏</strong>
-                <small>通过，DFM L1</small>
+                <small>通过，生产检查 L1</small>
               </span>
               <em>就绪</em>
             </button>
@@ -77,14 +77,14 @@
 
       <main class="thread-shell">
         <header class="thread-topbar">
-          <button class="topbar-menu" id="openThreadMenu" type="button" aria-label="打样菜单">...</button>
+          <button class="topbar-menu" id="openThreadMenu" type="button" aria-label="原型菜单">...</button>
           <div class="topbar-title">
             <strong id="topbarTitle">Y 工作台</strong>
             <span id="draftStatus">完整界面流程</span>
           </div>
           <div class="topbar-actions">
-            <button class="compact-button" id="copySpec" type="button">预览打样包</button>
-            <button class="compact-button primary" id="submitReview" type="button">加入 DFM 模拟</button>
+            <button class="compact-button" id="copySpec" type="button">预览原型方案包</button>
+            <button class="compact-button primary" id="submitReview" type="button">加入可行性检查</button>
           </div>
         </header>
 
@@ -92,30 +92,30 @@
           <div id="workspaceView" class="conversation-inner workspace-view" aria-live="polite"></div>
         </section>
 
-        <form id="promptForm" class="composer" aria-label="模拟打样输入框">
+        <form id="promptForm" class="composer" aria-label="模拟原型输入框">
           <div class="goal-strip">
             <span class="goal-dot"></span>
-            <span id="composerSummary" class="goal-text">模拟流程：需求、范围、BOM、护栏、报价、固件、DFM 打样包</span>
-            <span id="scopeLevel" class="goal-meta">DFM L1</span>
+            <span id="composerSummary" class="goal-text">模拟流程：需求、范围、零件清单（BOM）、风险限制、报价、设备行为、生产可行性（DFM）</span>
+            <span id="scopeLevel" class="goal-meta">生产检查 L1</span>
           </div>
 
           <textarea id="ideaInput" rows="3" spellcheck="true"></textarea>
 
           <div class="composer-toolbar">
-            <button id="openAttach" type="button" class="toolbar-icon" aria-label="添加打样输入">+</button>
+            <button id="openAttach" type="button" class="toolbar-icon" aria-label="添加原型输入">+</button>
             <button id="openScope" type="button" class="toolbar-chip">范围</button>
-            <button id="openBom" type="button" class="toolbar-chip">BOM</button>
-            <button id="openGuardrails" type="button" class="toolbar-chip">护栏</button>
-            <button id="openDfm" type="button" class="toolbar-chip">DFM</button>
+            <button id="openBom" type="button" class="toolbar-chip">零件</button>
+            <button id="openGuardrails" type="button" class="toolbar-chip">风险</button>
+            <button id="openDfm" type="button" class="toolbar-chip">可行性</button>
 
-            <button id="runChain" class="send-button" type="submit" aria-label="运行模拟打样链路">
+            <button id="runChain" class="send-button" type="submit" aria-label="运行模拟原型链路">
               <span></span>
             </button>
           </div>
         </form>
       </main>
 
-      <aside class="inspector" aria-label="打样输出检查器">
+      <aside class="inspector" aria-label="原型输出检查器">
         <div id="inspectorContent" class="inspector-content"></div>
       </aside>
     </div>
@@ -130,8 +130,8 @@
           <nav class="settings-nav" aria-label="设置分区">
             <button class="active" type="button" data-settings-tab="studio">工作室</button>
             <button type="button" data-settings-tab="parts">零件</button>
-            <button type="button" data-settings-tab="dfm">DFM</button>
-            <button type="button" data-settings-tab="firmware">固件</button>
+            <button type="button" data-settings-tab="dfm">生产检查</button>
+            <button type="button" data-settings-tab="firmware">设备行为</button>
             <button type="button" data-settings-tab="language">语言</button>
           </nav>
           <div class="settings-content">
@@ -172,15 +172,15 @@
             <section class="settings-panel" data-settings-panel="dfm" hidden>
               <label class="settings-row">
                 <span>
-                  <strong>必须经过 DFM 门禁</strong>
-                  <small>只有护栏通过的模拟打样包才能进入队列。</small>
+                  <strong>必须经过生产可行性检查</strong>
+                  <small>只有风险限制通过的模拟方案包才能进入队列。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
               <label class="settings-row">
                 <span>
                   <strong>显示阻塞队列</strong>
-                  <small>在 DFM 队列里保留范围修正建议。</small>
+                  <small>在生产可行性队列里保留范围修正建议。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
@@ -190,7 +190,7 @@
               <label class="settings-row">
                 <span>
                   <strong>仅预览规则</strong>
-                  <small>固件面板只展示计划行为，不生成可部署代码。</small>
+                  <small>设备行为面板只展示计划行为，不生成可部署代码。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
@@ -226,33 +226,33 @@
         </div>
       </section>
 
-      <section class="floating-card mini-popover thread-popover" data-dialog="thread" hidden aria-label="打样菜单">
-        <button type="button" data-action="rename">重命名打样</button>
+      <section class="floating-card mini-popover thread-popover" data-dialog="thread" hidden aria-label="原型菜单">
+        <button type="button" data-action="rename">重命名原型</button>
         <button type="button" data-action="duplicate">复制场景</button>
-        <button type="button" data-action="export">导出打样包预览</button>
+        <button type="button" data-action="export">导出原型方案预览</button>
         <button type="button" data-action="archive">归档草稿</button>
       </section>
 
-      <section class="floating-card mini-popover" data-dialog="attach" hidden aria-label="添加打样输入">
+      <section class="floating-card mini-popover" data-dialog="attach" hidden aria-label="添加原型输入">
         <button type="button" data-action="sketch">产品草图</button>
         <button type="button" data-action="reference">参考产品</button>
         <button type="button" data-action="constraints">约束说明</button>
-        <button type="button" data-action="behavior">固件行为</button>
+        <button type="button" data-action="behavior">设备行为</button>
       </section>
 
       <section class="floating-card detail-popover" data-dialog="scope" hidden aria-label="MVP 范围">
         <div id="scopePopover"></div>
       </section>
 
-      <section class="floating-card detail-popover" data-dialog="bom" hidden aria-label="已选 BOM">
+      <section class="floating-card detail-popover" data-dialog="bom" hidden aria-label="零件清单（BOM）">
         <div id="bomPopover"></div>
       </section>
 
-      <section class="floating-card detail-popover" data-dialog="guardrails" hidden aria-label="护栏">
+      <section class="floating-card detail-popover" data-dialog="guardrails" hidden aria-label="风险限制">
         <div id="guardrailsPopover"></div>
       </section>
 
-      <section class="floating-card detail-popover" data-dialog="dfm" hidden aria-label="DFM 等级">
+      <section class="floating-card detail-popover" data-dialog="dfm" hidden aria-label="生产可行性等级（DFM）">
         <div id="dfmPopover"></div>
       </section>
     </div>

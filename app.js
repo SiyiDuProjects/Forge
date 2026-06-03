@@ -26,29 +26,29 @@ const scenarioCopy = {
   walnut: {
     zh: {
       title: "核桃木桌面屏",
-      short: "通过，DFM L1",
+      short: "通过，生产检查 L1",
       badge: "就绪",
       request:
         "我想要一台小型桌面屏，可以显示家庭照片、天气、明天日程和 GitHub 构建状态。外观像复古核桃木相框，USB-C 供电，夜间自动变暗。",
       device: "桌面屏",
       screen: "3.5 英寸",
       finishLabel: "核桃木",
-      power: "USB-C 台架供电",
+      power: "USB-C 桌面供电",
       agent:
-        "这是一个清晰的 v1 台架打样：固定桌面屏、库存主控、USB-C 供电、环境光调暗，不引入需要认证的复杂模块。",
+        "这是一个清晰的 v1 原型方案：固定桌面屏、库存主控、USB-C 供电、环境光调暗，不引入需要认证的复杂模块。",
       included: ["Y-Core Lite 主控", "3.5 英寸 TFT 屏", "USB-C 供电", "核桃木外壳", "环境光板"],
       deferred: ["摄像头模块", "电池包"],
       bom: [
         ["Y-Core Lite 主控", "主控", "$42", "selected"],
         ["3.5 英寸 TFT 屏", "显示", "$28", "selected"],
-        ["USB-C 台架供电", "供电", "$12", "selected"],
+        ["USB-C 桌面供电", "供电", "$12", "selected"],
         ["核桃木桌面外壳", "外壳", "$34", "selected"],
         ["环境光板", "传感器", "$8", "selected"],
         ["摄像头模块", "视觉", "$36", "deferred"],
         ["电池包", "电源", "$44", "deferred"]
       ],
       guardrails: [
-        ["pass", "仅 USB-C", "台架供电让 v1 避开电池认证。"],
+        ["pass", "仅 USB-C", "桌面供电让 v1 避开电池认证。"],
         ["pass", "无摄像头", "MVP 避开隐私和摄像头开孔评审。"],
         ["pass", "无运动结构", "固定相框只需要基础外壳确认。"]
       ],
@@ -57,12 +57,12 @@ const scenarioCopy = {
         modes: ["照片", "天气", "日程", "构建状态"],
         constraints: ["离线缓存", "夜间调暗", "仅 USB-C"]
       },
-      packet: ["蓝图预览", "已选 BOM", "护栏报告", "报价区间", "固件规则"],
+      packet: ["蓝图预览", "零件清单（BOM）", "风险限制报告", "报价区间", "设备行为规则（固件）"],
       assumption: "使用库存 3.5 英寸屏和核桃木外壳；除外壳适配外不做额外 CAD。"
     },
     en: {
       title: "Walnut desk display",
-      short: "Pass, DFM L1",
+      short: "Pass, check L1 (DFM)",
       badge: "ready",
       request:
         "I want a small desktop screen that shows family photos, weather, tomorrow's calendar, and GitHub build status. Make it look like a retro walnut frame, USB-C powered, and dim at night.",
@@ -93,7 +93,7 @@ const scenarioCopy = {
         modes: ["Photo", "Weather", "Calendar", "Build status"],
         constraints: ["offline-safe cache", "night dimming", "USB-C only"]
       },
-      packet: ["Blueprint preview", "Selected BOM", "Guardrail report", "Quote band", "Firmware rules"],
+      packet: ["Blueprint preview", "Parts list (BOM)", "Risk limit report", "Quote band", "Device behavior rules"],
       assumption: "Stocked 3.5 in display and walnut shell; no custom CAD beyond enclosure fit."
     }
   },
@@ -107,9 +107,9 @@ const scenarioCopy = {
       device: "陪伴屏",
       screen: "5 英寸",
       finishLabel: "鼠尾草绿",
-      power: "USB-C 台架供电",
+      power: "USB-C 桌面供电",
       agent:
-        "陪伴屏概念可以作为界面原型推进，但舵机会把打样提升到 DFM L3。需要限制速度、封闭运动结构，并加入机械止挡。",
+        "陪伴屏概念可以作为界面原型推进，但舵机会把生产可行性检查提升到 DFM L3（机械级）。需要限制速度、封闭运动结构，并加入机械止挡。",
       included: ["Y-Core Lite 主控", "5 英寸 TFT 屏", "扬声器舱", "舵机支架", "鼠尾草绿外壳"],
       deferred: ["摄像头模块", "电池包"],
       bom: [
@@ -123,7 +123,7 @@ const scenarioCopy = {
       ],
       guardrails: [
         ["pass", "仅 USB-C", "这个 MVP 不进入电池路径。"],
-        ["warn", "舵机运动", "运动结构需要 DFM L3 间隙确认和物理止挡限制。"],
+        ["warn", "舵机运动", "运动结构需要生产可行性（DFM）L3 间隙确认和物理止挡限制。"],
         ["pass", "无摄像头", "隐私评审保持在范围外。"]
       ],
       firmware: {
@@ -131,7 +131,7 @@ const scenarioCopy = {
         modes: ["表情", "天气", "提醒", "睡眠"],
         constraints: ["舵机速度上限", "机械止挡", "仅 USB-C"]
       },
-      packet: ["运动范围警告", "已选 BOM", "舵机 DFM 说明", "报价区间", "固件规则"],
+      packet: ["运动范围警告", "零件清单（BOM）", "舵机生产检查说明（DFM）", "报价区间", "设备行为规则（固件）"],
       assumption: "舵机只允许作为低速、受限行程的可见台架原型。"
     },
     en: {
@@ -145,7 +145,7 @@ const scenarioCopy = {
       finishLabel: "sage",
       power: "USB-C bench power",
       agent:
-        "The companion concept is viable as a UI prototype, but the servo makes it a DFM L3 build. Keep motion slow, enclosed, and mechanically limited.",
+        "The companion concept is viable as a UI prototype, but the servo raises the manufacturing check to DFM L3 (mechanical). Keep motion slow, enclosed, and mechanically limited.",
       included: ["Y-Core Lite", "5 in TFT", "Speaker pod", "Servo mount", "Sage shell"],
       deferred: ["Camera module", "Battery pack"],
       bom: [
@@ -159,7 +159,7 @@ const scenarioCopy = {
       ],
       guardrails: [
         ["pass", "USB-C only", "No battery path in this MVP."],
-        ["warn", "Servo motion", "Motion needs DFM L3 clearance and physical stop limits."],
+        ["warn", "Servo motion", "Motion needs manufacturing check (DFM) L3 clearance and physical stop limits."],
         ["pass", "No camera", "Privacy review stays out of scope."]
       ],
       firmware: {
@@ -167,7 +167,7 @@ const scenarioCopy = {
         modes: ["Expression", "Weather", "Alert", "Sleep"],
         constraints: ["servo speed cap", "mechanical stop", "USB-C only"]
       },
-      packet: ["Motion scope warning", "Selected BOM", "Servo DFM note", "Quote band", "Firmware rules"],
+      packet: ["Motion scope warning", "Parts list (BOM)", "Servo manufacturing note (DFM)", "Quote band", "Device behavior rules"],
       assumption: "Servo is allowed only as a visible bench prototype with low-speed constrained travel."
     }
   },
@@ -181,7 +181,7 @@ const scenarioCopy = {
       device: "展台屏",
       screen: "7 英寸",
       finishLabel: "石墨黑",
-      power: "USB-C 台架供电",
+      power: "USB-C 桌面供电",
       agent:
         "展台屏是报价优先的原型。硬件部分直接，但自定义品牌件和网页更新文案需要保留为手动报价假设。",
       included: ["Y-Core Lite 主控", "7 英寸 TFT 屏", "石墨黑外壳", "USB-C 供电", "品牌铭牌"],
@@ -191,12 +191,12 @@ const scenarioCopy = {
         ["7 英寸 TFT 屏", "显示", "$72", "selected"],
         ["石墨黑桌面外壳", "外壳", "$38", "selected"],
         ["品牌铭牌", "定制", "$26", "warning"],
-        ["USB-C 台架供电", "供电", "$12", "selected"],
+        ["USB-C 桌面供电", "供电", "$12", "selected"],
         ["摄像头模块", "视觉", "$36", "deferred"],
         ["电池包", "电源", "$44", "deferred"]
       ],
       guardrails: [
-        ["pass", "仅 USB-C", "展台柜台供电避开电池认证。"],
+        ["pass", "仅 USB-C", "展台桌面供电避开电池认证。"],
         ["warn", "自定义品牌", "铭牌和配色需要人工确认报价。"],
         ["pass", "无摄像头", "这个原型不采集访客影像。"]
       ],
@@ -205,7 +205,7 @@ const scenarioCopy = {
         modes: ["指标", "倒计时", "品牌消息", "待机"],
         constraints: ["手动文案更新", "仅 USB-C", "不采集访客"]
       },
-      packet: ["报价假设", "已选 BOM", "品牌说明", "报价区间", "固件规则"],
+      packet: ["报价假设", "零件清单（BOM）", "品牌说明", "报价区间", "设备行为规则（固件）"],
       assumption: "手动报价包含品牌铭牌、文案槽和展台专用视觉打磨。"
     },
     en: {
@@ -241,7 +241,7 @@ const scenarioCopy = {
         modes: ["Metrics", "Countdown", "Brand message", "Idle"],
         constraints: ["manual copy update", "USB-C only", "no visitor capture"]
       },
-      packet: ["Quote assumption", "Selected BOM", "Branding note", "Quote band", "Firmware rules"],
+      packet: ["Quote assumption", "Parts list (BOM)", "Branding note", "Quote band", "Device behavior rules"],
       assumption: "Manual quote includes branding plate, copy slot, and booth-specific visual polish."
     }
   }
@@ -255,7 +255,7 @@ const blockedCopy = {
     guardrails: [
       ["block", "摄像头模块", "需要隐私、图像处理和外壳开孔评审后才能进入范围。"],
       ["block", "电池包", "需要电芯选择、充电方案、运输和安全认证后才能进入范围。"],
-      ["pass", "台架供电回退", "范围编辑建议：v1 使用 USB-C 台架供电，并移除摄像头。"]
+      ["pass", "桌面供电回退", "范围编辑建议：v1 使用 USB-C 桌面供电，并移除摄像头。"]
     ],
     quote: { bom: 132, build: 88, dfm: 0, range: "阻塞" }
   },
@@ -277,85 +277,92 @@ const copy = {
     appTitle: "Y 工作台",
     sidebarAria: "Y 工作台导航",
     navAria: "工作台视图",
-    navBuild: "开始打样",
-    navParts: "零件架",
-    navDfm: "DFM 队列",
-    navFirmware: "固件规则",
+    navBuild: "开始做原型",
+    navParts: "零件清单（BOM）",
+    navDfm: "生产可行性（DFM）",
+    navFirmware: "设备行为规则（固件）",
     projectLabel: "工作台",
     currentWorkbenchAria: "当前工作台",
     projectName: "Y 实验室",
-    scenariosAria: "打样场景",
+    scenariosAria: "原型场景",
     settingsButton: "工作台设置",
     uiPrototype: "界面原型",
-    threadMenuAria: "打样菜单",
+    threadMenuAria: "原型菜单",
     topbarDefaultStatus: "完整界面流程",
-    previewPacket: "预览打样包",
-    queueDfmMock: "加入 DFM 模拟",
-    holdL3: "暂缓 L3",
+    previewPacket: "预览原型方案包",
+    queueDfmMock: "加入可行性检查",
+    holdL3: "暂缓 L3 检查",
     conversationAria: "工作台内容",
-    composerAria: "模拟打样输入框",
-    composerDefault: "模拟流程：需求、范围、BOM、护栏、报价、固件、DFM 打样包",
-    addInputAria: "添加打样输入",
+    composerAria: "模拟原型输入框",
+    composerDefault: "模拟流程：需求、范围、零件清单（BOM）、风险限制、报价、设备行为、生产可行性（DFM）",
+    addInputAria: "添加原型输入",
     scope: "范围",
-    guardrails: "护栏",
-    runChainAria: "运行模拟打样链路",
-    inspectorAria: "打样输出检查器",
+    partsChip: "零件",
+    riskChip: "风险",
+    dfmChip: "可行性",
+    guardrails: "风险限制",
+    runChainAria: "运行模拟原型链路",
+    inspectorAria: "原型输出检查器",
     settingsTitle: "工作台设置",
     closeSettingsAria: "关闭工作台设置",
     settingsNavAria: "设置分区",
     studio: "工作室",
     parts: "零件",
-    firmware: "固件",
+    dfm: "生产检查",
+    firmware: "设备行为",
     language: "语言",
     langZh: "简体中文",
     langEn: "English",
     languageSelectAria: "界面语言",
-    threadRename: "重命名打样",
+    levelL1: "生产检查 L1",
+    levelL3: "生产检查 L3",
+    dfmCost: "生产检查",
+    threadRename: "重命名原型",
     threadDuplicate: "复制场景",
-    threadExport: "导出打样包预览",
+    threadExport: "导出原型方案预览",
     threadArchive: "归档草稿",
     attachSketch: "产品草图",
     attachReference: "参考产品",
     attachConstraints: "约束说明",
-    attachBehavior: "固件行为",
+    attachBehavior: "设备行为",
     scopeAria: "MVP 范围",
-    bomAria: "已选 BOM",
-    dfmAria: "DFM 等级",
+    bomAria: "零件清单（BOM）",
+    dfmAria: "生产可行性等级（DFM）",
     viewBuild: "Y 工作台",
     statusParts: "已选、库存、延期",
     statusDfm: "就绪、阻塞、已入队",
     statusFirmware: "规则预览",
     statusWarning: "舵机警告",
     statusQuote: "手动报价",
-    statusReady: "DFM 就绪",
+    statusReady: "生产检查就绪",
     manualQuote: "手动报价",
-    composerParts: (scenario) => `零件架：${scenario.included.length} 个已选，${scenario.deferred.length} 个延期`,
-    composerDfm: (count) => `DFM 队列：${count} 个模拟打样包，覆盖就绪、阻塞和已入队`,
-    composerFirmware: (scenario) => `固件规则：${scenario.firmware.rules.length} 条模拟规则，带 v1 约束`,
-    composerBuild: (scenario) => `模拟流程：${scenario.title} 从需求进入范围、BOM、护栏、报价、固件和 DFM 打样包`,
-    benchAgent: "打样助手",
-    scopeNote: "范围建议：舵机只作为界面原型状态展示，接受 DFM L3 机械确认后才能进入队列。",
+    composerParts: (scenario) => `零件清单（BOM）：${scenario.included.length} 个已选，${scenario.deferred.length} 个延期`,
+    composerDfm: (count) => `生产可行性（DFM）：${count} 个模拟方案包，覆盖就绪、阻塞和已入队`,
+    composerFirmware: (scenario) => `设备行为规则（固件）：${scenario.firmware.rules.length} 条模拟规则，带 v1 约束`,
+    composerBuild: (scenario) => `模拟流程：${scenario.title} 从需求进入范围、零件清单（BOM）、风险限制、报价、设备行为和生产可行性（DFM）`,
+    benchAgent: "原型助手",
+    scopeNote: "范围建议：舵机只作为界面原型状态展示，接受生产可行性（DFM）L3 机械确认后才能进入队列。",
     quoteNote: "报价假设：",
-    buildFlowAria: "模拟打样流程",
-    benchRun: "打样运行",
-    flowChain: "需求 -> 范围 -> BOM -> 护栏 -> 报价 -> 固件 -> DFM 打样包",
+    buildFlowAria: "模拟原型流程",
+    benchRun: "原型运行",
+    flowChain: "需求 -> 范围 -> 零件清单（BOM） -> 风险限制 -> 报价 -> 设备行为 -> 生产可行性（DFM）",
     parseTitle: "解析需求",
     parseDetail: "提取产品类型、屏幕尺寸、外壳材质、请求行为和 v1 排除项。",
-    scopeTitle: "打样范围",
+    scopeTitle: "原型范围",
     includedCount: (scenario) => `${scenario.included.length} 项包含，${scenario.deferred.length} 项延期`,
     scopeDetail: (scenario) => `本期包含：${scenario.included.join("，")}。v1 延期：${scenario.deferred.join("，")}。`,
-    bomTitle: "匹配 BOM",
+    bomTitle: "匹配零件清单（BOM）",
     bomSummary: (count) => `${count} 个已选零件`,
     bomDetail: "优先使用库存台架模块；被阻塞的模块保留为可见的 v1 延期项。",
-    runGuardrails: "运行护栏",
+    runGuardrails: "运行风险限制",
     guardrailWarningSummary: "舵机警告",
     guardrailPassSummary: "摄像头和电池不进入 v1",
     quoteTitle: "估算报价",
-    quoteDetail: (scenario) => `BOM $${scenario.quote.bom}，组装 $${scenario.quote.build}，DFM $${scenario.quote.dfm}。${scenario.assumption}`,
-    packetTitle: "起草 DFM 包",
-    packetWarningSummary: "暂缓到 DFM L3",
+    quoteDetail: (scenario) => `零件清单（BOM） $${scenario.quote.bom}，组装 $${scenario.quote.build}，生产检查 $${scenario.quote.dfm}。${scenario.assumption}`,
+    packetTitle: "起草生产检查包",
+    packetWarningSummary: "暂缓到生产检查 L3",
     packetReadySummary: "可以加入队列",
-    packetDetail: (scenario) => `打样包包含：${scenario.packet.join("，")}。`,
+    packetDetail: (scenario) => `方案包包含：${scenario.packet.join("，")}。`,
     done: "完成",
     pass: "通过",
     warn: "警告",
@@ -366,19 +373,19 @@ const copy = {
     stocked: "库存",
     deferred: "延期",
     needsConfirm: "需确认",
-    partsShelf: "零件架",
-    dfmQueue: "DFM 队列",
-    mockPacketBoard: "模拟打样包看板",
+    partsShelf: "零件清单（BOM）",
+    dfmQueue: "生产可行性（DFM）",
+    mockPacketBoard: "模拟方案包看板",
     ready: "就绪",
     blocked: "阻塞",
     queued: "已入队",
-    firmwareRules: "固件规则",
+    firmwareRules: "设备行为规则（固件）",
     rules: "规则",
     modes: "显示模式",
     constraints: "约束",
     inspectorScope: "范围",
     inspectorQuote: "报价",
-    inspectorPacket: "DFM 打样包",
+    inspectorPacket: "生产检查包（DFM）",
     device: "设备",
     display: "屏幕",
     finish: "外观",
@@ -388,21 +395,24 @@ const copy = {
     build: "组装",
     band: "区间",
     mockRulePreview: "模拟规则预览",
-    packetHeld: "暂缓到 DFM L3",
+    packetHeld: "暂缓到生产检查 L3",
     packetManualQuote: "带手动报价入队",
     packetReady: "可以加入队列",
     canvasAria: "打样设备预览",
     reasoning: "推理说明：",
     selectedParts: "已选零件",
     deferredParts: "延期零件",
-    dfmLevels: "DFM 等级",
-    dfmL0: "仅范围草案，不生成可排队打样包。",
-    dfmL1: "模块适配、外壳、报价区间。",
-    dfmL3: "运动结构、机械间隙、安全限制。",
+    dfmLevels: "生产可行性等级（DFM）",
+    dfmL0Label: "L0 范围草案",
+    dfmL1Label: "L1 基础生产检查",
+    dfmL3Label: "L3 机械生产检查",
+    dfmL0: "仅范围草案，不生成可排队方案包。",
+    dfmL1: "检查模块适配、外壳和报价区间。",
+    dfmL3: "检查运动结构、机械间隙和安全限制。",
     dfmBlocked: "摄像头和电池保持在 v1 范围外。",
     noticeRerun: "已重新运行模拟链路",
-    noticePreview: "已打开打样包预览（模拟）",
-    noticeHeld: "已暂缓到 DFM L3",
+    noticePreview: "已打开原型方案预览（模拟）",
+    noticeHeld: "已暂缓到生产检查 L3",
     noticeQueued: "已加入模拟队列",
     noticeAction: "已选择：",
     settingsRows: [
@@ -410,9 +420,9 @@ const copy = {
       ["紧凑输出", "线程和右侧检查器保持适合反复审阅的密度。"],
       ["显示延期零件", "始终把摄像头和电池显示为 v1 被阻止模块。"],
       ["库存状态标签", "显示库存、已选、警告和延期状态。"],
-      ["必须经过 DFM 门禁", "只有护栏通过的模拟打样包才能进入队列。"],
-      ["显示阻塞队列", "在 DFM 队列里保留范围修正建议。"],
-      ["仅预览规则", "固件面板只展示计划行为，不生成可部署代码。"],
+      ["必须经过生产可行性检查", "只有风险限制通过的模拟方案包才能进入队列。"],
+      ["显示阻塞队列", "在生产可行性队列里保留范围修正建议。"],
+      ["仅预览规则", "设备行为面板只展示计划行为，不生成可部署代码。"],
       ["约束标签", "始终显示 USB-C 供电、无摄像头、无电池的 v1 约束。"],
       ["界面语言", "保留中文和 English 两套文案；新增功能必须同步维护。"],
       ["文案维护规则", "按钮、状态、弹窗、文档和后续功能说明都要同步更新中英文。"]
@@ -422,83 +432,90 @@ const copy = {
     appTitle: "Y Workbench",
     sidebarAria: "Y Workbench navigation",
     navAria: "Workbench views",
-    navBuild: "Start build",
-    navParts: "Parts shelf",
-    navDfm: "DFM queue",
-    navFirmware: "Firmware rules",
+    navBuild: "Start prototype",
+    navParts: "Parts list (BOM)",
+    navDfm: "Manufacturing check (DFM)",
+    navFirmware: "Device behavior rules",
     projectLabel: "Workbench",
     currentWorkbenchAria: "Current workbench",
     projectName: "Y Lab",
-    scenariosAria: "Build scenarios",
+    scenariosAria: "Prototype scenarios",
     settingsButton: "Bench settings",
     uiPrototype: "UI prototype",
-    threadMenuAria: "Build menu",
+    threadMenuAria: "Prototype menu",
     topbarDefaultStatus: "Complete UI flow",
     previewPacket: "Preview packet",
-    queueDfmMock: "Queue DFM mock",
-    holdL3: "Hold for L3",
+    queueDfmMock: "Queue DFM check",
+    holdL3: "Hold L3 check",
     conversationAria: "Workbench content",
-    composerAria: "Mock build input",
-    composerDefault: "Mock flow: request, scope, BOM, guardrails, quote, firmware, DFM packet",
+    composerAria: "Mock prototype input",
+    composerDefault: "Mock flow: request, scope, parts list (BOM), risk limits, quote, behavior rules, manufacturing check (DFM)",
     addInputAria: "Add build input",
     scope: "Scope",
-    guardrails: "Guardrails",
-    runChainAria: "Run mock build chain",
-    inspectorAria: "Build output inspector",
+    partsChip: "Parts",
+    riskChip: "Risk",
+    dfmChip: "DFM check",
+    guardrails: "Risk limits",
+    runChainAria: "Run mock prototype chain",
+    inspectorAria: "Prototype output inspector",
     settingsTitle: "Bench settings",
     closeSettingsAria: "Close bench settings",
     settingsNavAria: "Settings sections",
     studio: "Studio",
     parts: "Parts",
-    firmware: "Firmware",
+    dfm: "DFM check",
+    firmware: "Behavior",
     language: "Language",
     langZh: "Simplified Chinese",
     langEn: "English",
     languageSelectAria: "Interface language",
-    threadRename: "Rename build",
+    levelL1: "DFM check L1",
+    levelL3: "DFM check L3",
+    dfmCost: "DFM check",
+    threadRename: "Rename prototype",
     threadDuplicate: "Duplicate scenario",
     threadExport: "Export packet preview",
     threadArchive: "Archive draft",
     attachSketch: "Product sketch",
     attachReference: "Reference product",
     attachConstraints: "Constraints note",
-    attachBehavior: "Firmware behavior",
+    attachBehavior: "Device behavior",
     scopeAria: "MVP scope",
-    bomAria: "Selected BOM",
-    dfmAria: "DFM level",
+    bomAria: "Parts list (BOM)",
+    dfmAria: "Manufacturing check level (DFM)",
     viewBuild: "Y Workbench",
     statusParts: "Selected, stocked, deferred",
     statusDfm: "Ready, blocked, queued",
     statusFirmware: "Rules preview",
     statusWarning: "Servo warning",
     statusQuote: "Manual quote",
-    statusReady: "DFM ready",
+    statusReady: "Manufacturing check ready",
     manualQuote: "Manual quote",
-    composerParts: (scenario) => `Parts shelf: ${scenario.included.length} selected, ${scenario.deferred.length} deferred`,
-    composerDfm: (count) => `DFM queue: ${count} mock packets across ready, blocked, and queued`,
-    composerFirmware: (scenario) => `Firmware rules: ${scenario.firmware.rules.length} mock rules with v1 constraints`,
-    composerBuild: (scenario) => `Mock flow: ${scenario.title} from request to scope, BOM, guardrails, quote, firmware, and DFM packet`,
-    benchAgent: "Bench agent",
-    scopeNote: "Scope note: Servo stays in UI prototype state until DFM L3 mechanical clearance is accepted.",
+    composerParts: (scenario) => `Parts list (BOM): ${scenario.included.length} selected, ${scenario.deferred.length} deferred`,
+    composerDfm: (count) => `Manufacturing check (DFM): ${count} mock plan packets across ready, blocked, and queued`,
+    composerFirmware: (scenario) => `Device behavior rules: ${scenario.firmware.rules.length} mock rules with v1 constraints`,
+    composerBuild: (scenario) => `Mock flow: ${scenario.title} from request to scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM)`,
+    benchAgent: "Prototype assistant",
+    scopeNote: "Scope note: Servo stays in UI prototype state until manufacturing check (DFM) L3 mechanical clearance is accepted.",
     quoteNote: "Quote note: ",
-    buildFlowAria: "Mock build flow",
-    benchRun: "Bench run",
-    flowChain: "request -> scope -> BOM -> guardrail -> quote -> firmware -> DFM packet",
+    buildFlowAria: "Mock prototype flow",
+    benchRun: "Prototype run",
+    flowChain: "request -> scope -> parts list (BOM) -> risk limits -> quote -> behavior rules -> manufacturing check (DFM)",
     parseTitle: "Parse request",
     parseDetail: "Extract product type, display size, enclosure finish, requested behaviors, and v1 exclusions.",
     scopeTitle: "Build scope",
     includedCount: (scenario) => `${scenario.included.length} included, ${scenario.deferred.length} deferred`,
     scopeDetail: (scenario) => `Included: ${scenario.included.join(", ")}. Deferred: ${scenario.deferred.join(", ")}.`,
-    bomTitle: "Match BOM",
+    bomTitle: "Match parts list (BOM)",
     bomSummary: (count) => `${count} selected parts`,
     bomDetail: "Use stocked bench modules first; keep blocked modules visible as deferred v1 items.",
-    runGuardrails: "Run guardrails",
+    runGuardrails: "Run risk limits",
     guardrailWarningSummary: "Servo warning",
     guardrailPassSummary: "Camera/battery out of v1",
     quoteTitle: "Estimate quote",
-    quoteDetail: (scenario) => `BOM $${scenario.quote.bom}, build $${scenario.quote.build}, DFM $${scenario.quote.dfm}. ${scenario.assumption}`,
-    packetTitle: "Draft DFM packet",
-    packetWarningSummary: "Held for DFM L3",
+    quoteDetail: (scenario) => `Parts list (BOM) $${scenario.quote.bom}, build $${scenario.quote.build}, manufacturing check $${scenario.quote.dfm}. ${scenario.assumption}`,
+    packetTitle: "Draft manufacturing check packet",
+    packetWarningSummary: "Held for manufacturing check L3",
     packetReadySummary: "Ready to queue",
     packetDetail: (scenario) => `Packet contains ${scenario.packet.join(", ")}.`,
     done: "done",
@@ -511,19 +528,19 @@ const copy = {
     stocked: "stocked",
     deferred: "deferred",
     needsConfirm: "needs review",
-    partsShelf: "Parts shelf",
-    dfmQueue: "DFM queue",
+    partsShelf: "Parts list (BOM)",
+    dfmQueue: "Manufacturing check (DFM)",
     mockPacketBoard: "Mock packet board",
     ready: "ready",
     blocked: "blocked",
     queued: "queued",
-    firmwareRules: "Firmware rules",
+    firmwareRules: "Device behavior rules",
     rules: "rules",
     modes: "modes",
     constraints: "constraints",
     inspectorScope: "Scope",
     inspectorQuote: "Quote",
-    inspectorPacket: "DFM Packet",
+    inspectorPacket: "Manufacturing check packet",
     device: "Device",
     display: "Display",
     finish: "Finish",
@@ -533,21 +550,24 @@ const copy = {
     build: "Build",
     band: "Band",
     mockRulePreview: "mock rule preview",
-    packetHeld: "held for DFM L3",
+    packetHeld: "held for manufacturing check L3",
     packetManualQuote: "queued with manual quote",
     packetReady: "ready to queue",
     canvasAria: "Generated hardware preview",
     reasoning: "Reasoning: ",
     selectedParts: "Selected parts",
     deferredParts: "Deferred parts",
-    dfmLevels: "DFM levels",
+    dfmLevels: "Manufacturing readiness levels (DFM)",
+    dfmL0Label: "L0 scope draft",
+    dfmL1Label: "L1 basic check",
+    dfmL3Label: "L3 mechanical check",
     dfmL0: "Scope draft only; no queueable packet.",
     dfmL1: "Module fit, shell, quote band.",
     dfmL3: "Motion, mechanical clearance, safety limits.",
     dfmBlocked: "Camera and battery stay out of v1.",
     noticeRerun: "Mock chain rerun",
     noticePreview: "Packet preview opened (mock)",
-    noticeHeld: "Held for DFM L3",
+    noticeHeld: "Held for manufacturing check L3",
     noticeQueued: "Queued mock packet",
     noticeAction: "Selected: ",
     settingsRows: [
@@ -555,9 +575,9 @@ const copy = {
       ["Dense output", "Keep the thread and inspector dense enough for repeated review."],
       ["Show deferred parts", "Always show camera and battery as blocked v1 modules."],
       ["Stock labels", "Show stocked, selected, warning, and deferred states."],
-      ["Require DFM gate", "Only guardrail-passing mock packets can enter the queue."],
-      ["Show blocked queue", "Keep scope-edit suggestions visible in the DFM queue."],
-      ["Preview rules only", "The firmware panel shows planned behavior, not deployable code."],
+      ["Require manufacturing check", "Only risk-limit-passing mock packets can enter the queue."],
+      ["Show blocked queue", "Keep scope-edit suggestions visible in the manufacturing check queue."],
+      ["Preview rules only", "The behavior panel shows planned device behavior, not deployable code."],
       ["Constraint labels", "Always show USB-C power, no camera, and no battery v1 constraints."],
       ["Interface language", "Keep both Chinese and English copy; new features must update both."],
       ["Copy maintenance", "Buttons, statuses, popovers, docs, and future feature text must stay bilingual."]
@@ -651,7 +671,7 @@ function render() {
   dom.draftStatus.textContent = statusText(scenario);
   dom.apiStatus.textContent = state.notice || t("uiPrototype");
   dom.composerSummary.textContent = composerText(scenario);
-  dom.scopeLevel.textContent = scenario.status === "warning" ? "DFM L3" : scenario.status === "quote" ? t("manualQuote") : "DFM L1";
+  dom.scopeLevel.textContent = scenario.status === "warning" ? t("levelL3") : scenario.status === "quote" ? t("manualQuote") : t("levelL1");
   dom.submitReview.textContent = scenario.status === "warning" ? t("holdL3") : t("queueDfmMock");
 
   renderActiveStates();
@@ -673,6 +693,10 @@ function renderStaticText() {
   setText(".project-row span:last-child", t("projectName"));
   setText("#openSettings span:last-child", t("settingsButton"));
   setText("#copySpec", t("previewPacket"));
+  setText("#openScope", t("scope"));
+  setText("#openBom", t("partsChip"));
+  setText("#openGuardrails", t("riskChip"));
+  setText("#openDfm", t("dfmChip"));
 
   setAttr(".project-sidebar", "aria-label", t("sidebarAria"));
   setAttr(".primary-nav", "aria-label", t("navAria"));
@@ -698,7 +722,7 @@ function renderStaticText() {
   setText(".settings-dialog .floating-head strong", t("settingsTitle"));
   setText('[data-settings-tab="studio"]', t("studio"));
   setText('[data-settings-tab="parts"]', t("parts"));
-  setText('[data-settings-tab="dfm"]', "DFM");
+  setText('[data-settings-tab="dfm"]', t("dfm"));
   setText('[data-settings-tab="firmware"]', t("firmware"));
   setText('[data-settings-tab="language"]', t("language"));
 
@@ -939,7 +963,7 @@ function allParts(scenario) {
           ["3.5 英寸 TFT 屏", "显示", "$28", "stocked"],
           ["5 英寸 TFT 屏", "显示", "$48", "stocked"],
           ["7 英寸 TFT 屏", "显示", "$72", "stocked"],
-          ["USB-C 台架供电", "供电", "$12", "stocked"],
+          ["USB-C 桌面供电", "供电", "$12", "stocked"],
           ["环境光板", "传感器", "$8", "stocked"]
         ]
       : [
@@ -989,15 +1013,15 @@ function renderDfmView() {
 function queueItems() {
   return state.lang === "zh"
     ? [
-        { title: "核桃木桌面屏", status: "ready", detail: "DFM L1 打样包已包含范围、BOM、报价、固件和护栏。" },
-        { title: "摄像头和电池阻塞测试", status: "blocked", detail: "摄像头和电池需要先编辑范围，才能加入打样包队列。" },
-        { title: "运动陪伴屏", status: "blocked", detail: "舵机运动需要 DFM L3 机械间隙确认。" },
+        { title: "核桃木桌面屏", status: "ready", detail: "生产检查 L1 方案包已包含范围、零件清单（BOM）、报价、设备行为和风险限制。" },
+        { title: "摄像头和电池阻塞测试", status: "blocked", detail: "摄像头和电池需要先编辑范围，才能加入方案包队列。" },
+        { title: "运动陪伴屏", status: "blocked", detail: "舵机运动需要生产可行性（DFM）L3 机械间隙确认。" },
         { title: "展台计数屏", status: "queued", detail: "已附带品牌铭牌和文案槽的手动报价假设。" }
       ]
     : [
-        { title: "Walnut desk display", status: "ready", detail: "DFM L1 packet has scope, BOM, quote, firmware, and guardrails." },
+        { title: "Walnut desk display", status: "ready", detail: "Manufacturing check L1 packet has scope, parts list (BOM), quote, behavior rules, and risk limits." },
         { title: "Camera/battery blocked test", status: "blocked", detail: "Camera and battery require scope edit before packet can queue." },
-        { title: "Motion companion", status: "blocked", detail: "Servo motion requires DFM L3 mechanical clearance." },
+        { title: "Motion companion", status: "blocked", detail: "Servo motion requires manufacturing check (DFM) L3 mechanical clearance." },
         { title: "Booth counter unit", status: "queued", detail: "Manual quote assumption attached for branding plate and copy slot." }
       ];
 }
@@ -1033,7 +1057,7 @@ function renderFirmwareView(scenario) {
 function renderInspector(scenario) {
   const sections = [
     ["scope", t("inspectorScope"), renderScopeSection(scenario)],
-    ["bom", "BOM", renderBomSection(scenario)],
+    ["bom", t("bomAria"), renderBomSection(scenario)],
     ["guardrails", t("guardrails"), renderGuardrailSection(scenario)],
     ["quote", t("inspectorQuote"), renderQuoteSection(scenario)],
     ["firmware", t("firmware"), renderFirmwareSection(scenario)],
@@ -1087,9 +1111,9 @@ function renderGuardrailSection(scenario) {
 function renderQuoteSection(scenario) {
   return `
     <div class="quote-grid">
-      <span>BOM <strong>$${scenario.quote.bom}</strong></span>
+      <span>${escapeHtml(t("bomAria"))} <strong>$${scenario.quote.bom}</strong></span>
       <span>${escapeHtml(t("build"))} <strong>$${scenario.quote.build}</strong></span>
-      <span>DFM <strong>$${scenario.quote.dfm}</strong></span>
+      <span>${escapeHtml(t("dfmCost"))} <strong>$${scenario.quote.dfm}</strong></span>
       <span>${escapeHtml(t("band"))} <strong>${escapeHtml(scenario.quote.range)}</strong></span>
     </div>
     <p class="section-note">${escapeHtml(scenario.assumption)}</p>
@@ -1133,9 +1157,9 @@ function renderPopovers(scenario) {
   `;
   dom.dfmPopover.innerHTML = `
     <strong>${escapeHtml(t("dfmLevels"))}</strong>
-    <div class="popover-row ${scenario.dfmLevel === 1 ? "selected" : ""}"><span>DFM L0</span><small>${escapeHtml(t("dfmL0"))}</small></div>
-    <div class="popover-row ${scenario.dfmLevel === 1 ? "selected" : ""}"><span>DFM L1</span><small>${escapeHtml(t("dfmL1"))}</small></div>
-    <div class="popover-row ${scenario.dfmLevel === 3 ? "selected" : ""}"><span>DFM L3</span><small>${escapeHtml(t("dfmL3"))}</small></div>
+    <div class="popover-row ${scenario.dfmLevel === 0 ? "selected" : ""}"><span>${escapeHtml(t("dfmL0Label"))}</span><small>${escapeHtml(t("dfmL0"))}</small></div>
+    <div class="popover-row ${scenario.dfmLevel === 1 ? "selected" : ""}"><span>${escapeHtml(t("dfmL1Label"))}</span><small>${escapeHtml(t("dfmL1"))}</small></div>
+    <div class="popover-row ${scenario.dfmLevel === 3 ? "selected" : ""}"><span>${escapeHtml(t("dfmL3Label"))}</span><small>${escapeHtml(t("dfmL3"))}</small></div>
     <div class="popover-row ${blockedCase.dfmLevel === 4 ? "blocked" : ""}"><span>${escapeHtml(t("blocked"))}</span><small>${escapeHtml(t("dfmBlocked"))}</small></div>
   `;
 }
