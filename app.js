@@ -157,7 +157,7 @@ const state = {
   lang: initialLanguage(),
   productPlan: null,
   activeSidebar: "chat",
-  collapsedSections: new Set(),
+  collapsedSections: new Set(["scope", "parts", "model", "layout", "risk"]),
   notice: "",
   loading: false,
   submittingReview: false,
@@ -475,21 +475,24 @@ function renderInspector() {
     return;
   }
   const sections = [
-    ["scope", t("sections.scope"), renderScopeSection(revision)],
-    ["parts", t("sections.parts"), renderPartsSection(revision)],
-    ["model", t("sections.model"), renderModelSection(revision)],
-    ["layout", t("sections.layout"), renderLayoutSection(revision)],
-    ["quote", t("sections.quote"), renderQuoteSection(revision)],
-    ["risk", t("sections.risk"), renderRiskSection(revision)],
-    ["review", t("sections.review"), renderReviewSection()]
+    ["scope", t("sections.scope"), inspectorSectionSummary("scope", revision), renderScopeSection(revision)],
+    ["parts", t("sections.parts"), inspectorSectionSummary("parts", revision), renderPartsSection(revision)],
+    ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)],
+    ["layout", t("sections.layout"), inspectorSectionSummary("layout", revision), renderLayoutSection(revision)],
+    ["quote", t("sections.quote"), inspectorSectionSummary("quote", revision), renderQuoteSection(revision)],
+    ["risk", t("sections.risk"), inspectorSectionSummary("risk", revision), renderRiskSection(revision)],
+    ["review", t("sections.review"), inspectorSectionSummary("review", revision), renderReviewSection()]
   ];
   dom.inspectorContent.innerHTML = sections
-    .map(([key, title, body]) => {
+    .map(([key, title, summary, body]) => {
       const collapsed = state.collapsedSections.has(key);
       return `
         <section class="inspector-card">
           <button class="card-head inspector-toggle" type="button" data-inspector-toggle="${escapeHtml(key)}">
-            <span>${escapeHtml(title)}</span>
+            <span class="inspector-title">
+              <span>${escapeHtml(title)}</span>
+              <small>${escapeHtml(summary)}</small>
+            </span>
             <strong>${collapsed ? "+" : "-"}</strong>
           </button>
           <div class="inspector-section" ${collapsed ? "hidden" : ""}>${body}</div>
@@ -497,6 +500,17 @@ function renderInspector() {
       `;
     })
     .join("");
+}
+
+function inspectorSectionSummary(key, revision) {
+  if (key === "scope") return planTitle(revision);
+  if (key === "parts") return `${revision.modules?.length || 0} modules`;
+  if (key === "model") return `${revision.modelPreview?.viewerType || "placeholder_3d"} · ${t("modelNotCad")}`;
+  if (key === "layout") return `${revision.electronicsLayout?.placements?.length || 0} placements`;
+  if (key === "quote") return revision.quoteEstimate?.range || revision.quote?.range || "-";
+  if (key === "risk") return revision.riskReport?.blocked ? t("planManual") : t("planReady");
+  if (key === "review") return state.productPlan.reviewSubmission?.status || planStatusText();
+  return "";
 }
 
 function renderScopeSection(revision) {

@@ -866,8 +866,8 @@ pre {
   min-height: 0;
   overflow: auto;
   border-left: 1px solid rgba(232, 230, 223, 0.78);
-  background: #fbfbf8;
-  padding: 58px 18px 18px 14px;
+  background: #fcfcfa;
+  padding: 50px 18px 18px 14px;
   display: grid;
   align-content: start;
   gap: 0;
@@ -885,7 +885,7 @@ pre {
   border-bottom: 1px solid rgba(221, 218, 209, 0.82);
   border-radius: 0;
   background: transparent;
-  padding: 15px 2px 16px;
+  padding: 11px 2px 12px;
   box-shadow: none;
 }
 
@@ -900,7 +900,7 @@ pre {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: #8d918b;
   font-size: 13px;
   font-weight: 650;
@@ -908,7 +908,7 @@ pre {
 
 .inspector-toggle {
   width: 100%;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 0;
   text-align: left;
 }
@@ -919,6 +919,30 @@ pre {
 
 .inspector-section[hidden] {
   display: none;
+}
+
+.inspector-title {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.inspector-title span,
+.inspector-title small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-title small {
+  color: #8a8f89;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.inspector-section {
+  padding-top: 10px;
 }
 
 .kv-list {
@@ -1146,9 +1170,7 @@ pre {
   display: grid;
   grid-template-columns: 1fr;
   gap: 7px;
-  border-top: 1px solid var(--border);
-  margin-top: 12px;
-  padding-top: 11px;
+  margin-top: 2px;
 }
 
 .quote-grid span {
@@ -1177,10 +1199,10 @@ pre {
 .risk-item,
 .packet-item {
   border: 0;
-  border-bottom: 1px solid rgba(232, 230, 223, 0.8);
+  border-bottom: 1px solid rgba(232, 230, 223, 0.68);
   border-radius: 0;
   background: transparent;
-  padding: 7px 0;
+  padding: 6px 0;
 }
 
 .artifact-item {
@@ -1316,7 +1338,7 @@ pre {
 
 .risk-item.pass,
 .popover-row.pass {
-  background: var(--green-soft);
+  background: transparent;
 }
 
 .risk-item.warn {
