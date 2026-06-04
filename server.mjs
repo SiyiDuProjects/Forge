@@ -5,6 +5,19 @@ import { fileURLToPath } from "node:url";
 import { API_CONTRACT, CONTRACT_VERSION, WORKBENCH_CHAIN } from "./src/contracts/workbench_contract.mjs";
 import { createLogger, durationMs } from "./src/core/observability.mjs";
 import { registerAsset } from "./src/core/assets.mjs";
+import {
+  applyDesignPatch,
+  commitStagedChange,
+  getRevisionArtifacts,
+  getWorkspaceSummary,
+  proposeDesignChange,
+  regenerateRevision,
+  rejectStagedChange,
+  revertRevision,
+  searchComponentLibrary,
+  stageDesignPatch,
+  validateDesign
+} from "./src/core/forge_actions.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn, createProductPlan, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
@@ -82,6 +95,115 @@ async function handleApi(request, response, url) {
     sendJson(response, 200, {
       modules: listCatalogModules()
     });
+    return;
+  }
+
+  const workspaceSummaryMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/summary$/);
+  if (request.method === "GET" && workspaceSummaryMatch) {
+    sendActionJson(response, getWorkspaceSummary({
+      workspaceId: workspaceSummaryMatch[1]
+    }));
+    return;
+  }
+
+  const workspaceArtifactsMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/artifacts\/([^/]+)$/);
+  if (request.method === "GET" && workspaceArtifactsMatch) {
+    sendActionJson(response, getRevisionArtifacts({
+      workspaceId: workspaceArtifactsMatch[1],
+      revisionId: workspaceArtifactsMatch[2]
+    }));
+    return;
+  }
+
+  const workspaceComponentSearchMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/search$/);
+  if (request.method === "POST" && workspaceComponentSearchMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, searchComponentLibrary({
+      workspaceId: workspaceComponentSearchMatch[1],
+      query: body.query || "",
+      componentType: body.componentType || "",
+      limit: body.limit || 10
+    }));
+    return;
+  }
+
+  const workspaceProposalMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals$/);
+  if (request.method === "POST" && workspaceProposalMatch) {
+    const body = await readJsonBody(request);
+    const result = Array.isArray(body.patches)
+      ? stageDesignPatch({
+        workspaceId: workspaceProposalMatch[1],
+        patches: body.patches,
+        summary: body.summary || ""
+      })
+      : proposeDesignChange({
+        workspaceId: workspaceProposalMatch[1],
+        message: body.message || ""
+      });
+    sendActionJson(response, result);
+    return;
+  }
+
+  const workspaceProposalCommitMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/([^/]+)\/commit$/);
+  if (request.method === "POST" && workspaceProposalCommitMatch) {
+    sendActionJson(response, commitStagedChange({
+      workspaceId: workspaceProposalCommitMatch[1],
+      proposalId: workspaceProposalCommitMatch[2]
+    }));
+    return;
+  }
+
+  const workspaceProposalRejectMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/([^/]+)\/reject$/);
+  if (request.method === "POST" && workspaceProposalRejectMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, rejectStagedChange({
+      workspaceId: workspaceProposalRejectMatch[1],
+      proposalId: workspaceProposalRejectMatch[2],
+      reason: body.reason || ""
+    }));
+    return;
+  }
+
+  const workspacePatchApplyMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/patches\/apply$/);
+  if (request.method === "POST" && workspacePatchApplyMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, applyDesignPatch({
+      workspaceId: workspacePatchApplyMatch[1],
+      message: body.message || "",
+      patches: body.patches || []
+    }));
+    return;
+  }
+
+  const workspaceRegenerateMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revisions\/regenerate$/);
+  if (request.method === "POST" && workspaceRegenerateMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, regenerateRevision({
+      workspaceId: workspaceRegenerateMatch[1],
+      revisionId: body.revisionId || "",
+      reason: body.reason || "manual_regeneration"
+    }));
+    return;
+  }
+
+  const workspaceRevisionRevertMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revisions\/([^/]+)\/revert$/);
+  if (request.method === "POST" && workspaceRevisionRevertMatch) {
+    sendActionJson(response, revertRevision({
+      workspaceId: workspaceRevisionRevertMatch[1],
+      revisionId: workspaceRevisionRevertMatch[2]
+    }));
+    return;
+  }
+
+  const workspaceValidateMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/validate$/);
+  if (request.method === "POST" && workspaceValidateMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, validateDesign({
+      workspaceId: workspaceValidateMatch[1],
+      proposalId: body.proposalId || "",
+      patches: Array.isArray(body.patches) ? body.patches : null,
+      mode: body.mode || "current_or_proposal"
+    }));
     return;
   }
 
@@ -385,6 +507,15 @@ function sendJson(response, status, payload) {
     "cache-control": "no-store"
   });
   response.end(JSON.stringify(payload, null, 2));
+}
+
+function sendActionJson(response, result) {
+  const status = result?.ok
+    ? 200
+    : result?.error?.statusCode === 404 || result?.error?.code?.startsWith("UNKNOWN_") || result?.error?.code === "NOT_FOUND"
+      ? 404
+      : 400;
+  sendJson(response, status, result);
 }
 
 server.listen(port, host, () => {

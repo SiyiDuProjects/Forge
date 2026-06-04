@@ -4,7 +4,7 @@ import { createGenerationJob } from "./jobs.mjs";
 import { createReviewSubmission } from "./review_queue.mjs";
 import { isGenerationRequest, processUserTurn } from "./sparker_orchestrator.mjs";
 import { includesAny, makeId } from "./utils.mjs";
-import { clone, createEmptyProductPlan, createRevisionDiff, createWorkspaceState, productPlanToDraft } from "./workspace_state.mjs";
+import { applyWorkspacePatches, clone, createEmptyProductPlan, createRevisionDiff, createWorkspaceState, productPlanToDraft } from "./workspace_state.mjs";
 
 const plans = new Map();
 
@@ -31,6 +31,7 @@ export function createProductPlan({ message, initialMessage, assets = [], langua
     requiredInputs: {},
     conversation: [userTurn],
     revisions: [],
+    proposals: workspaceState.proposals,
     workspaceState,
     assets: assetRefs,
     jobs: [],
@@ -148,13 +149,89 @@ export function revertProductPlanRevision({ planId, revisionId } = {}) {
   return { productPlan: plan, revision };
 }
 
-export async function submitProductPlanReview({ planId, revisionId, contactInfo = {} } = {}) {
-  const plan = plans.get(planId);
-  if (!plan) {
-    const error = new Error(`Unknown ProductPlan: ${planId}`);
+export function createProductPlanRevisionFromPatches({
+  planId,
+  patches = [],
+  summary = "",
+  message = "",
+  source = "forge_action",
+  generateArtifacts = true
+} = {}) {
+  const plan = getPlanOrThrow(planId);
+  ensureWorkspaceCollections(plan);
+  const previous = currentRevision(plan);
+  const previousProductPlan = previous?.productPlanSnapshot
+    || plan.workspaceState?.productPlan
+    || createEmptyProductPlan();
+  const patchResult = applyWorkspacePatches(previousProductPlan, patches);
+  if (patchResult.rejectedPatches.length > 0) {
+    const error = new Error("One or more patches were rejected.");
+    error.statusCode = 400;
+    error.rejectedPatches = patchResult.rejectedPatches;
+    throw error;
+  }
+  const turn = createTurn({
+    role: "action",
+    text: String(summary || message || "Forge action patch").trim()
+  });
+  const requestText = [previous?.requestText, summary || message]
+    .filter(Boolean)
+    .join("\nAction: ");
+  const revision = createRevisionForTurn({
+    plan,
+    turn,
+    requestText,
+    structuredProductPlan: patchResult.productPlan,
+    patches: patchResult.appliedPatches,
+    sparkerResult: {
+      appliedPatches: patchResult.appliedPatches,
+      rejectedPatches: [],
+      intent: source
+    },
+    previousRevision: previous,
+    generateArtifacts
+  });
+  return {
+    productPlan: plan,
+    revision,
+    appliedPatches: patchResult.appliedPatches
+  };
+}
+
+export function regenerateProductPlanRevision({ planId, revisionId = "", reason = "manual_regeneration" } = {}) {
+  const plan = getPlanOrThrow(planId);
+  ensureWorkspaceCollections(plan);
+  const sourceRevision = revisionId
+    ? plan.revisions.find((item) => item.revisionId === revisionId)
+    : currentRevision(plan);
+  if (!sourceRevision) {
+    const error = new Error(`Unknown revision for ProductPlan: ${planId}`);
     error.statusCode = 404;
     throw error;
   }
+  const turn = createTurn({
+    role: "action",
+    text: String(reason || "manual_regeneration")
+  });
+  const revision = createRevisionForTurn({
+    plan,
+    turn,
+    requestText: sourceRevision.requestText || reason,
+    structuredProductPlan: clone(sourceRevision.productPlanSnapshot || plan.workspaceState?.productPlan || createEmptyProductPlan()),
+    patches: [],
+    sparkerResult: {
+      appliedPatches: [],
+      rejectedPatches: [],
+      intent: "regenerate_revision"
+    },
+    previousRevision: sourceRevision,
+    generateArtifacts: true
+  });
+  return { productPlan: plan, revision, sourceRevision };
+}
+
+export async function submitProductPlanReview({ planId, revisionId, contactInfo = {} } = {}) {
+  const plan = getPlanOrThrow(planId);
   const revision = revisionId
     ? plan.revisions.find((item) => item.revisionId === revisionId)
     : currentRevision(plan);
@@ -272,6 +349,7 @@ function createRevisionForTurn({
   plan.requiredInputs = requiredInputsFor(requestText, draft);
   plan.revisions.push(revision);
   plan.jobs.push(modelJob, layoutJob, quoteJob);
+  plan.updatedAt = revision.createdAt;
   if (plan.workspaceState) {
     plan.workspaceState.productPlan = clone(structuredProductPlan);
     plan.workspaceState.currentRevisionId = revision.revisionId;
@@ -327,7 +405,7 @@ function generatedAssetsFromRevision(revision) {
   });
 }
 
-function artifactPathsForRevision(revision) {
+export function artifactPathsForRevision(revision) {
   const artifacts = revision.modelArtifacts?.artifacts || {};
   return Object.fromEntries(
     Object.entries(artifacts)
@@ -336,9 +414,32 @@ function artifactPathsForRevision(revision) {
   );
 }
 
-function currentRevision(plan) {
+export function currentRevision(plan) {
   return plan.revisions.find((revision) => revision.revisionId === plan.currentRevisionId)
     || plan.revisions.at(-1);
+}
+
+function getPlanOrThrow(planId) {
+  const plan = plans.get(planId);
+  if (!plan) {
+    const error = new Error(`Unknown ProductPlan: ${planId}`);
+    error.statusCode = 404;
+    throw error;
+  }
+  ensureWorkspaceCollections(plan);
+  return plan;
+}
+
+function ensureWorkspaceCollections(plan) {
+  if (!plan.workspaceState) {
+    plan.workspaceState = createWorkspaceState({
+      workspaceId: plan.planId,
+      title: plan.revisions.at(-1)?.requestText || "Forge hardware prototype"
+    });
+  }
+  if (!Array.isArray(plan.workspaceState.proposals)) plan.workspaceState.proposals = [];
+  if (!Array.isArray(plan.workspaceState.revisions)) plan.workspaceState.revisions = [];
+  plan.proposals = plan.workspaceState.proposals;
 }
 
 function createTurn({ role, text, assetIds = [], createdAt = new Date().toISOString() }) {

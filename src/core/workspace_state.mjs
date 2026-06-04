@@ -18,6 +18,7 @@ export function createWorkspaceState({ workspaceId = "forge_demo_001", title = "
     validationWarnings: [],
     generatedArtifacts: {},
     revisions: [],
+    proposals: [],
     directEditingAllowed: false
   };
 }

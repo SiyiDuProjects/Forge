@@ -53,6 +53,38 @@ User preview uses the same `GeometrySpec` as the generated GLB and supports rota
 
 ProductPlan conversation turns default to `generateArtifacts: false`, so they validate geometry but do not write GLB/STL/STEP until the user confirms generation. Direct model APIs default to generating artifacts unless `generateArtifacts` is explicitly false.
 
+## Forge Action Contract
+
+The source of truth for action implementations is `src/core/forge_actions.mjs`. Detailed schemas are documented in `docs/FORGE_ACTION_CONTRACT.md`.
+
+Future chat, agent, or LLM tool-calling layers should call these actions instead of directly mutating files, meshes, GLB/STL artifacts, raw `GeometrySpec`, or ProductPlan internals.
+
+Action names:
+
+- `getWorkspaceSummary`
+- `searchComponentLibrary`
+- `proposeDesignChange`
+- `stageDesignPatch`
+- `commitStagedChange`
+- `applyDesignPatch`
+- `regenerateRevision`
+- `validateDesign`
+- `revertRevision`
+- `getRevisionArtifacts`
+- `rejectStagedChange`
+
+Action responses use `{ ok: true, ... }` for success and `{ ok: false, error: { code, message } }` for normal invalid input.
+
+Patch safety checks include known patch type, known patch path, supported component type or component ID, supported semantic position, supported shape profile, known workspace ID, known proposal ID, and known revision ID.
+
+Proposal states:
+
+- `proposed`
+- `staged`
+- `committed`
+- `rejected`
+- `expired`
+
 ## ComponentDescriptor v2 Contract
 
 Descriptor files live under `src/core/component_assets/<component_id>/descriptor.json` with a companion `sources.md`.
@@ -102,6 +134,58 @@ Returns service health, contract version, chain steps, and the API contract list
 ### `GET /api/modules`
 
 Returns the stocked/review/deferred module catalog.
+
+### `GET /api/workspaces/:workspaceId/summary`
+
+Returns compact workspace summary for chat/UI context. It does not include large GLB/STL content.
+
+### `GET /api/workspaces/:workspaceId/artifacts/:revisionId`
+
+Returns compact artifact links and metadata for a revision, including ProductPlan, GeometrySpec, component selections, component descriptors, component asset manifest, GLB, shell STL, validation report, and design summary when present.
+
+### `POST /api/workspaces/:workspaceId/components/search`
+
+Body:
+
+```json
+{
+  "query": "button",
+  "componentType": "button",
+  "limit": 10
+}
+```
+
+Returns supported ComponentDescriptor-backed rows. Camera and battery rows include manual-review risk flags.
+
+### `POST /api/workspaces/:workspaceId/proposals`
+
+Creates a proposal from either `message` or explicit `patches`.
+
+With `message`, the server calls `proposeDesignChange` and stores a `proposed` record. With `patches`, the server calls `stageDesignPatch` and stores a `staged` record. Neither path creates a committed revision.
+
+### `POST /api/workspaces/:workspaceId/proposals/:proposalId/commit`
+
+Commits a proposed or staged change. This creates a new ProductPlan revision and, when validation allows, revision-specific artifacts.
+
+### `POST /api/workspaces/:workspaceId/proposals/:proposalId/reject`
+
+Marks a proposal as `rejected`. Rejected proposals cannot be committed later.
+
+### `POST /api/workspaces/:workspaceId/patches/apply`
+
+Applies explicit structured patches immediately for clear user commands. Valid patches create a new ProductPlan revision and revision-specific generated artifacts.
+
+### `POST /api/workspaces/:workspaceId/revisions/regenerate`
+
+Creates a fresh revision from the same design intent and regenerates artifacts. This is for generation-code changes, descriptor changes, or explicit regeneration requests.
+
+### `POST /api/workspaces/:workspaceId/revisions/:revisionId/revert`
+
+Switches the current workspace back to a previous revision without AI involvement.
+
+### `POST /api/workspaces/:workspaceId/validate`
+
+Validates the current state, a proposal, or explicit patch set without writing model files.
 
 ### `POST /api/plans`
 

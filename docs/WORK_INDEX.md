@@ -20,6 +20,23 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-04 - Forge Action Contract
+
+- Scope: implement the stable backend action layer between future chat/tool-calling runtimes and Forge ProductPlan/GeometrySpec/artifact state.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-04-forge-action-contract-goal-notes.md`
+- Main docs: `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `AGENTS.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/workspace_state.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `server.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: Forge action contract, tool calling, proposals, staged patches, commitStagedChange, applyDesignPatch, validateDesign, regenerateRevision, getRevisionArtifacts, patch safety, directEditingAllowed false.
+- Verification: `node --test tests/forge_actions.test.mjs` passes; `npm run check` passes with 32 tests.
+- Next: future chat framework work should map tool calls to these actions instead of mutating ProductPlan, GeometrySpec, files, or model artifacts directly.
+
 ### 2026-06-04 - Project Context Organization
 
 - Scope: align Forge documentation with the global AGENTS context-organization rules.

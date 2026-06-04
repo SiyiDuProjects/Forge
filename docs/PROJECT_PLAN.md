@@ -16,6 +16,7 @@ The product should let a user describe a custom desk hardware idea, then convert
 - Standardized 3D printed enclosure plan
 - ProductPlan revisions created from ongoing conversation
 - Prototype structure preview (3D) and electronics-layout generation jobs
+- Stable Forge action contract for future chat/tool-calling layers to inspect, propose, stage, commit, validate, regenerate, revert, and retrieve artifacts without owning Forge state
 
 The UI should preserve the Codex interaction model: left workspace sidebar, center thread, bottom composer, right-side live output/inspector, settings dialog, and floating menus. The visible labels, buttons, workflows, and output content must be our own hardware-build language.
 
@@ -58,6 +59,7 @@ Non-goals for the first MVP:
 - Real supplier ordering
 - User accounts and team permissions
 - Real AI memory or external data integrations
+- Full chatbot framework integration; future chat runtimes must call Forge actions instead of owning ProductPlan, GeometrySpec, artifacts, or files
 
 Enclosure boundary:
 
@@ -196,6 +198,8 @@ Implemented:
 - Node built-in tests for pipeline behavior, blocking rules, firmware preview, contracts, and bilingual UI assets
 - GitHub Actions workflow that runs `npm run check`
 - JSON request logging in the local server
+- Forge action contract in `src/core/forge_actions.mjs` with workspace summaries, component search, proposal creation, staged patches, committed patch application, regeneration, validation, revert, artifact retrieval, structured patch errors, and HTTP wrappers under `/api/workspaces/:workspaceId/...`
+- Proposal storage on `workspaceState.proposals` with proposed/staged/committed/rejected lifecycle states
 
 Implementation boundary:
 
@@ -207,6 +211,7 @@ Implementation boundary:
 - SolidWorks is only an internal STEP handoff target for reviewers, not a user-facing generation core.
 - The 3D preview should remain a result/evidence surface. Users may rotate, zoom, pan, and switch between appearance/component transparency layers, but cannot drag parts, edit holes, or directly modify geometry.
 - Conversation turns can update `GeometrySpec` and validation without writing GLB/STL/STEP; a clear confirmation such as "生成模型", "现在造一下", or "build it" is required before model artifacts are written.
+- Future chatbot, agent, or tool-calling layers must use the Forge action contract instead of directly mutating files, meshes, `GeometrySpec`, GLB, STL, STEP, or ProductPlan internals.
 
 Known local verification limits:
 
@@ -286,7 +291,7 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, and ComponentDescriptor v2 mechanical proxy pass complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype.
+Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, and Forge action contract complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and future chat/tool-calling layers now have a controlled backend action surface.
 
 - Keep user turns creating ProductPlan revisions.
 - Keep prototype structure preview (3D), electronics layout, quote, and review submission on unified jobs.
@@ -295,6 +300,7 @@ Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact ge
 - Keep GLB user preview with placed part volumes, interface markers, cable-route lines, and risk markers. Keep STL shell-only for print/quote handoff and STEP as the internal SolidWorks/engineering handoff.
 - Keep the viewer read-only except rotate, zoom, pan, risk markers, and appearance/component layer switching.
 - Keep non-standard hardware in `manual_expansion_draft`.
+- Keep future AI/chat runtimes outside direct Forge state mutation; they should call actions for summary, component search, proposal, patch application, validation, regeneration, revert, and artifact retrieval.
 
 Implemented V1 conversational hardware prototype path:
 
@@ -311,6 +317,21 @@ Implemented V1 conversational hardware prototype path:
 - Keep shell print handoff split into `shell_front.stl` and `shell_back.stl`; electronics are excluded from printable STL output.
 - Persist generation evidence files with each revision: `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `model.glb`, shell STL files, `design_summary.md`, `validation_report.json`, STEP handoff summary, and the CadQuery adapter script.
 - Keep the UI as a read-only result preview. Users can switch `外观层` / `元器件层`, rotate, zoom, pan, view component asset quality, view warnings, and open generated evidence links, but they cannot drag parts, edit holes, or modify geometry directly.
+
+Implemented Forge action contract:
+
+- `getWorkspaceSummary` returns compact workspace state for chat/UI context without embedding large artifact content.
+- `searchComponentLibrary` exposes finite ComponentDescriptor-backed supported components and camera/battery review risks.
+- `proposeDesignChange` creates proposal records from user messages without creating committed revisions.
+- `stageDesignPatch` stores explicit structured patches as staged proposals without generating committed revisions.
+- `commitStagedChange` commits a proposal through the existing ProductPlan revision and artifact-generation path.
+- `applyDesignPatch` applies explicit patches immediately for clear user commands and creates a generated revision.
+- `regenerateRevision` creates a fresh revision from the same design intent when generation code or descriptors change.
+- `validateDesign` validates current state, staged proposals, or explicit patches without writing model artifacts.
+- `revertRevision` switches the current workspace back to a known revision without AI involvement.
+- `getRevisionArtifacts` returns compact artifact links and metadata for ProductPlan, GeometrySpec, component selections, descriptors, asset manifest, GLB, shell STL, validation report, and design summary.
+- `rejectStagedChange` marks proposals rejected so they cannot be committed later.
+- Patch validation fails safely for unknown patch types, unknown paths, unknown components, unsupported component types, unsupported semantic positions, and unsupported shape profiles.
 
 Real-generation direction:
 
@@ -377,6 +398,11 @@ The project should not be considered done until:
 - A confirmed generation request also writes ComponentDescriptor v2 evidence: `component_descriptors.json` and `component_asset_manifest.json`.
 - Component asset quality and validation status are visible in the UI and generated evidence. Current proxy components must not be presented as production ready.
 - The 3D preview is visible as an outcome snapshot and allows rotate, zoom, pan, and appearance/component layer switching, but does not introduce modeling-editor behavior.
+- Future chatbot, agent, or LLM tool-calling runtimes can drive Forge by calling a small safe set of backend actions rather than directly mutating files or geometry.
+- Proposal and discussion flows can create `workspaceState.proposals` without generating committed revisions.
+- Staged/committed action flows preserve revision-specific artifacts and do not overwrite old revision artifacts.
+- Patch application rejects unsafe or unsupported changes with structured errors.
+- Action schemas and API wrappers are documented in `docs/FORGE_ACTION_CONTRACT.md` and `docs/CONTRACTS.md`.
 - A camera/battery request remains reviewable and shows clear human-review risk messaging.
 - A motion request is blocked from the standard desktop screen path.
 - `提交审核下单` writes a local human review packet and states that no payment or manufacturing has started.

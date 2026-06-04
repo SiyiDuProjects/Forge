@@ -8,7 +8,8 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 - `styles.css`: Codex-like desktop layout, inspector density, popovers, and responsive behavior.
 - `app.js`: browser-side conversation-first state machine, bilingual copy, ProductPlan rendering, contact capture, canvas preview, and popover rendering.
 - `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, and review submission.
-- `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
+- `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, Forge actions, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
+- `src/core/forge_actions.mjs`: stable action contract for future chat/tool-calling layers. It exposes summaries, component search, proposal staging, committed patch application, regeneration, validation, revert, and artifact retrieval while keeping ProductPlan and GeometrySpec under Forge control.
 - `src/contracts`: stable names for API routes, chain steps, statuses, and supported languages.
 - `tests`: Node built-in test suite for pipeline behavior and frontend copy invariants.
 - `docs`: planning, architecture, contracts, operations notes, work index, and source-material index.
@@ -27,6 +28,17 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 9. After confirmation, the model-generation job writes a placed-part GLB, shell-only STL, STEP handoff file, validation report, and CadQuery adapter script.
 10. Electronics layout, quote assumptions, and the review packet refer back to the same revision and generated geometry artifacts when available.
 11. `createReviewSubmission` writes a local human review packet when `提交审核下单` is clicked.
+
+## Action Boundary
+
+Future chat frameworks should call `src/core/forge_actions.mjs` instead of directly mutating Forge state. The action layer separates discussion, staged proposals, and committed revisions:
+
+- Discussion/proposal actions can create `workspaceState.proposals` without creating committed revisions.
+- Commit/apply/regenerate actions create ProductPlan revisions through the existing generation jobs.
+- Validation actions run GeometrySpec validation without writing model files.
+- Artifact actions return compact links and metadata, not raw GLB/STL content.
+
+The action layer rejects unknown patch types, unknown patch paths, unsupported component types, unsupported semantic positions, unsupported shape profiles, unknown workspaces, unknown proposals, and unknown revisions with structured `{ ok: false, error }` responses.
 
 ## UI Boundary
 
@@ -60,3 +72,4 @@ Future work should start from the lightweight documentation routing layer before
 - `docs/WORK_INDEX.md`: recent work blocks, artifacts, retrieval handles, and next steps.
 - `docs/source-materials/INDEX.md`: source-note inventory and metadata pattern.
 - `docs/PROJECT_PLAN.md`: durable product decisions, implementation status, and acceptance criteria.
+- `docs/FORGE_ACTION_CONTRACT.md`: action schemas for future chat/tool-calling integration.

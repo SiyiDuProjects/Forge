@@ -1,4 +1,4 @@
-export const CONTRACT_VERSION = "2026-06-03";
+export const CONTRACT_VERSION = "2026-06-04";
 
 export const WORKBENCH_CHAIN = [
   "parse_request",
@@ -82,6 +82,62 @@ export const API_CONTRACT = [
     method: "GET",
     path: "/api/modules",
     response: ["modules"]
+  },
+  {
+    method: "GET",
+    path: "/api/workspaces/:workspaceId/summary",
+    response: ["ok", "workspaceId", "currentRevisionId", "requirements", "artifactStatus", "directEditingAllowed"]
+  },
+  {
+    method: "GET",
+    path: "/api/workspaces/:workspaceId/artifacts/:revisionId",
+    response: ["ok", "revisionId", "artifacts", "artifactPaths", "directEditingAllowed"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/search",
+    body: ["query", "componentType", "limit"],
+    response: ["ok", "results"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/proposals",
+    body: ["message", "patches", "summary"],
+    response: ["ok", "proposalId", "status", "patches", "validationPreview"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/proposals/:proposalId/commit",
+    response: ["ok", "committed", "newRevisionId", "diff", "validationReport", "artifactPaths"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/proposals/:proposalId/reject",
+    body: ["reason"],
+    response: ["ok", "rejected", "proposalId", "status"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/patches/apply",
+    body: ["message", "patches"],
+    response: ["ok", "applied", "newRevisionId", "diff", "validationReport", "artifactPaths"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/revisions/regenerate",
+    body: ["revisionId", "reason"],
+    response: ["ok", "regenerated", "revisionId", "sourceRevisionId", "artifactPaths", "validationReport"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/revisions/:revisionId/revert",
+    response: ["ok", "reverted", "currentRevisionId", "artifactPaths"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/validate",
+    body: ["proposalId", "patches", "mode"],
+    response: ["ok", "status", "errors", "warnings", "blocked", "geometryValidation"]
   },
   {
     method: "POST",

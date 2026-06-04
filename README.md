@@ -13,6 +13,7 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 - Single-page UI prototype in `index.html`, `styles.css`, and `app.js`
 - Core planning pipeline under `src/core`
 - ProductPlan, asset, job, GeometrySpec, generated model artifact, electronics layout preview, quote assumption, and local review APIs
+- Forge action contract under `src/core/forge_actions.mjs` for future chat/tool-calling layers to inspect summaries, stage proposals, apply patches, validate designs, regenerate revisions, revert revisions, and retrieve artifacts without direct mesh or file mutation
 - Confirmed first-generation model artifacts under `data/models`: GLB with placed part placeholders for preview, STL shell-only print/quote handoff, STEP for internal engineering review, validation reports, and a CadQuery adapter script
 - Shared contracts under `src/contracts`
 - Project and architecture docs under `docs`
@@ -59,5 +60,6 @@ Every visible button should still produce a concrete UI state: view switch, popo
 - [Work Index](docs/WORK_INDEX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contracts](docs/CONTRACTS.md)
+- [Forge Action Contract](docs/FORGE_ACTION_CONTRACT.md)
 - [Observability](docs/operations/OBSERVABILITY.md)
 - [Source Materials Index](docs/source-materials/INDEX.md)

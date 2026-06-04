@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-04
 
+### Forge Action Contract Goal Notes
+
+- File: `docs/source-materials/2026-06-04-forge-action-contract-goal-notes.md`
+- Status: implemented as the stable backend action layer for future chat/tool-calling integrations.
+- Related docs: `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `AGENTS.md`
+- Key handles: Forge action contract, tool calling, proposal, staged patch, commit revision, apply patch, validate design, component search, artifacts, read-only UI.
+
 ### Descriptor-Driven Mechanical Proxy Pipeline
 
 - File: `docs/source-materials/2026-06-04-descriptor-driven-mechanical-proxy-pipeline-notes.md`
