@@ -2,7 +2,7 @@
 
 Status: implemented for the current local Forge prototype.
 
-This contract defines the controlled backend actions that a future chat runtime, agent, or tool-calling layer can use to inspect and update a Forge workspace. Chat systems must call these actions instead of directly mutating files, meshes, GLB/STL artifacts, or raw `GeometrySpec`.
+This contract defines the controlled backend actions that Forge QueryEngine, chat runtimes, agents, or tool-calling layers can use to inspect and update a Forge workspace. Chat systems must call these actions instead of directly mutating files, meshes, GLB/STL artifacts, or raw `GeometrySpec`.
 
 ## Boundary
 
@@ -25,6 +25,8 @@ The local file-backed workspace is written under `data/workspaces/<planId>/`. It
 Generated GLB/STL/STEP files under `revisions/<revisionId>/artifacts/` are derived outputs. They are not editable source and must still be regenerated from ProductPlan, ComponentDescriptor selections, and GeometrySpec through Forge actions.
 
 Tool Protocol metadata lives in `src/core/tool_registry.mjs`. Future chat runtimes should inspect it before action calls so they can respect confirmation gates, read/write behavior, side effects, concurrency locks, rollback policy, and disallowed raw mutation targets.
+
+Forge QueryEngine V1 now implements that runtime layer in `src/core/forge_query_engine.mjs`. It exports model tool schemas, runs `permission_gate.mjs`, dispatches through `tool_executor.mjs`, persists chat sessions under `data/workspaces/<planId>/chat_sessions/`, and exposes `/api/workspaces/:workspaceId/chat/*` routes.
 
 ## Proposal Model
 

@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-04
 
+### Forge QueryEngine And Chat Runtime V1 Goal
+
+- File: `docs/source-materials/2026-06-04-forge-query-engine-chat-runtime-goal.md`
+- Status: implemented as Forge QueryEngine / Chat Runtime V1.
+- Related docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`
+- Key handles: Forge QueryEngine, Chat Runtime V1, Claude Code QueryEngine, tool loop, permission gate, transcript, ContextPack, MockModelAdapter, OpenAIResponsesAdapter.
+
 ### GPT Pro Project Folder Runtime Recommendation
 
 - File: `docs/source-materials/2026-06-04-gpt-pro-project-folder-runtime-recommendation.md`

@@ -105,6 +105,23 @@ export const API_CONTRACT = [
   },
   {
     method: "POST",
+    path: "/api/workspaces/:workspaceId/chat/turn",
+    body: ["sessionId", "userMessage", "modelProvider", "mode", "confirmation"],
+    response: ["ok", "assistantMessage", "messages", "toolCalls", "toolResults", "proposal", "revision", "pendingConfirmation", "productPlan"]
+  },
+  {
+    method: "GET",
+    path: "/api/workspaces/:workspaceId/chat/:sessionId",
+    response: ["ok", "workspaceId", "sessionId", "entries", "messages"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/chat/confirm",
+    body: ["sessionId", "confirmationId", "approved"],
+    response: ["ok", "assistantMessage", "toolCalls", "toolResults", "revision", "pendingConfirmation", "productPlan"]
+  },
+  {
+    method: "POST",
     path: "/api/workspaces/:workspaceId/components/search",
     body: ["query", "componentType", "limit"],
     response: ["ok", "results"]

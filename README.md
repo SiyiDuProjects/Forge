@@ -14,6 +14,7 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 - Core planning pipeline under `src/core`
 - ProductPlan, asset, job, GeometrySpec, generated model artifact, electronics layout preview, quote assumption, and local review APIs
 - Forge action contract under `src/core/forge_actions.mjs` for future chat/tool-calling layers to inspect summaries, stage proposals, apply patches, validate designs, regenerate revisions, revert revisions, and retrieve artifacts without direct mesh or file mutation
+- Forge QueryEngine / Chat Runtime V1 under `src/core/forge_query_engine.mjs`, with ContextPack prompt assembly, model adapters, tool schema export, permission gate, tool executor, chat session JSONL, and confirmation flow
 - File-backed Forge project folders under `data/workspaces/<planId>/` with `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, persistent proposals, immutable revision folders, context markdown indexes, review files, and revision-scoped generated artifacts
 - Tool Protocol metadata under `src/core/tool_registry.mjs` and ContextPack summaries under `src/core/context_pack_builder.mjs` for future chat/runtime layers
 - Confirmed first-generation model artifacts under `data/models`: GLB with placed part placeholders for preview, STL shell-only print/quote handoff, STEP for internal engineering review, validation reports, and a CadQuery adapter script
@@ -51,6 +52,7 @@ This is a complete clickable UI prototype, not a real manufacturing system.
 - No real payment or checkout
 - No real manufacturing order or user-facing export flow
 - No enclosure process beyond standardized 3D printing
+- No full Claude Code clone, MCP, remote sessions, shell tools, arbitrary file editing, plugin marketplace, or multi-agent runtime
 - The current 3D layer validates `GeometrySpec` during conversation and generates deterministic v1 artifacts only after explicit generation confirmation; it is not yet a full CadQuery/OpenCascade service or SolidWorks automation
 - SolidWorks is only an internal STEP handoff target, not part of the user flow
 
@@ -63,5 +65,6 @@ Every visible button should still produce a concrete UI state: view switch, popo
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contracts](docs/CONTRACTS.md)
 - [Forge Action Contract](docs/FORGE_ACTION_CONTRACT.md)
+- [Forge QueryEngine](docs/FORGE_QUERY_ENGINE.md)
 - [Observability](docs/operations/OBSERVABILITY.md)
 - [Source Materials Index](docs/source-materials/INDEX.md)

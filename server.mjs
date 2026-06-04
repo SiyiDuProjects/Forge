@@ -6,6 +6,7 @@ import { API_CONTRACT, CONTRACT_VERSION, WORKBENCH_CHAIN } from "./src/contracts
 import { createLogger, durationMs } from "./src/core/observability.mjs";
 import { registerAsset } from "./src/core/assets.mjs";
 import { buildContextPack } from "./src/core/context_pack_builder.mjs";
+import { loadChatSession } from "./src/core/chat_session_store.mjs";
 import {
   applyDesignPatch,
   commitStagedChange,
@@ -19,6 +20,7 @@ import {
   stageDesignPatch,
   validateDesign
 } from "./src/core/forge_actions.mjs";
+import { confirmForgeChatTool, runForgeChatTurn } from "./src/core/forge_query_engine.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn, createProductPlan, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
@@ -132,6 +134,42 @@ async function handleApi(request, response, url) {
       workspaceId: workspaceToolsMatch[1],
       tools: listToolMetadata()
     });
+    return;
+  }
+
+  const workspaceChatTurnMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/turn$/);
+  if (request.method === "POST" && workspaceChatTurnMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, await runForgeChatTurn({
+      workspaceId: workspaceChatTurnMatch[1],
+      sessionId: body.sessionId || "session_default",
+      userMessage: body.userMessage || body.message || "",
+      modelProvider: body.modelProvider || process.env.FORGE_MODEL_PROVIDER || "mock",
+      mode: body.mode || "normal",
+      confirmation: body.confirmation || null
+    }));
+    return;
+  }
+
+  const workspaceChatSessionMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/([^/]+)$/);
+  if (request.method === "GET" && workspaceChatSessionMatch) {
+    sendActionJson(response, loadChatSession({
+      workspaceId: workspaceChatSessionMatch[1],
+      sessionId: workspaceChatSessionMatch[2],
+      limit: Number(url.searchParams.get("limit") || 0)
+    }));
+    return;
+  }
+
+  const workspaceChatConfirmMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/confirm$/);
+  if (request.method === "POST" && workspaceChatConfirmMatch) {
+    const body = await readJsonBody(request);
+    sendActionJson(response, await confirmForgeChatTool({
+      workspaceId: workspaceChatConfirmMatch[1],
+      confirmationId: body.confirmationId || "",
+      sessionId: body.sessionId || "session_default",
+      approved: Boolean(body.approved)
+    }));
     return;
   }
 

@@ -41,6 +41,12 @@ const copy = {
     benchAgent: "原型助手",
     fallbackNotice: "后端暂不可用，正在显示本地 ProductPlan 示例",
     rerunNotice: "已更新 ProductPlan revision",
+    chatRuntimeNotice: "QueryEngine 已通过 Forge 工具更新项目",
+    chatConfirmationRequired: "需要确认后执行",
+    chatTraceTitle: "工具调用",
+    chatTraceEmpty: "本轮没有执行工具",
+    approveChange: "确认执行",
+    rejectChange: "取消",
     submitNeedContact: "请先填写姓名和邮箱",
     submittedNotice: "已生成本地人工审核资料，等待确认；不是付款，也不是立即生产。",
     actionNotice: "已选择：",
@@ -221,6 +227,12 @@ const copy = {
     benchAgent: "Prototype assistant",
     fallbackNotice: "Backend unavailable; showing a local ProductPlan example",
     rerunNotice: "ProductPlan revision updated",
+    chatRuntimeNotice: "QueryEngine updated the project through Forge tools",
+    chatConfirmationRequired: "Confirmation required",
+    chatTraceTitle: "Tool calls",
+    chatTraceEmpty: "No tool executed in this turn",
+    approveChange: "Confirm",
+    rejectChange: "Cancel",
     submitNeedContact: "Enter name and email first",
     submittedNotice: "Local human review material generated; no payment or manufacturing has started.",
     actionNotice: "Selected: ",
@@ -388,6 +400,9 @@ const state = {
   notice: "",
   loading: false,
   submittingReview: false,
+  chatSessionId: "session_default",
+  lastChatTurn: null,
+  pendingConfirmation: null,
   workspaceToken: 0,
   contactInfo: { name: "", email: "" }
 };
@@ -468,17 +483,52 @@ async function sendTurn(message) {
   state.loading = true;
   render();
   try {
-    const response = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback")
-      ? await apiPost(`/api/plans/${state.productPlan.planId}/turns`, { message })
+    const hasRealPlan = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback");
+    const response = hasRealPlan
+      ? await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/turn`, {
+        sessionId: state.chatSessionId,
+        userMessage: message,
+        modelProvider: "mock"
+      })
       : await apiPost("/api/plans", { initialMessage: message, language: state.lang });
     if (token !== state.workspaceToken) return;
     state.productPlan = response.productPlan;
+    state.lastChatTurn = hasRealPlan ? response : null;
+    state.pendingConfirmation = response.pendingConfirmation || null;
     state.activeSidebar = "chat";
-    setNotice(t("rerunNotice"));
+    setNotice(response.pendingConfirmation ? t("chatConfirmationRequired") : (hasRealPlan ? t("chatRuntimeNotice") : t("rerunNotice")));
   } catch {
     if (token !== state.workspaceToken) return;
     state.productPlan = fallbackProductPlan(message);
+    state.lastChatTurn = null;
+    state.pendingConfirmation = null;
     state.activeSidebar = "chat";
+    setNotice(t("fallbackNotice"));
+  } finally {
+    if (token !== state.workspaceToken) return;
+    state.loading = false;
+    render();
+  }
+}
+
+async function resolveChatConfirmation(approved) {
+  if (!state.productPlan || !state.pendingConfirmation || state.loading) return;
+  const token = ++state.workspaceToken;
+  state.loading = true;
+  render();
+  try {
+    const response = await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/confirm`, {
+      sessionId: state.chatSessionId,
+      confirmationId: state.pendingConfirmation.confirmationId,
+      approved
+    });
+    if (token !== state.workspaceToken) return;
+    state.productPlan = response.productPlan || state.productPlan;
+    state.lastChatTurn = response;
+    state.pendingConfirmation = null;
+    setNotice(approved ? t("chatRuntimeNotice") : t("actionNotice") + t("rejectChange"));
+  } catch {
+    if (token !== state.workspaceToken) return;
     setNotice(t("fallbackNotice"));
   } finally {
     if (token !== state.workspaceToken) return;
@@ -690,6 +740,7 @@ function renderChatWorkspace() {
     <div class="message-stack">
       ${messages.map((turn) => renderMessage(turn)).join("")}
     </div>
+    ${renderChatRuntimePanel()}
     ${renderPrototypeSnapshot(revision)}
     <section class="inline-panel flow-panel" aria-label="ProductPlan">
       <div class="inline-panel-head">
@@ -838,6 +889,60 @@ function renderMessage(turn) {
       </div>
     </article>
   `;
+}
+
+function renderChatRuntimePanel() {
+  const pending = state.pendingConfirmation;
+  const turn = state.lastChatTurn;
+  if (!pending && !turn) return "";
+  const calls = turn?.toolCalls || [];
+  const results = turn?.toolResults || [];
+  return `
+    <section class="inline-panel chat-runtime-panel" aria-label="${escapeHtml(t("chatTraceTitle"))}">
+      <div class="inline-panel-head">
+        <span class="inline-label">QueryEngine</span>
+        <strong>${escapeHtml(pending ? t("chatConfirmationRequired") : t("chatTraceTitle"))}</strong>
+      </div>
+      ${pending ? `
+        <div class="packet-status warning">${escapeHtml(pending.toolCall?.name || "")}</div>
+        <p class="section-note">${escapeHtml(pending.permission?.reason || t("chatConfirmationRequired"))}</p>
+        <div class="segmented-row">
+          <button type="button" class="active" data-chat-confirm="approve">${escapeHtml(t("approveChange"))}</button>
+          <button type="button" data-chat-confirm="reject">${escapeHtml(t("rejectChange"))}</button>
+        </div>
+      ` : ""}
+      <div class="queue-list compact">
+        ${calls.length ? calls.map((call, index) => {
+          const result = results[index]?.summary || {};
+          const stateText = call.permission?.decision === "confirm"
+            ? t("chatConfirmationRequired")
+            : result.ok === false
+              ? (result.code || "failed")
+              : (result.newRevisionId || result.proposalId || call.permission?.decision || "ok");
+          return `
+            <div class="queue-item ${result.ok === false ? "blocked" : "queued"}">
+              <button type="button" tabindex="-1">
+                <span>${escapeHtml(call.name)}</span>
+                <strong>${escapeHtml(stateText)}</strong>
+                <p>${escapeHtml(toolCallSummary(call, result))}</p>
+              </button>
+            </div>
+          `;
+        }).join("") : `<p class="section-note">${escapeHtml(t("chatTraceEmpty"))}</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function toolCallSummary(call, result = {}) {
+  if (result.message) return result.message;
+  if (result.artifactPaths && Object.keys(result.artifactPaths).length > 0) {
+    return state.lang === "zh" ? "已返回派生文件路径" : "Returned derived artifact paths";
+  }
+  if (call.permission?.requiresConfirmation) return call.permission.reason || t("chatConfirmationRequired");
+  const count = Array.isArray(call.input?.patches) ? call.input.patches.length : 0;
+  if (count) return state.lang === "zh" ? `${count} 个结构化 patch` : `${count} structured patch(es)`;
+  return call.input?.message || call.input?.query || "";
 }
 
 function renderPlanSteps(revision) {
@@ -1463,6 +1568,8 @@ function startNewProject() {
   state.contactInfo = { name: "", email: "" };
   state.loading = false;
   state.submittingReview = false;
+  state.lastChatTurn = null;
+  state.pendingConfirmation = null;
   if (dom.ideaInput) dom.ideaInput.value = "";
   render();
   setNotice(t("newProjectReady"));
@@ -2015,6 +2122,11 @@ dom.workspaceView.addEventListener("click", (event) => {
   const revertRevision = event.target.closest("[data-revert-revision]");
   if (revertRevision) {
     revertToRevision(revertRevision.dataset.revertRevision);
+    return;
+  }
+  const chatConfirm = event.target.closest("[data-chat-confirm]");
+  if (chatConfirm) {
+    resolveChatConfirmation(chatConfirm.dataset.chatConfirm === "approve");
     return;
   }
   const modelAction = event.target.closest("[data-model-action]");

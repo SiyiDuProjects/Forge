@@ -64,6 +64,13 @@ Current known local limitation:
 - `src/core/project_workspace.mjs`: file-backed Forge project runtime for `data/workspaces/<planId>/`, including project manifests, current ProductPlan files, append-only events, proposal files, revision folders, revision-scoped artifacts, review files, and generated markdown indexes.
 - `src/core/context_pack_builder.mjs`: compact project-folder context builder for future chat/runtime layers; summarizes current state, revisions, proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without loading raw GLB/STL/STEP bytes.
 - `src/core/tool_registry.mjs`: Tool Protocol metadata for existing Forge actions, including schemas, confirmation policy, read/write behavior, side effects, concurrency locks, rollback strategy, and disallowed raw mutation targets.
+- `src/core/forge_query_engine.mjs`: Forge-native Claude Code-style query loop for one chat turn; persists user/assistant messages, builds ContextPack/prompt/tool schemas, calls a model adapter, permission-checks tool calls, executes Forge actions, records events, and returns UI-ready payloads.
+- `src/core/model_adapters.mjs`: deterministic `MockModelAdapter` for local tests plus optional OpenAI Responses adapter behind `OPENAI_API_KEY` and `FORGE_MODEL_PROVIDER=openai`.
+- `src/core/tool_schema_exporter.mjs`: exports Tool Protocol metadata into model-callable tool schemas.
+- `src/core/tool_executor.mjs`: validates and dispatches model tool calls to `forge_actions.mjs`; never executes shell or arbitrary file edits.
+- `src/core/permission_gate.mjs`: enforces read/proposal/mutation confirmation rules and blocks raw GeometrySpec, GLB/STL/STEP, mesh, and arbitrary file mutation targets.
+- `src/core/chat_session_store.mjs`: append-only chat session JSONL and pending confirmation storage under `data/workspaces/<planId>/chat_sessions/`.
+- `src/core/prompt_sections.mjs`: Forge role, boundary, tool-rule, ContextPack, recent-message, and user-message prompt assembly for chat runtimes.
 - `src/core/jobs.mjs`: unified generation job system for model generation, electronics layout, quote estimate, review packet, and AI chat reserved capability.
 - `src/core/workspace_state.mjs`: structured ProductPlan/workspace state helpers and deterministic mock plan adapter for conversation-derived plan updates.
 - `src/core/component_assets/*/descriptor.json`: ComponentDescriptor v2 seed assets for mechanical proxy dimensions, mounting holes, connectors, external features, keepouts, access volumes, risk flags, asset paths, and source notes.
@@ -90,6 +97,7 @@ Current known local limitation:
 - `src/core/observability.mjs`: local JSON logging helpers.
 - `src/core/pipeline.mjs`: public core pipeline API used by `server.mjs`.
 - `tests/core_pipeline.test.mjs`: Node built-in tests for the core flow, blocking rules, firmware preview, contracts, and bilingual UI assets.
+- `tests/query_engine.test.mjs`: QueryEngine/tool-loop tests for direct apply, proposal-only discussion, explicit commit, pending confirmation, raw mutation denial, schema export, API contracts, and compact ContextPack behavior.
 - `.github/workflows/check.yml`: CI workflow that runs `npm run check`.
 
 ## Product Language

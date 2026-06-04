@@ -18,6 +18,7 @@ The product should let a user describe a custom desk hardware idea, then convert
 - Prototype structure preview (3D) and electronics-layout generation jobs
 - Stable Forge action contract for future chat/tool-calling layers to inspect, propose, stage, commit, validate, regenerate, revert, and retrieve artifacts without owning Forge state
 - File-backed Forge project folders for durable workspace state, append-only events, proposals, immutable revision snapshots, context packs, and generated artifacts
+- Forge QueryEngine / Chat Runtime V1 that borrows Claude Code's query-loop/tool/session shape but only runs safe Forge actions against the hardware project folder
 
 The UI should preserve the Codex interaction model: left workspace sidebar, center thread, bottom composer, right-side live output/inspector, settings dialog, and floating menus. The visible labels, buttons, workflows, and output content must be our own hardware-build language.
 
@@ -61,6 +62,7 @@ Non-goals for the first MVP:
 - User accounts and team permissions
 - Real AI memory or external data integrations
 - Full chatbot framework integration; future chat runtimes must call Forge actions instead of owning ProductPlan, GeometrySpec, artifacts, or files
+- Full Claude Code clone, MCP, remote sessions, shell/bash tools, arbitrary file editing, plugin marketplace, swarm/multi-agent runtime, or generic coding-agent capabilities
 
 Enclosure boundary:
 
@@ -201,6 +203,11 @@ Implemented:
 - JSON request logging in the local server
 - Forge action contract in `src/core/forge_actions.mjs` with workspace summaries, component search, proposal creation, staged patches, committed patch application, regeneration, validation, revert, artifact retrieval, structured patch errors, and HTTP wrappers under `/api/workspaces/:workspaceId/...`
 - Proposal storage on `workspaceState.proposals` with proposed/staged/committed/rejected lifecycle states
+- Forge QueryEngine / Chat Runtime V1: `ContextPack -> prompt sections -> model adapter -> tool schema export -> permission gate -> tool executor -> Forge actions -> assistant/UI payload`.
+- Chat session JSONL and pending confirmation storage under `data/workspaces/<planId>/chat_sessions/`.
+- Deterministic `MockModelAdapter` for local tests and optional OpenAI Responses adapter behind `OPENAI_API_KEY`.
+- API routes for `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
+- Minimal center-thread QueryEngine trace and confirmation card in the UI.
 
 Implementation boundary:
 
@@ -213,6 +220,7 @@ Implementation boundary:
 - The 3D preview should remain a result/evidence surface. Users may rotate, zoom, pan, and switch between appearance/component transparency layers, but cannot drag parts, edit holes, or directly modify geometry.
 - Conversation turns can update `GeometrySpec` and validation without writing GLB/STL/STEP; a clear confirmation such as "生成模型", "现在造一下", or "build it" is required before model artifacts are written.
 - Future chatbot, agent, or tool-calling layers must use the Forge action contract instead of directly mutating files, meshes, `GeometrySpec`, GLB, STL, STEP, or ProductPlan internals.
+- QueryEngine currently supports a controlled subset of chat actions: discuss/propose, search components, apply structured patches, commit proposals, regenerate, revert, validate, and retrieve artifact metadata. It does not expose shell, arbitrary file edits, direct model artifact edits, external plugins, or long-term memory/RAG.
 
 Known local verification limits:
 
@@ -266,6 +274,16 @@ Language rule:
 9. User enters name and email, then clicks `提交审核下单`.
 10. The app writes a local human review packet; no payment or manufacturing starts.
 
+QueryEngine flow for an existing workspace:
+
+1. User sends a chat message.
+2. QueryEngine appends the user message to chat JSONL and `events.jsonl`.
+3. QueryEngine builds ContextPack and prompt sections.
+4. The model adapter chooses Forge tool calls.
+5. Permission gate allows, denies, or creates a pending confirmation.
+6. Tool executor calls `forge_actions.mjs`; no raw file or GeometrySpec mutation is allowed.
+7. QueryEngine appends tool results and assistant message, then returns updated `productPlan`, trace, proposal/revision summary, warnings, artifact paths, or confirmation state to the UI.
+
 ## 8. Engineering Plan
 
 ### Phase 1: Interface Foundation
@@ -292,7 +310,7 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, and Forge action contract complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and future chat/tool-calling layers now have a controlled backend action surface.
+Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, and QueryEngine / Chat Runtime V1 complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface.
 
 - Keep user turns creating ProductPlan revisions.
 - Keep prototype structure preview (3D), electronics layout, quote, and review submission on unified jobs.
@@ -301,7 +319,7 @@ Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact ge
 - Keep GLB user preview with placed part volumes, interface markers, cable-route lines, and risk markers. Keep STL shell-only for print/quote handoff and STEP as the internal SolidWorks/engineering handoff.
 - Keep the viewer read-only except rotate, zoom, pan, risk markers, and appearance/component layer switching.
 - Keep non-standard hardware in `manual_expansion_draft`.
-- Keep future AI/chat runtimes outside direct Forge state mutation; they should call actions for summary, component search, proposal, patch application, validation, regeneration, revert, and artifact retrieval.
+- Keep AI/chat runtimes outside direct Forge state mutation; QueryEngine should call actions for summary, component search, proposal, patch application, validation, regeneration, revert, and artifact retrieval.
 
 Implemented V1 conversational hardware prototype path:
 

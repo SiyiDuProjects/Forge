@@ -6,9 +6,12 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 
 - `index.html`: application shell, dialogs, settings, popover mounts, and composer.
 - `styles.css`: Codex-like desktop layout, inspector density, popovers, and responsive behavior.
-- `app.js`: browser-side conversation-first state machine, bilingual copy, ProductPlan rendering, contact capture, canvas preview, and popover rendering.
-- `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, project context packs, tool metadata, and review submission.
+- `app.js`: browser-side conversation-first state machine, bilingual copy, ProductPlan rendering, QueryEngine trace/confirmation UI, contact capture, canvas preview, and popover rendering.
+- `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, project context packs, tool metadata, QueryEngine chat routes, and review submission.
 - `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, Forge actions, project folder persistence, context pack building, tool metadata, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
+- `src/core/forge_query_engine.mjs`: Forge-native chat runtime loop. It persists user messages before model work, builds ContextPack and prompt sections, exports tool schemas, calls a model adapter, runs the permission gate, executes Forge actions, records tool events, persists assistant messages, and returns UI-ready payloads.
+- `src/core/model_adapters.mjs`: deterministic mock adapter for local QueryEngine tests plus optional OpenAI Responses adapter behind `OPENAI_API_KEY`.
+- `src/core/tool_schema_exporter.mjs`, `src/core/tool_executor.mjs`, `src/core/permission_gate.mjs`, `src/core/chat_session_store.mjs`, and `src/core/prompt_sections.mjs`: the narrow Claude Code-inspired runtime support layer for tool schemas, action dispatch, confirmation/denial, append-only chat sessions, and prompt assembly.
 - `src/core/forge_actions.mjs`: stable action contract for future chat/tool-calling layers. It exposes summaries, component search, proposal staging, committed patch application, regeneration, validation, revert, and artifact retrieval while keeping ProductPlan and GeometrySpec under Forge control.
 - `src/core/project_workspace.mjs`: file-backed Forge project runtime. It writes `data/workspaces/<planId>/project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, proposal JSON files, immutable revision folders, revision-scoped artifacts, local review files, and markdown indexes.
 - `src/core/context_pack_builder.mjs`: compact context builder for future chat/runtime layers. It reads project folder summaries and metadata while excluding raw GLB/STL/STEP bytes and full event history.
@@ -20,7 +23,7 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 
 ## Flow
 
-1. User request enters the UI composer, which creates or updates a `ProductPlan`.
+1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace.
 2. `interpretRequest` extracts product type, screen, standardized 3D printed enclosure finish, sources, functions, and options.
 3. `matchModules` chooses stocked modules, review-required modules, the standard 3D printed shell, and deferred modules from the catalog.
 4. `evaluateRisk` marks review level, warnings, and blocked scope. Camera and battery stay reviewable as human-review risks; motion structures leave the standard path.
@@ -33,9 +36,20 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 11. Electronics layout, quote assumptions, and the review packet refer back to the same revision and generated geometry artifacts when available.
 12. `createReviewSubmission` writes a local human review packet when `提交审核下单` is clicked and records a project-folder review event.
 
+## QueryEngine Boundary
+
+Forge QueryEngine is a narrow adaptation of Claude Code's query loop. It does not turn Forge into a general coding agent. It only connects model tool calls to the existing Forge action contract:
+
+- Context comes from `ContextPack`, not raw project-file scanning.
+- Tools come from `tool_registry.mjs`, not ad hoc model instructions.
+- Tool execution goes through `tool_executor.mjs` and `forge_actions.mjs`.
+- Mutations require explicit wording or `/chat/confirm` approval when the permission gate marks them ambiguous.
+- Chat transcripts live in `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`.
+- Raw GeometrySpec, GLB, STL, STEP, mesh vertices, arbitrary file writes, shell tools, MCP, remote sessions, plugins, supplier ordering, and manufacturing actions remain outside V1.
+
 ## Action Boundary
 
-Future chat frameworks should call `src/core/forge_actions.mjs` instead of directly mutating Forge state. The action layer separates discussion, staged proposals, and committed revisions:
+Chat runtimes call `src/core/forge_actions.mjs` through QueryEngine instead of directly mutating Forge state. The action layer separates discussion, staged proposals, and committed revisions:
 
 - Discussion/proposal actions can create `workspaceState.proposals` without creating committed revisions.
 - Commit/apply/regenerate actions create ProductPlan revisions through the existing generation jobs.
@@ -89,4 +103,5 @@ Future work should start from the lightweight documentation routing layer before
 - `docs/WORK_INDEX.md`: recent work blocks, artifacts, retrieval handles, and next steps.
 - `docs/source-materials/INDEX.md`: source-note inventory and metadata pattern.
 - `docs/PROJECT_PLAN.md`: durable product decisions, implementation status, and acceptance criteria.
-- `docs/FORGE_ACTION_CONTRACT.md`: action schemas for future chat/tool-calling integration.
+- `docs/FORGE_ACTION_CONTRACT.md`: action schemas for chat/tool-calling integration.
+- `docs/FORGE_QUERY_ENGINE.md`: QueryEngine, ModelAdapter, permission, session, and UI payload contract.

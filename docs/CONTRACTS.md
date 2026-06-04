@@ -92,6 +92,26 @@ Important events include `workspace_created`, `user_message`, `assistant_message
 
 Context packs are built by `src/core/context_pack_builder.mjs`. They summarize the project folder and explicitly exclude raw GLB/STL/STEP bytes, full `events.jsonl`, arbitrary file contents, and direct GeometrySpec mutation instructions.
 
+## Forge QueryEngine / Chat Runtime
+
+Forge QueryEngine lives in `src/core/forge_query_engine.mjs`. It is the local chat/runtime loop inspired by Claude Code's QueryEngine, but limited to Forge tools.
+
+Runtime modules:
+
+- `forge_query_engine.mjs`: chat turn lifecycle and tool loop
+- `model_adapters.mjs`: deterministic mock adapter and optional OpenAI Responses adapter
+- `tool_schema_exporter.mjs`: model-callable tool schema export from Tool Protocol metadata
+- `permission_gate.mjs`: read/proposal/mutation confirmation and denial rules
+- `tool_executor.mjs`: action dispatch to `forge_actions.mjs`
+- `chat_session_store.mjs`: chat session JSONL and pending confirmations
+- `prompt_sections.mjs`: Forge role, boundary, tool, ContextPack, and recent-message prompt sections
+
+Chat session files live under `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`. Pending confirmations live in `chat_sessions/pending_confirmations.json`.
+
+Important chat/runtime events include `chat_turn_started`, `context_pack_built`, `model_request`, `model_response`, `tool_call`, `tool_result`, `tool_failed`, `confirmation_required`, `confirmation_resolved`, and `chat_turn_completed`.
+
+Mutation tools such as `applyDesignPatch`, `commitStagedChange`, `regenerateRevision`, and `revertRevision` run only when the user wording is explicit or an approved confirmation is supplied. Raw `GeometrySpec`, GLB/STL/STEP, mesh, artifact-byte, and arbitrary file mutation targets are denied before action execution.
+
 ## Forge Action Contract
 
 The source of truth for action implementations is `src/core/forge_actions.mjs`. Detailed schemas are documented in `docs/FORGE_ACTION_CONTRACT.md`.
@@ -211,6 +231,44 @@ Returns a compact context pack built from the project folder: project summary, P
 ### `GET /api/workspaces/:workspaceId/tools`
 
 Returns Tool Protocol metadata for the Forge action set.
+
+### `POST /api/workspaces/:workspaceId/chat/turn`
+
+Runs one QueryEngine chat turn for an existing Forge workspace.
+
+Body:
+
+```json
+{
+  "sessionId": "session_default",
+  "userMessage": "Add two buttons on the right side.",
+  "modelProvider": "mock",
+  "mode": "normal",
+  "confirmation": null
+}
+```
+
+Returns assistant message, chat messages, tool call trace, tool results, proposal summary, revision summary, validation warnings, artifact paths, pending confirmation if required, appended events, and updated `productPlan`.
+
+### `GET /api/workspaces/:workspaceId/chat/:sessionId`
+
+Returns persisted chat session JSONL entries and message entries for a workspace.
+
+### `POST /api/workspaces/:workspaceId/chat/confirm`
+
+Resolves and optionally executes a pending QueryEngine confirmation.
+
+Body:
+
+```json
+{
+  "sessionId": "session_default",
+  "confirmationId": "confirm-...",
+  "approved": true
+}
+```
+
+Approval executes the stored tool call through `tool_executor.mjs`; rejection records the resolution without changing the workspace.
 
 ### `POST /api/workspaces/:workspaceId/components/search`
 

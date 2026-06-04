@@ -20,6 +20,27 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-04 - Forge QueryEngine And Chat Runtime V1
+
+- Scope: implement the Claude Code-inspired Forge QueryEngine / Chat Runtime V1 while keeping the runtime narrowed to Forge hardware project actions.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-04-forge-query-engine-chat-runtime-goal.md`
+- Main docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`
+- Key code handles:
+  - `src/core/forge_query_engine.mjs`
+  - `src/core/model_adapters.mjs`
+  - `src/core/tool_schema_exporter.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/permission_gate.mjs`
+  - `src/core/chat_session_store.mjs`
+  - `src/core/prompt_sections.mjs`
+  - `server.mjs`
+  - `app.js`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: QueryEngine, Chat Runtime V1, MockModelAdapter, OpenAIResponsesAdapter, ContextPack prompt sections, Tool Protocol export, permission gate, pending_confirmations.json, chat_sessions, tool_call, tool_result, confirmation_required, `/api/workspaces/:workspaceId/chat/turn`.
+- Verification: `node --test tests/query_engine.test.mjs` passes; `npm run check` passes with 45 tests.
+- Next: a live OpenAI-backed turn can be tested only after `OPENAI_API_KEY`, `FORGE_MODEL_PROVIDER=openai`, and `FORGE_MODEL_NAME` are intentionally configured; do not broaden into shell/file-edit/MCP behavior.
+
 ### 2026-06-04 - Project Folder Runtime And Tool Protocol Metadata
 
 - Scope: implement GPT Pro's recommended `Forge Project Folder Runtime + Tool Protocol Metadata` direction as the durable file-backed workspace layer for Forge.
