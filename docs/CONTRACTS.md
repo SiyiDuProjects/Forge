@@ -11,18 +11,21 @@ The workbench chain is:
 3. `match_bom`
 4. `run_guardrails`
 5. `estimate_quote`
-6. `draft_model_preview`
-7. `draft_electronics_layout`
-8. `draft_firmware`
-9. `draft_dfm_packet`
+6. `build_geometry_spec`
+7. `draft_model_preview`
+8. `generate_model_artifacts`
+9. `validate_geometry`
+10. `draft_electronics_layout`
+11. `draft_firmware`
+12. `draft_dfm_packet`
 
 ## Risk Status
 
 - `ready_for_engineer_review`: the draft can be queued for human DFM review.
 - `blocked_until_scope_change`: the draft must be edited before it can queue.
 
-Camera and battery requests should remain blocked for the current MVP.
-Motion structures are also blocked from the standard desktop display path. ProductPlans that request non-standard hardware or excluded modules should use `manual_expansion_draft`.
+Camera and battery requests remain reviewable in the current MVP, but must be marked as human-review risks.
+Motion structures are blocked from the standard desktop display path. ProductPlans that request non-standard hardware or blocked motion structures should use `manual_expansion_draft`.
 
 All accepted MVP drafts should keep `spec.enclosure.method` on `parameterized_3d_printed_shell` and `spec.enclosure.standardization` on `3d_print_only`. Finish values such as woodgrain, sage, and graphite are surface treatments, not alternate enclosure manufacturing paths.
 
@@ -35,6 +38,18 @@ All accepted MVP drafts should keep `spec.enclosure.method` on `parameterized_3d
 - `standard_supported`: standard USB-C desktop display path.
 - `manual_expansion_draft`: internal draft for non-standard hardware or excluded modules.
 - `submitted_for_review`: local human review packet has been generated.
+
+## ProductPlan Revision Geometry
+
+Generated revisions may include:
+
+- `geometrySpec`: the single structured input for 3D generation.
+- `modelArtifacts`: either `pending_confirmation`, `generated`, or `blocked`. Generated artifacts include GLB/STL/STEP paths plus the GeometrySpec, validation report, and CadQuery adapter script.
+- `geometryValidation`: pass/warn/block checks for module geometry, standard shell fit, interface directions, cable-route placeholders, camera/battery review risks, and blocked motion structures.
+
+User preview uses the same `GeometrySpec` as the generated GLB and supports rotate, zoom, pan, and view switching. Direct geometry edits, part dragging, hole edits, and user CAD export are outside the public interface.
+
+ProductPlan conversation turns default to `generateArtifacts: false`, so they validate geometry but do not write GLB/STL/STEP until the user confirms generation. Direct model APIs default to generating artifacts unless `generateArtifacts` is explicitly false.
 
 ## Job Status
 
@@ -50,7 +65,7 @@ Returns service health, contract version, chain steps, and the API contract list
 
 ### `GET /api/modules`
 
-Returns the stocked/deferred module catalog.
+Returns the stocked/review/deferred module catalog.
 
 ### `POST /api/plans`
 
@@ -90,7 +105,9 @@ Creates a unified generation job.
   "planId": "plan-...",
   "revisionId": "rev-...",
   "capability": "model_generation",
-  "input": {}
+  "input": {
+    "generateArtifacts": true
+  }
 }
 ```
 
@@ -100,11 +117,19 @@ Returns a generation job by id.
 
 ### `POST /api/model/generate`
 
-Convenience route for a `model_generation` job. v1 returns a placeholder 3D structure preview with model parameters and future preview/GLB/CAD asset slots.
+Convenience route for a `model_generation` job. It builds `geometrySpec`, validates it, generates model artifacts when `generateArtifacts` is not false and geometry is allowed, and returns the preview plus geometry outputs.
+
+Returns `{ "job": ..., "modelPreview": ..., "geometrySpec": ..., "modelArtifacts": ..., "geometryValidation": ... }`.
+
+### `POST /api/geometry/generate`
+
+Convenience route for the geometry-only part of model generation. It uses the same `ProductPlan` revision inputs as `/api/model/generate`, including `generateArtifacts`, but returns only the geometry result fields.
+
+Returns `{ "job": ..., "geometrySpec": ..., "modelArtifacts": ..., "geometryValidation": ... }`.
 
 ### `POST /api/layout/electronics`
 
-Convenience route for an `electronics_layout` job. v1 returns placeholder placements, interface directions, cable notes, and conflict checks.
+Convenience route for an `electronics_layout` job. v1 returns UI-only preview placements, interface directions, cable notes, and conflict checks.
 
 ### `POST /api/quote/estimate`
 

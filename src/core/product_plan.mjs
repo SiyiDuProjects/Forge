@@ -35,7 +35,12 @@ export function createProductPlan({ message, initialMessage, assets = [], langua
     updatedAt: now
   };
 
-  const revision = createRevisionForTurn({ plan, turn: userTurn, requestText: text });
+  const revision = createRevisionForTurn({
+    plan,
+    turn: userTurn,
+    requestText: text,
+    generateArtifacts: false
+  });
   const assistantTurn = createTurn({
     role: "assistant",
     text: assistantMessageForPlan(plan, revision),
@@ -68,7 +73,13 @@ export function addProductPlanTurn({ planId, message, assetIds = [], assets = []
   const requestText = [previous?.spec?.user_request, turn.text]
     .filter(Boolean)
     .join("\nUpdate: ");
-  const revision = createRevisionForTurn({ plan, turn, requestText, overrides });
+  const revision = createRevisionForTurn({
+    plan,
+    turn,
+    requestText,
+    overrides,
+    generateArtifacts: isGenerationConfirmation(turn.text)
+  });
   const assistantTurn = createTurn({
     role: "assistant",
     text: assistantMessageForPlan(plan, revision)
@@ -119,7 +130,7 @@ export async function submitProductPlanReview({ planId, revisionId, contactInfo 
   return { productPlan: plan, submission };
 }
 
-function createRevisionForTurn({ plan, turn, requestText, overrides = {} }) {
+function createRevisionForTurn({ plan, turn, requestText, overrides = {}, generateArtifacts = false }) {
   const draft = createDraft({ requestText, overrides });
   const revisionId = makeId("rev");
   const status = classifyPlanStatus(requestText, draft);
@@ -129,7 +140,9 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {} }) {
     capability: JOB_CAPABILITY.MODEL_GENERATION,
     input: {
       spec: draft.spec,
-      modules: draft.modules
+      modules: draft.modules,
+      riskReport: draft.riskReport,
+      generateArtifacts
     }
   });
   const layoutJob = createGenerationJob({
@@ -165,6 +178,11 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {} }) {
     modules: draft.modules,
     riskReport: draft.riskReport,
     quote: draft.quote,
+    geometrySpec: modelJob.output?.geometrySpec,
+    modelArtifacts: modelJob.output?.modelArtifacts,
+    geometryValidation: modelJob.output?.geometryValidation,
+    generationStatus: modelJob.output?.modelArtifacts?.status || "pending_confirmation",
+    generationConfirmed: modelJob.output?.modelArtifacts?.status === "generated",
     modelPreview: modelJob.output?.modelPreview,
     electronicsLayout: layoutJob.output?.electronicsLayout,
     assumptions: quoteJob.output?.quoteEstimate?.assumptions || [],
@@ -183,12 +201,30 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {} }) {
 
 function generatedAssetsFromRevision(revision) {
   const assets = revision.modelPreview?.assets || {};
-  return [
+  const artifactAssets = revision.modelArtifacts?.artifacts || {};
+  const collected = [
     assets.preview,
     assets.glb,
+    assets.stl,
+    assets.step,
     assets.cad,
+    assets.geometrySpec,
+    assets.validationReport,
+    assets.cadqueryScript,
+    artifactAssets.geometrySpec,
+    artifactAssets.validationReport,
+    artifactAssets.cadqueryScript,
+    artifactAssets.glb,
+    artifactAssets.stl,
+    artifactAssets.step,
     ...(assets.renders || [])
   ].filter(Boolean);
+  const seen = new Set();
+  return collected.filter((asset) => {
+    if (!asset.assetId || seen.has(asset.assetId)) return false;
+    seen.add(asset.assetId);
+    return true;
+  });
 }
 
 function currentRevision(plan) {
@@ -244,9 +280,7 @@ function classifyPlanStatus(text, draft) {
   ];
   const hasExplicitNonStandard = includesAny(lower, nonStandardWords)
     && !includesAny(lower, displayWords);
-  const hasExcludedModules = draft.interpreted.options.camera
-    || draft.interpreted.options.battery
-    || draft.interpreted.options.motor;
+  const hasExcludedModules = draft.interpreted.options.motor;
 
   return hasExplicitNonStandard || hasExcludedModules
     ? PRODUCT_PLAN_STATUS.MANUAL_EXPANSION_DRAFT
@@ -305,18 +339,62 @@ function requiredInputsFor(text, draft) {
   };
 }
 
+function isGenerationConfirmation(text) {
+  const lower = String(text || "").toLowerCase();
+  if (includesAny(lower, ["不要生成", "别生成", "not ready", "do not generate", "don't generate"])) {
+    return false;
+  }
+  return includesAny(lower, [
+    "生成模型",
+    "生成一下",
+    "现在造",
+    "现在造一下",
+    "可以了",
+    "开始生成",
+    "开始造",
+    "造一下",
+    "确认生成",
+    "generate model",
+    "generate the model",
+    "build it",
+    "make it now",
+    "ready to build",
+    "this is ready",
+    "ready"
+  ]);
+}
+
 function assistantMessageForPlan(plan, revision) {
   const missing = plan.requiredInputs.missing || [];
+  const isZh = plan.language !== "en";
   if (missing.length > 0) {
-    const labels = {
-      purpose: "用途",
-      screenSize: "屏幕尺寸",
-      finish: "外观风格"
-    };
-    return `我先生成了一个可编辑方案。还需要确认：${missing.map((item) => labels[item] || item).join("、")}。`;
+    const labels = isZh
+      ? { purpose: "用途", screenSize: "屏幕尺寸", finish: "外观风格" }
+      : { purpose: "purpose", screenSize: "screen size", finish: "finish" };
+    const joined = missing.map((item) => labels[item] || item).join(isZh ? "、" : ", ");
+    return isZh
+      ? `我先生成了一个可编辑方案。还需要确认：${joined}。`
+      : `I created an editable plan first. Still need confirmation for: ${joined}.`;
   }
   if (plan.status === PRODUCT_PLAN_STATUS.MANUAL_EXPANSION_DRAFT) {
-    return "这个想法已经进入人工扩展草案：我会继续把对话变成产品状态，但它不属于标准桌面屏的一键下单范围。";
+    return isZh
+      ? "这个想法已经进入人工扩展草案：我会继续把对话变成产品状态，但它不属于标准桌面屏的一键下单范围。"
+      : "This idea moved into a manual expansion draft. I can keep turning the conversation into product state, but it is outside the standard desktop display path.";
   }
-  return `已更新标准桌面屏方案：${revision.spec.module_stack?.join("、")}。右侧方案包已刷新。`;
+  const hasReviewRisk = (revision.riskReport?.items || []).some((item) => item.level === "warn");
+  const modules = revision.spec.module_stack?.join(isZh ? "、" : ", ");
+  if (revision.generationStatus === "pending_confirmation") {
+    return isZh
+      ? `已更新标准桌面屏方案：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : ""}3D 装配预览等待你确认生成；现在不会生成新的 3D 模型文件。`
+      : `Updated the standard desktop display plan: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review. " : ""}The 3D assembly preview is waiting for generation confirmation; no new 3D model file has been generated yet.`;
+  }
+  if (revision.generationStatus === "generated") {
+    return isZh
+      ? `已生成带零件布局的 3D 装配预览：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : "3D 模型已挂到当前版本。"}`
+      : `Generated the 3D assembly preview with placed parts: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review." : "The 3D model is attached to this revision."}`;
+  }
+  if (isZh) {
+    return `已更新标准桌面屏方案：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : "右侧方案包已刷新。"}`;
+  }
+  return `Updated the standard desktop display plan: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review." : "The plan packet is refreshed."}`;
 }

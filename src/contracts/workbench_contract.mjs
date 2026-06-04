@@ -6,7 +6,10 @@ export const WORKBENCH_CHAIN = [
   "match_bom",
   "run_guardrails",
   "estimate_quote",
+  "build_geometry_spec",
   "draft_model_preview",
+  "generate_model_artifacts",
+  "validate_geometry",
   "draft_electronics_layout",
   "draft_firmware",
   "draft_dfm_packet"
@@ -50,9 +53,14 @@ export const ASSET_TYPES = [
   "text",
   "image",
   "reference_url",
+  "geometry_spec",
   "model_preview",
   "glb",
+  "stl",
+  "step",
   "cad_placeholder",
+  "cadquery_script",
+  "validation_report",
   "render"
 ];
 
@@ -107,8 +115,14 @@ export const API_CONTRACT = [
   {
     method: "POST",
     path: "/api/model/generate",
-    body: ["planId", "revisionId", "spec", "modules"],
-    response: ["job", "modelPreview"]
+    body: ["planId", "revisionId", "spec", "modules", "riskReport", "generateArtifacts"],
+    response: ["job", "modelPreview", "geometrySpec", "modelArtifacts", "geometryValidation"]
+  },
+  {
+    method: "POST",
+    path: "/api/geometry/generate",
+    body: ["planId", "revisionId", "spec", "modules", "riskReport", "generateArtifacts"],
+    response: ["job", "geometrySpec", "modelArtifacts", "geometryValidation"]
   },
   {
     method: "POST",

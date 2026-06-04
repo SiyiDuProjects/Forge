@@ -10,7 +10,7 @@ export function createElectronicsLayout({ spec = {}, modules = [], modelPreview 
   const conflicts = conflictChecks(modules, dimensions);
 
   return {
-    layoutType: "placeholder_electronics_fit",
+    layoutType: "electronics_fit_preview",
     coordinateSystem: "enclosure_center_mm",
     enclosureDimensionsMm: dimensions,
     placements,
@@ -29,7 +29,7 @@ export function createElectronicsLayout({ spec = {}, modules = [], modelPreview 
     ],
     conflicts,
     notes: [
-      "Layout is a v1 placeholder for electronic/mechanical fit review.",
+      "Layout is a v1 UI-only preview for electronic/mechanical fit review.",
       "It records positions and conflicts but is not a PCB or CAD placement file."
     ]
   };
@@ -109,6 +109,13 @@ function conflictChecks(modules, dimensions) {
         note: "Deferred module cannot be placed in the v1 standard shell."
       });
     }
+    if (module.status === "review") {
+      conflicts.push({
+        level: "warn",
+        item: module.name,
+        note: "Human review is required before this module can be treated as standard fit."
+      });
+    }
     if (module.capabilities?.includes("servo_motion")) {
       conflicts.push({
         level: "block",
@@ -121,7 +128,7 @@ function conflictChecks(modules, dimensions) {
     conflicts.push({
       level: "ok",
       item: "standard_shell_fit",
-      note: "No placeholder collisions detected for approved modules."
+      note: "No preview collisions detected for approved modules."
     });
   }
   return conflicts;

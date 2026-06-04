@@ -66,7 +66,8 @@ async function createProductPlanReviewSubmission({ productPlan, revision, contac
   const reviewId = makeId("review");
   const manufacturingPacket = [
     "ProductPlan revision locked for internal human review",
-    "Conversation summary, spec, parts list, risk limits, model placeholder, electronics layout, and quote assumptions attached",
+    "Conversation summary, spec, parts list, risk limits, geometrySpec, GLB/STL/STEP artifacts, electronics layout, and quote assumptions attached",
+    "STEP is for internal engineer or SolidWorks handoff only; users cannot edit geometry directly",
     "No payment has been collected",
     "No manufacturing or supplier order has been started",
     "Human confirmation is required before any real order step"
@@ -78,6 +79,9 @@ async function createProductPlanReviewSubmission({ productPlan, revision, contac
   const riskReport = revision.riskReport || null;
   const electronicsLayout = revision.electronicsLayout || electronicsLayoutJob?.output?.electronicsLayout || null;
   const quoteAssumptions = revision.quoteEstimate?.assumptions || revision.assumptions || [];
+  const geometrySpec = revision.geometrySpec || modelJob?.output?.geometrySpec || null;
+  const modelArtifacts = revision.modelArtifacts || modelJob?.output?.modelArtifacts || null;
+  const geometryValidation = revision.geometryValidation || modelJob?.output?.geometryValidation || null;
   const submission = {
     reviewId,
     status: REVIEW_STATUS.QUEUED,
@@ -97,6 +101,9 @@ async function createProductPlanReviewSubmission({ productPlan, revision, contac
     modelJob,
     electronicsLayoutJob,
     quoteJob,
+    geometrySpec,
+    modelArtifacts,
+    geometryValidation,
     electronicsLayout,
     quote,
     quoteAssumptions,

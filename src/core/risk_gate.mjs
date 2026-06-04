@@ -48,16 +48,18 @@ export function evaluateRisk(interpreted, modules) {
   }
 
   if (interpreted.options.camera) {
+    reviewLevel = Math.max(reviewLevel, 3);
     items.push({
-      level: "block",
-      text: "Camera or recognition is outside the first version scope."
+      level: "warn",
+      text: "Camera or recognition can enter structure preview, but needs human review for privacy, fit, and scope risk."
     });
   }
 
   if (interpreted.options.battery) {
+    reviewLevel = Math.max(reviewLevel, 3);
     items.push({
-      level: "block",
-      text: "Battery power is deferred because of safety, shipping, and support risk."
+      level: "warn",
+      text: "Battery power can be evaluated in the packet, but needs human review for safety, shipping, and support risk."
     });
   }
 

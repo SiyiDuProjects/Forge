@@ -1,33 +1,49 @@
 import { registerAsset } from "./assets.mjs";
 
-export function createModelPreview({ spec = {}, modules = [] } = {}) {
+export function createModelPreview({ spec = {}, modules = [], geometrySpec = null, modelArtifacts = null, geometryValidation = null } = {}) {
   const screenSize = Number(spec.enclosure?.screen_size_in || 5);
   const finish = spec.enclosure?.finish || "woodgrain";
-  const widthMm = Math.round(screenSize * 25.4 * 1.48);
-  const heightMm = Math.round(screenSize * 25.4 * 0.94);
-  const depthMm = screenSize >= 7 ? 42 : 36;
+  const widthMm = geometrySpec?.enclosure?.dimensionsMm?.width || Math.round(screenSize * 25.4 * 1.48);
+  const heightMm = geometrySpec?.enclosure?.dimensionsMm?.height || Math.round(screenSize * 25.4 * 0.94);
+  const depthMm = geometrySpec?.enclosure?.dimensionsMm?.depth || (screenSize >= 7 ? 42 : 36);
   const hasSpeaker = modules.some((module) => module.capabilities?.includes("speaker"));
   const hasAmbient = modules.some((module) => module.capabilities?.includes("ambient_light_sensor"));
+  const generatedAssets = modelArtifacts?.artifacts || {};
 
-  const previewAsset = registerAsset({
+  const previewAsset = generatedAssets.preview || registerAsset({
     type: "model_preview",
     source: "generated",
-    caption: "Parametric preview placeholder for the standard 3D printed enclosure"
+    caption: "Prototype structure preview for the standard 3D printed enclosure"
   });
-  const glbAsset = registerAsset({
+  const glbAsset = generatedAssets.glb || (modelArtifacts ? null : registerAsset({
     type: "glb",
     source: "provider",
-    caption: "Future GLB asset slot; not generated in v1"
-  });
-  const cadAsset = registerAsset({
-    type: "cad_placeholder",
+    caption: "Future 3D model asset slot; not generated in v1"
+  }));
+  const stlAsset = generatedAssets.stl || null;
+  const stepAsset = generatedAssets.step || (modelArtifacts ? null : registerAsset({
+    type: "step",
     source: "provider",
-    caption: "Future CAD/STEP asset slot; not generated in v1"
-  });
+    caption: "Future internal engineering file slot; not generated in v1"
+  }));
 
+  const artifactStatus = modelArtifacts?.status || "pending_confirmation";
   return {
-    viewerType: "placeholder_3d",
-    generationMode: "ai_provider_reserved",
+    viewerType: generatedAssets.glb
+      ? "interactive_glb_preview"
+      : artifactStatus === "pending_confirmation"
+        ? "pending_generation_preview"
+        : "geometry_validation_preview",
+    generationMode: modelArtifacts?.provider || "ai_provider_reserved",
+    targetProvider: modelArtifacts?.targetProvider || "cadquery_open_cascade",
+    interactionPolicy: {
+      orbit: true,
+      zoom: true,
+      pan: true,
+      directPartEditing: false,
+      geometryEditing: false,
+      modificationPath: "conversation_revision_only"
+    },
     modelParameters: {
       enclosureFamily: "standard_desktop_display_shell",
       manufacturingPath: "standardized_3d_print",
@@ -49,12 +65,23 @@ export function createModelPreview({ spec = {}, modules = [] } = {}) {
     assets: {
       preview: previewAsset,
       glb: glbAsset,
-      cad: cadAsset,
+      stl: stlAsset,
+      step: stepAsset,
+      cad: stepAsset,
+      geometrySpec: generatedAssets.geometrySpec || null,
+      validationReport: generatedAssets.validationReport || null,
+      cadqueryScript: generatedAssets.cadqueryScript || null,
       renders: []
     },
+    validation: geometryValidation || modelArtifacts?.validation || null,
     notes: [
-      "This is a structure preview placeholder, not final CAD.",
-      "Future provider adapters can attach generated GLB, render, or CAD assets to these slots.",
+      "This is a read-only 3D prototype preview.",
+      generatedAssets.glb
+        ? "Generated 3D model is for orbit, zoom, and pan preview only; users cannot edit parts or geometry."
+        : artifactStatus === "pending_confirmation"
+          ? "3D model generation is waiting for explicit confirmation."
+          : "No 3D model file is emitted when geometry is blocked or incomplete.",
+      "Engineering file generation stays inside the internal review flow.",
       "The v1 shell path stays on standardized 3D printing."
     ]
   };

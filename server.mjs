@@ -10,6 +10,7 @@ import { createDraft, createDeviceConfig, listCatalogModules, submitReview } fro
 import { addProductPlanTurn, createProductPlan, getProductPlan, submitProductPlanReview } from "./src/core/product_plan.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const threeDir = fileURLToPath(new URL("./node_modules/three/", import.meta.url));
 const port = Number(process.env.PORT || 8765);
 const host = process.env.HOST || "127.0.0.1";
 const logger = createLogger({ service: "forge-hardware-workbench" });
@@ -19,6 +20,7 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".glb": "model/gltf-binary",
   ".svg": "image/svg+xml"
 };
 
@@ -31,6 +33,11 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname.startsWith("/api/")) {
       await handleApi(request, response, url);
+      return;
+    }
+
+    if (url.pathname.startsWith("/vendor/three/")) {
+      await serveThreeVendor(response, url.pathname);
       return;
     }
 
@@ -144,12 +151,39 @@ async function handleApi(request, response, url) {
       capability: "model_generation",
       input: {
         spec: body.spec,
-        modules: body.modules || []
+        modules: body.modules || [],
+        riskReport: body.riskReport || {},
+        generateArtifacts: body.generateArtifacts !== false
       }
     });
     sendJson(response, 200, {
       job,
-      modelPreview: job.output?.modelPreview
+      modelPreview: job.output?.modelPreview,
+      geometrySpec: job.output?.geometrySpec,
+      modelArtifacts: job.output?.modelArtifacts,
+      geometryValidation: job.output?.geometryValidation
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/geometry/generate") {
+    const body = await readJsonBody(request);
+    const job = createGenerationJob({
+      planId: body.planId,
+      revisionId: body.revisionId,
+      capability: "model_generation",
+      input: {
+        spec: body.spec,
+        modules: body.modules || [],
+        riskReport: body.riskReport || {},
+        generateArtifacts: body.generateArtifacts !== false
+      }
+    });
+    sendJson(response, 200, {
+      job,
+      geometrySpec: job.output?.geometrySpec,
+      modelArtifacts: job.output?.modelArtifacts,
+      geometryValidation: job.output?.geometryValidation
     });
     return;
   }
@@ -276,6 +310,42 @@ async function serveStatic(response, pathname) {
       error: {
         code: "asset_not_found",
         message: `Missing asset ${pathname}`
+      }
+    });
+  }
+}
+
+async function serveThreeVendor(response, pathname) {
+  const requested = pathname.replace(/^\/vendor\/three\//, "");
+  const relativePath = requested.startsWith("addons/")
+    ? requested.replace(/^addons\//, "examples/jsm/")
+    : `build/${requested}`;
+  const normalizedPath = normalize(relativePath).replace(/^(\.\.[/\\])+/, "");
+  const absolutePath = join(threeDir, normalizedPath);
+
+  if (!absolutePath.startsWith(threeDir)) {
+    sendJson(response, 403, {
+      error: {
+        code: "forbidden",
+        message: "Path escapes Three vendor root"
+      }
+    });
+    return;
+  }
+
+  try {
+    const content = await readFile(absolutePath);
+    const contentType = mimeTypes[extname(absolutePath)] || "application/octet-stream";
+    response.writeHead(200, {
+      "content-type": contentType,
+      "cache-control": "no-store"
+    });
+    response.end(content);
+  } catch {
+    sendJson(response, 404, {
+      error: {
+        code: "asset_not_found",
+        message: `Missing vendor asset ${pathname}`
       }
     });
   }

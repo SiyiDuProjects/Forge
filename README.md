@@ -1,6 +1,6 @@
 # Forge
 
-Forge is a Codex-style hardware MVP planning workbench. It turns an ongoing hardware conversation into a `ProductPlan`: scope, parts list (BOM), risk limits, model/3D placeholder, electronics layout placeholder, quote assumptions, and a local human review packet.
+Forge is a Codex-style hardware MVP planning workbench. It turns an ongoing hardware conversation into a `ProductPlan`: scope, parts list (BOM), risk limits, prototype structure preview (3D), electronics layout preview, quote assumptions, and a local human review packet.
 
 当前原型保留中英两套界面文案。默认语言是简体中文，可在 `Forge 设置 -> 语言` 切换到 English。
 
@@ -12,7 +12,8 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 
 - Single-page UI prototype in `index.html`, `styles.css`, and `app.js`
 - Core planning pipeline under `src/core`
-- ProductPlan, asset, job, model placeholder, electronics layout placeholder, quote assumption, and local review APIs
+- ProductPlan, asset, job, GeometrySpec, generated model artifact, electronics layout preview, quote assumption, and local review APIs
+- Confirmed first-generation model artifacts under `data/models`: GLB with placed part placeholders for preview, STL shell-only print/quote handoff, STEP for internal engineering review, validation reports, and a CadQuery adapter script
 - Shared contracts under `src/contracts`
 - Project and architecture docs under `docs`
 - Node built-in test suite under `tests`
@@ -41,12 +42,13 @@ This runs syntax checks for `server.mjs` and `app.js`, then executes the Node te
 This is a complete clickable UI prototype, not a real manufacturing system.
 
 - No real upload
-- No real CAD generation
+- No user-facing CAD editor or direct geometry editing
 - No real supplier ordering
 - No real payment or checkout
-- No real manufacturing/export action
+- No real manufacturing order or user-facing export flow
 - No enclosure process beyond standardized 3D printing
-- No final CAD or real 3D generation yet; v1 reserves provider/job interfaces and placeholder assets
+- The current 3D layer validates `GeometrySpec` during conversation and generates deterministic v1 artifacts only after explicit generation confirmation; it is not yet a full CadQuery/OpenCascade service or SolidWorks automation
+- SolidWorks is only an internal STEP handoff target, not part of the user flow
 
 Every visible button should still produce a concrete UI state: view switch, popover, panel, filter, mock queue state, or mock notice.
 

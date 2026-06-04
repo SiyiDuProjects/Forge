@@ -1,5 +1,6 @@
 import { JOB_CAPABILITY, JOB_PROVIDER, JOB_STATUS } from "../contracts/workbench_contract.mjs";
 import { createElectronicsLayout } from "./electronics_layout.mjs";
+import { createGeometrySpec, generateModelArtifacts } from "./geometry_generation.mjs";
 import { createModelPreview } from "./model_preview.mjs";
 import { createQuoteEstimate } from "./quote_plan.mjs";
 import { makeId } from "./utils.mjs";
@@ -65,10 +66,28 @@ function normalizeProvider(provider, capability) {
 
 function runJob(job) {
   if (job.capability === JOB_CAPABILITY.MODEL_GENERATION) {
+    const geometrySpec = createGeometrySpec({
+      spec: job.input.spec,
+      modules: job.input.modules || [],
+      riskReport: job.input.riskReport || {}
+    });
+    const modelArtifacts = generateModelArtifacts({
+      geometrySpec,
+      planId: job.planId,
+      revisionId: job.revisionId,
+      jobId: job.jobId,
+      generateArtifacts: job.input.generateArtifacts !== false
+    });
     return {
+      geometrySpec,
+      modelArtifacts,
+      geometryValidation: modelArtifacts.validation,
       modelPreview: createModelPreview({
         spec: job.input.spec,
-        modules: job.input.modules || []
+        modules: job.input.modules || [],
+        geometrySpec,
+        modelArtifacts,
+        geometryValidation: modelArtifacts.validation
       })
     };
   }

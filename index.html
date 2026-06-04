@@ -72,7 +72,7 @@
             <span id="draftStatus">完整界面流程</span>
           </div>
           <div class="topbar-actions">
-            <button class="compact-button" id="copySpec" type="button">预览方案快照</button>
+            <button class="compact-button" id="copySpec" type="button">预览原型快照</button>
             <button class="compact-button primary" id="submitReview" type="button">提交审核下单</button>
           </div>
         </header>
@@ -84,7 +84,7 @@
         <form id="promptForm" class="composer" aria-label="模拟原型输入框">
           <div class="goal-strip">
             <span class="goal-dot"></span>
-            <span id="composerSummary" class="goal-text">持续对话会更新右侧 ProductPlan、零件、模型占位、估算和审核状态</span>
+            <span id="composerSummary" class="goal-text">持续对话会更新 ProductPlan、原型结构预览（3D）、零件、估算和审核状态</span>
             <span id="scopeLevel" class="goal-meta">标准桌面屏</span>
           </div>
 
@@ -95,7 +95,7 @@
             <button id="openScope" type="button" class="toolbar-chip">范围</button>
             <button id="openBom" type="button" class="toolbar-chip">零件</button>
             <button id="openGuardrails" type="button" class="toolbar-chip">风险</button>
-            <button id="openDfm" type="button" class="toolbar-chip">模型</button>
+            <button id="openDfm" type="button" class="toolbar-chip">3D预览</button>
 
             <button id="runChain" class="send-button" type="submit" aria-label="运行模拟原型链路">
               <span></span>
@@ -145,8 +145,8 @@
               </label>
               <label class="settings-row">
                 <span>
-                  <strong>生成能力占位</strong>
-                  <small>3D、电子布局和 AI provider 都通过 job 接口预留。</small>
+                  <strong>结果预览优先</strong>
+                  <small>3D 视图用于理解原型结果，不提供建模编辑工具。</small>
                 </span>
                 <input type="checkbox" checked />
               </label>
@@ -206,6 +206,14 @@
       </section>
     </div>
 
-    <script src="app.js?v=forge-productplan-v1"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/vendor/three/three.module.js",
+          "three/addons/": "/vendor/three/addons/"
+        }
+      }
+    </script>
+    <script type="module" src="app.js?v=forge-webgl-v1"></script>
   </body>
 </html>

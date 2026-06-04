@@ -498,6 +498,144 @@ pre {
   gap: 14px;
 }
 
+.prototype-snapshot {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(221, 218, 209, 0.92);
+  border-radius: 8px;
+  background: #fff;
+  padding: 11px;
+}
+
+.prototype-snapshot-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  color: #8b908a;
+  font-size: 13px;
+}
+
+.prototype-snapshot-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #303430;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snapshot-link {
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 10px;
+  color: #3f4540;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.snapshot-link.primary {
+  border-color: rgba(43, 112, 88, 0.42);
+  background: #1f6f58;
+  color: #fff;
+}
+
+.model-action-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.prototype-snapshot-body {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 198px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.prototype-canvas-wrap {
+  min-width: 0;
+  position: relative;
+}
+
+.prototype-canvas-wrap [data-device-canvas] {
+  height: 236px;
+}
+
+.prototype-snapshot-side {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.prototype-snapshot-side p {
+  color: #626861;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.snapshot-facts {
+  display: grid;
+  gap: 8px;
+}
+
+.snapshot-facts span {
+  display: grid;
+  gap: 2px;
+  border-bottom: 1px solid rgba(232, 230, 223, 0.72);
+  padding-bottom: 7px;
+}
+
+.snapshot-facts small {
+  color: #8b908a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.snapshot-facts strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #303430;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.preview-controls span {
+  color: #858984;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.preview-controls button {
+  min-height: 27px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 8px;
+  color: #4f5550;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.preview-controls button.active {
+  background: #111413;
+  border-color: #111413;
+  color: #fff;
+}
+
 .workspace-head {
   display: flex;
   align-items: center;
@@ -515,6 +653,35 @@ pre {
   white-space: nowrap;
   color: #303430;
   font-size: 14px;
+}
+
+.workspace-head span {
+  color: #858984;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.workspace-copy {
+  color: #626861;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.snapshot-facts.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.history-workspace,
+.review-workspace {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.packet-heading {
+  color: #303430;
+  font-size: 13px;
 }
 
 .segmented-row {
@@ -889,6 +1056,14 @@ pre {
   box-shadow: none;
 }
 
+.inspector-card.model-priority {
+  padding-top: 0;
+}
+
+.inspector-card.model-priority .card-head {
+  margin-bottom: 8px;
+}
+
 .inspector-card.pulse {
   border-radius: 8px;
   background: #fff;
@@ -1248,6 +1423,27 @@ pre {
 
 .preview-card {
   overflow: hidden;
+  position: relative;
+}
+
+.preview-engine-badge {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  max-width: calc(100% - 18px);
+  border: 1px solid rgba(232, 230, 223, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0 9px;
+  color: #535851;
+  font-size: 11px;
+  font-weight: 750;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
 }
 
 [data-device-canvas] {
@@ -1666,6 +1862,14 @@ pre {
   .review-packet {
     grid-column: 1 / -1;
   }
+
+  .prototype-snapshot-body {
+    grid-template-columns: 1fr;
+  }
+
+  .prototype-snapshot-side {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1721,6 +1925,19 @@ pre {
 
   .composer-toolbar {
     flex-wrap: wrap;
+  }
+
+  .prototype-snapshot-head {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .snapshot-link {
+    justify-self: start;
+  }
+
+  .prototype-canvas-wrap [data-device-canvas] {
+    height: 190px;
   }
 
   .send-button {

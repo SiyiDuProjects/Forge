@@ -1,4 +1,9 @@
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
 const SUPPORTED_LANGUAGES = ["zh", "en"];
+const threePreviewInstances = new Map();
 
 const copy = {
   zh: {
@@ -12,13 +17,13 @@ const copy = {
     uiPrototype: "内部 MVP",
     topbarStatus: "ProductPlan 实时方案",
     submitOrder: "提交审核下单",
-    previewSnapshot: "预览方案快照",
-    composerDefault: "持续对话会更新右侧 ProductPlan、零件、模型占位、估算和审核状态",
+    previewSnapshot: "预览原型快照",
+    composerDefault: "持续对话会更新 ProductPlan、原型结构预览（3D）、零件、估算和审核状态",
     composerPlaceholder: "说出你想做的硬件，例如：我想做一个小型木纹桌面屏，显示天气和照片，3.5 英寸，USB-C 供电。",
     addInputAria: "添加输入资产",
     scope: "范围",
     partsChip: "零件",
-    modelChip: "模型",
+    modelChip: "3D预览",
     riskChip: "风险",
     runChainAria: "发送需求并更新方案",
     inspectorAria: "实时方案包",
@@ -41,7 +46,7 @@ const copy = {
     planManual: "人工扩展草案",
     planSubmitted: "已提交人工审核",
     benchAgent: "原型助手",
-    fallbackNotice: "后端暂不可用，正在显示本地 ProductPlan 占位",
+    fallbackNotice: "后端暂不可用，正在显示本地 ProductPlan 示例",
     rerunNotice: "已更新 ProductPlan revision",
     submitNeedContact: "请先填写姓名和邮箱",
     submittedNotice: "已生成本地人工审核包，等待确认；不是付款，也不是立即生产。",
@@ -53,7 +58,7 @@ const copy = {
     sections: {
       scope: "范围",
       parts: "零件清单（BOM）",
-      model: "结构/3D 预览占位",
+      model: "原型结构预览（3D）",
       layout: "电子零件布局",
       quote: "估算+假设",
       risk: "风险限制",
@@ -61,7 +66,54 @@ const copy = {
     },
     required: "待确认",
     confirmed: "已确认",
-    modelNotCad: "不是最终 CAD",
+    modelPreviewState: "只读 3D 预览",
+    prototypePreviewTitle: "原型快照",
+    prototypePreviewSubtitle: "这是方案结果视图，不是建模编辑器。",
+    prototypePreviewCta: "查看结构审核视图",
+    prototypeViewLabel: "层级",
+    previewModes: {
+      appearance: "外观层",
+      components: "元器件层"
+    },
+    prototypeModelSummary: "标准外壳与零件布局快照",
+    modelEvidence: "3D 模型 · 零件布局",
+    modelShellPath: "外壳路径",
+    modelDimensions: "尺寸",
+    modelOpenings: "开孔检查",
+    modelReviewReady: "人工审核前预览",
+    modelViewerHint: "拖拽旋转，滚轮缩放，Shift 拖拽平移；外观层看整体外壳，元器件层会把外壳变透明；不能拖动零件或改孔位。",
+    modelArtifacts: "3D 模型状态",
+    modelArtifactSummary: "3D 模型已生成",
+    modelLoading: "正在加载 3D 模型",
+    modelLoaded: "真实 3D 预览已加载",
+    modelLoadFailed: "3D 模型加载失败",
+    modelSketchPreview: "结构草图预览",
+    generateModelCta: "生成模型",
+    generateModelCommand: "生成模型",
+    generationPending: "待确认生成",
+    generationInsufficient: "信息不足",
+    placedParts: (count) => `已放置 ${count} 个零件`,
+    modifyThroughChat: "修改结构请继续对话并生成新版本。",
+    modelInternalFilesNote: "用户侧只看可旋转的 3D 模型；工程文件留给内部审核流程。",
+    geometryValidation: "几何校验",
+    geometryBlocked: "几何信息不足或超出标准路径",
+    geometryPassed: "可生成可信预览",
+    screenOpening: "屏幕开孔",
+    usbCRear: "USB-C 后置开口",
+    coreBoard: "主板位",
+    shellLabel: "标准 3D 打印外壳",
+    historyTitle: "项目历史",
+    historyIntro: "这里显示 ProductPlan 的版本、草稿和人工扩展记录。",
+    currentRevision: "当前版本",
+    revisionCount: "版本数量",
+    reviewPacketTitle: "内部审核包",
+    reviewAudience: "给内部工程师或合作审核人员使用。",
+    reviewChecklistTitle: "审核包内容",
+    reviewChecklist: ["ProductPlan 当前版本", "原型结构预览（3D）", "零件清单（BOM）", "风险限制", "报价假设"],
+    reviewRiskNote: "摄像头和电池进入人工审核风险项；运动结构进入人工扩展草案。",
+    reviewSubmitCta: "生成本地审核包",
+    reviewContactCta: "填写右侧联系信息",
+    noManufacturing: "不付款、不生产、不联系供应商",
     noPlan: "输入第一条硬件想法后生成方案。",
     standardShell: "标准 3D 打印外壳",
     woodgrainDemo: "木纹桌面屏",
@@ -69,12 +121,18 @@ const copy = {
       ["内部原型模式", "提交只生成本地人工审核包，不付款、不生产、不接供应商。"],
       ["对话优先", "用户持续聊天，右侧 ProductPlan 实时更新。"],
       ["标准 3D 打印外壳", "木纹、鼠尾草绿、石墨黑都只是标准外壳的表面效果。"],
-      ["生成能力占位", "3D、电子布局和 AI provider 都通过 job 接口预留。"],
+      ["结果预览优先", "3D 视图用于理解原型结果，不提供建模编辑工具。"],
       ["界面语言", "保留中文和 English 两套文案。"],
       ["文案维护规则", "新增按钮、状态、弹窗、文档都要同步更新中英文。"]
     ],
     demoRequest:
-      "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电，夜间自动变暗。"
+      "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电。",
+    demoConversationTurns: [
+      "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电。",
+      "加一个环境光传感器，夜间自动变暗，还是保持桌面 USB-C 供电。",
+      "结构上先用标准 3D 打印外壳，前面要屏幕开孔，后面留 USB-C 开口。",
+      "可以了，生成模型。"
+    ]
   },
   en: {
     appTitle: "Forge",
@@ -87,13 +145,13 @@ const copy = {
     uiPrototype: "Internal MVP",
     topbarStatus: "Live ProductPlan",
     submitOrder: "Submit for review/order",
-    previewSnapshot: "Preview plan snapshot",
-    composerDefault: "Conversation updates the ProductPlan, parts, model placeholder, estimate, and review state",
+    previewSnapshot: "Preview prototype snapshot",
+    composerDefault: "Conversation updates the ProductPlan, prototype structure preview (3D), parts, estimate, and review state",
     composerPlaceholder: "Describe the hardware you want, e.g. a small woodgrain desktop display for weather and photos, 3.5 in, USB-C powered.",
     addInputAria: "Add input asset",
     scope: "Scope",
     partsChip: "Parts",
-    modelChip: "Model",
+    modelChip: "3D preview",
     riskChip: "Risk",
     runChainAria: "Send request and update plan",
     inspectorAria: "Live plan packet",
@@ -116,7 +174,7 @@ const copy = {
     planManual: "manual expansion draft",
     planSubmitted: "submitted for human review",
     benchAgent: "Prototype assistant",
-    fallbackNotice: "Backend unavailable; showing local ProductPlan placeholder",
+    fallbackNotice: "Backend unavailable; showing a local ProductPlan example",
     rerunNotice: "ProductPlan revision updated",
     submitNeedContact: "Enter name and email first",
     submittedNotice: "Local human review packet generated; no payment or manufacturing has started.",
@@ -128,7 +186,7 @@ const copy = {
     sections: {
       scope: "Scope",
       parts: "Parts list (BOM)",
-      model: "Structure / 3D placeholder",
+      model: "Prototype structure preview (3D)",
       layout: "Electronics layout",
       quote: "Estimate + assumptions",
       risk: "Risk limits",
@@ -136,7 +194,54 @@ const copy = {
     },
     required: "needs input",
     confirmed: "confirmed",
-    modelNotCad: "not final CAD",
+    modelPreviewState: "read-only 3D preview",
+    prototypePreviewTitle: "Prototype snapshot",
+    prototypePreviewSubtitle: "A result view of the planned prototype, not a modeling editor.",
+    prototypePreviewCta: "Open structure review view",
+    prototypeViewLabel: "Layer",
+    previewModes: {
+      appearance: "Appearance",
+      components: "Components"
+    },
+    prototypeModelSummary: "Standard shell and parts layout snapshot",
+    modelEvidence: "3D model · parts layout",
+    modelShellPath: "Shell path",
+    modelDimensions: "Dimensions",
+    modelOpenings: "Opening check",
+    modelReviewReady: "Pre-review preview",
+    modelViewerHint: "Drag to rotate, wheel to zoom, Shift-drag to pan; the appearance layer shows the shell, and the components layer makes the shell transparent; parts and holes are not editable.",
+    modelArtifacts: "3D model status",
+    modelArtifactSummary: "3D model generated",
+    modelLoading: "Loading 3D model",
+    modelLoaded: "Real 3D preview loaded",
+    modelLoadFailed: "3D model failed to load",
+    modelSketchPreview: "Structure sketch preview",
+    generateModelCta: "Generate model",
+    generateModelCommand: "generate model",
+    generationPending: "waiting for generation",
+    generationInsufficient: "insufficient information",
+    placedParts: (count) => `${count} placed parts`,
+    modifyThroughChat: "To change structure, continue the conversation and generate a new revision.",
+    modelInternalFilesNote: "The user view stays a rotatable 3D model; engineering files stay inside the review flow.",
+    geometryValidation: "Geometry validation",
+    geometryBlocked: "Geometry is incomplete or outside the standard path",
+    geometryPassed: "Trusted preview can be generated",
+    screenOpening: "Screen opening",
+    usbCRear: "Rear USB-C cutout",
+    coreBoard: "Core board position",
+    shellLabel: "Standard 3D printed shell",
+    historyTitle: "Project history",
+    historyIntro: "This view shows ProductPlan versions, drafts, and manual expansion records.",
+    currentRevision: "Current revision",
+    revisionCount: "Revision count",
+    reviewPacketTitle: "Internal review packet",
+    reviewAudience: "For internal engineers or partner reviewers.",
+    reviewChecklistTitle: "Packet contents",
+    reviewChecklist: ["Current ProductPlan revision", "Prototype structure preview (3D)", "Parts list (BOM)", "Risk limits", "Quote assumptions"],
+    reviewRiskNote: "Camera and battery become human-review risk items; motion structures move into manual expansion drafts.",
+    reviewSubmitCta: "Generate local review packet",
+    reviewContactCta: "Fill right-side contact fields",
+    noManufacturing: "No payment, production, or supplier contact",
     noPlan: "Send the first hardware idea to generate a plan.",
     standardShell: "Standard 3D printed shell",
     woodgrainDemo: "Woodgrain desk display",
@@ -144,12 +249,18 @@ const copy = {
       ["Internal prototype mode", "Submission writes a local human review packet; no payment, production, or supplier order starts."],
       ["Conversation first", "The user keeps chatting while the right-side ProductPlan updates."],
       ["Standard 3D printed shell", "Woodgrain, sage, and graphite are finish treatments on the same shell path."],
-      ["Generation placeholders", "3D, electronics layout, and AI providers are reserved through job interfaces."],
+      ["Result preview first", "The 3D view helps users understand the prototype result; it does not expose modeling tools."],
       ["Interface language", "Keep both Chinese and English copy."],
       ["Copy maintenance", "Buttons, statuses, popovers, and docs must stay bilingual."]
     ],
     demoRequest:
-      "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered, and dim at night."
+      "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered.",
+    demoConversationTurns: [
+      "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered.",
+      "Add an ambient light sensor so it dims at night, and keep it desktop USB-C powered.",
+      "Use the standard 3D printed shell first, with a front screen opening and a rear USB-C cutout.",
+      "Ready, generate model."
+    ]
   }
 };
 
@@ -157,7 +268,19 @@ const state = {
   lang: initialLanguage(),
   productPlan: null,
   activeSidebar: "chat",
-  collapsedSections: new Set(["scope", "parts", "model", "layout", "risk"]),
+  previewMode: "appearance",
+  viewer: {
+    yaw: 0,
+    pitch: 0,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    dragging: false,
+    dragMode: "orbit",
+    lastX: 0,
+    lastY: 0
+  },
+  collapsedSections: new Set(["scope", "parts", "layout", "risk"]),
   notice: "",
   loading: false,
   submittingReview: false,
@@ -213,17 +336,29 @@ async function bootstrap() {
 
 async function createInitialPlan() {
   try {
+    const turns = demoConversationTurns();
     const response = await apiPost("/api/plans", {
-      initialMessage: t("demoRequest"),
+      initialMessage: turns[0],
       language: state.lang
     });
-    state.productPlan = response.productPlan;
-    state.contactInfo = response.productPlan.contactInfo || state.contactInfo;
+    let productPlan = response.productPlan;
+    for (const message of turns.slice(1)) {
+      const turnResponse = await apiPost(`/api/plans/${productPlan.planId}/turns`, { message });
+      productPlan = turnResponse.productPlan;
+    }
+    state.productPlan = productPlan;
+    state.contactInfo = productPlan.contactInfo || state.contactInfo;
   } catch {
-    state.productPlan = fallbackProductPlan();
+    state.productPlan = fallbackProductPlan(t("demoRequest"), { useDemoConversation: true });
     setNotice(t("fallbackNotice"));
   }
   render();
+}
+
+function demoConversationTurns() {
+  const turns = t("demoConversationTurns");
+  if (Array.isArray(turns) && turns.length > 0) return turns;
+  return [t("demoRequest")];
 }
 
 async function sendTurn(message) {
@@ -405,6 +540,18 @@ function renderHistory() {
 }
 
 function renderConversation() {
+  if (state.activeSidebar === "history") {
+    renderHistoryWorkspace();
+    return;
+  }
+  if (state.activeSidebar === "review") {
+    renderReviewWorkspace();
+    return;
+  }
+  renderChatWorkspace();
+}
+
+function renderChatWorkspace() {
   if (!state.productPlan) {
     dom.workspaceView.innerHTML = `<section class="workspace-card"><p>${escapeHtml(t("noPlan"))}</p></section>`;
     return;
@@ -415,6 +562,7 @@ function renderConversation() {
     <div class="message-stack">
       ${messages.map((turn) => renderMessage(turn)).join("")}
     </div>
+    ${renderPrototypeSnapshot(revision)}
     <section class="inline-panel flow-panel" aria-label="ProductPlan">
       <div class="inline-panel-head">
         <span class="inline-label">ProductPlan</span>
@@ -422,6 +570,126 @@ function renderConversation() {
       </div>
       <div class="flow-list">
         ${renderPlanSteps(revision)}
+      </div>
+    </section>
+  `;
+}
+
+function renderHistoryWorkspace() {
+  const revision = currentRevision();
+  const revisions = state.productPlan?.revisions || [];
+  dom.workspaceView.innerHTML = `
+    <section class="workspace-card history-workspace">
+      <div class="workspace-head">
+        <strong>${escapeHtml(t("historyTitle"))}</strong>
+        <span>${escapeHtml(t("currentRevision"))}: ${escapeHtml(revision?.revisionId || "-")}</span>
+      </div>
+      <p class="workspace-copy">${escapeHtml(t("historyIntro"))}</p>
+      <div class="snapshot-facts compact">
+        <span>
+          <small>${escapeHtml(t("revisionCount"))}</small>
+          <strong>${escapeHtml(String(revisions.length || 0))}</strong>
+        </span>
+        <span>
+          <small>ProductPlan</small>
+          <strong>${escapeHtml(planTitle(revision))}</strong>
+        </span>
+        <span>
+          <small>Status</small>
+          <strong>${escapeHtml(planStatusText())}</strong>
+        </span>
+      </div>
+      <div class="queue-list">
+        ${revisions.map((item, index) => `
+          <button class="queue-item ${item.revisionId === state.productPlan.currentRevisionId ? "queued" : ""}" type="button" data-history-revision="${escapeHtml(item.revisionId)}">
+            <span>r${index + 1}</span>
+            <strong>${escapeHtml(planTitle(item))}</strong>
+            <p>${escapeHtml(item.riskReport?.blocked ? t("planManual") : t("planReady"))} · ${escapeHtml(item.quoteEstimate?.range || item.quote?.range || "-")}</p>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderReviewWorkspace() {
+  const revision = currentRevision();
+  const review = state.productPlan?.reviewSubmission || {};
+  dom.workspaceView.innerHTML = `
+    <section class="workspace-card review-workspace">
+      <div class="workspace-head">
+        <strong>${escapeHtml(t("reviewPacketTitle"))}</strong>
+        <span>${escapeHtml(review.status || planStatusText())}</span>
+      </div>
+      <p class="workspace-copy">${escapeHtml(t("reviewAudience"))}</p>
+      <div class="packet-status ${review.accepted ? "ready" : "quote"}">${escapeHtml(t("noManufacturing"))}</div>
+      <div class="review-packet">
+        <strong class="packet-heading">${escapeHtml(t("reviewChecklistTitle"))}</strong>
+        ${t("reviewChecklist").map((item) => `<div class="packet-item">${escapeHtml(item)}</div>`).join("")}
+      </div>
+      <p class="section-note">${escapeHtml(t("reviewRiskNote"))}</p>
+      <div class="segmented-row">
+        <button type="button" data-review-action="contact">${escapeHtml(t("reviewContactCta"))}</button>
+        <button type="button" class="active" data-review-action="submit">${escapeHtml(t("reviewSubmitCta"))}</button>
+      </div>
+      <div class="code-output compact">${escapeHtml(JSON.stringify({
+        planId: state.productPlan?.planId || "",
+        revisionId: revision?.revisionId || "",
+        status: state.productPlan?.status || "",
+        quote: revision?.quoteEstimate?.range || revision?.quote?.range || "",
+        riskItems: revision?.riskReport?.items?.length || 0
+      }, null, 2))}</div>
+    </section>
+  `;
+}
+
+function renderPrototypeSnapshot(revision) {
+  if (!revision) return "";
+  const params = revision.modelPreview?.modelParameters || {};
+  const dimensions = params.dimensionsMm || {};
+  const modules = revision.modules || [];
+  const pending = generationIsPending(revision);
+  const previewEngine = previewEngineForRevision(revision);
+  return `
+    <section class="prototype-snapshot" aria-label="${escapeHtml(t("prototypePreviewTitle"))}">
+      <div class="prototype-snapshot-head">
+        <span class="inline-label">${escapeHtml(t("prototypePreviewTitle"))}</span>
+        <strong>${escapeHtml(planTitle(revision))}</strong>
+        <button class="snapshot-link" type="button" data-open-dialog="dfm">${escapeHtml(t("prototypePreviewCta"))}</button>
+      </div>
+      <div class="prototype-snapshot-body">
+        <div class="prototype-canvas-wrap">
+          <span class="preview-engine-badge" data-model-render-status="conversation">${escapeHtml(renderPreviewStatus(revision))}</span>
+          <canvas data-device-canvas="conversation" data-preview-id="conversation" data-preview-engine="${escapeHtml(previewEngine)}" width="920" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
+        </div>
+        <div class="prototype-snapshot-side">
+          ${renderPreviewControls()}
+          <p>${escapeHtml(t("prototypePreviewSubtitle"))}</p>
+          <p>${escapeHtml(t("modelViewerHint"))}</p>
+          <div class="snapshot-facts">
+            <span>
+              <small>${escapeHtml(t("modelShellPath"))}</small>
+              <strong>${escapeHtml(t("standardShell"))}</strong>
+            </span>
+            <span>
+              <small>${escapeHtml(t("modelDimensions"))}</small>
+              <strong>${escapeHtml(formatDimensions(dimensions))}</strong>
+            </span>
+            <span>
+              <small>${escapeHtml(t("modelOpenings"))}</small>
+              <strong>${escapeHtml(openingSummary(params.openings, modules))}</strong>
+            </span>
+            <span>
+              <small>${escapeHtml(t("sections.parts"))}</small>
+              <strong>${escapeHtml(placedPartsSummary(revision))}</strong>
+            </span>
+            <span>
+              <small>${escapeHtml(t("modelArtifacts"))}</small>
+              <strong>${escapeHtml(artifactSummary(revision))}</strong>
+            </span>
+          </div>
+          ${pending ? `<button class="snapshot-link primary" type="button" data-model-action="generate">${escapeHtml(t("generateModelCta"))}</button>` : ""}
+        </div>
       </div>
     </section>
   `;
@@ -446,7 +714,7 @@ function renderPlanSteps(revision) {
   const steps = [
     ["scope", t("sections.scope"), planTitle(revision), "done"],
     ["parts", t("sections.parts"), `${revision.modules?.length || 0} modules`, "done"],
-    ["model", t("sections.model"), revision.modelPreview?.viewerType || "placeholder_3d", "ready"],
+    ["model", t("sections.model"), artifactSummary(revision), generationIsPending(revision) ? "warn" : "ready"],
     ["layout", t("sections.layout"), `${revision.electronicsLayout?.placements?.length || 0} placements`, "ready"],
     ["quote", t("sections.quote"), revision.quoteEstimate?.range || revision.quote?.range || "", "done"],
     ["risk", t("sections.risk"), revision.riskReport?.blocked ? t("planManual") : t("planReady"), revision.riskReport?.blocked ? "warn" : "done"],
@@ -475,9 +743,9 @@ function renderInspector() {
     return;
   }
   const sections = [
+    ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)],
     ["scope", t("sections.scope"), inspectorSectionSummary("scope", revision), renderScopeSection(revision)],
     ["parts", t("sections.parts"), inspectorSectionSummary("parts", revision), renderPartsSection(revision)],
-    ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)],
     ["layout", t("sections.layout"), inspectorSectionSummary("layout", revision), renderLayoutSection(revision)],
     ["quote", t("sections.quote"), inspectorSectionSummary("quote", revision), renderQuoteSection(revision)],
     ["risk", t("sections.risk"), inspectorSectionSummary("risk", revision), renderRiskSection(revision)],
@@ -487,7 +755,7 @@ function renderInspector() {
     .map(([key, title, summary, body]) => {
       const collapsed = state.collapsedSections.has(key);
       return `
-        <section class="inspector-card">
+        <section class="inspector-card ${key === "model" ? "model-priority" : ""}">
           <button class="card-head inspector-toggle" type="button" data-inspector-toggle="${escapeHtml(key)}">
             <span class="inspector-title">
               <span>${escapeHtml(title)}</span>
@@ -505,7 +773,7 @@ function renderInspector() {
 function inspectorSectionSummary(key, revision) {
   if (key === "scope") return planTitle(revision);
   if (key === "parts") return `${revision.modules?.length || 0} modules`;
-  if (key === "model") return `${revision.modelPreview?.viewerType || "placeholder_3d"} · ${t("modelNotCad")}`;
+  if (key === "model") return artifactSummary(revision);
   if (key === "layout") return `${revision.electronicsLayout?.placements?.length || 0} placements`;
   if (key === "quote") return revision.quoteEstimate?.range || revision.quote?.range || "-";
   if (key === "risk") return revision.riskReport?.blocked ? t("planManual") : t("planReady");
@@ -545,19 +813,93 @@ function renderPartsSection(revision) {
 }
 
 function renderModelSection(revision) {
-  const model = revision.modelPreview || {};
-  const params = model.modelParameters || {};
+  const params = revision.modelPreview?.modelParameters || {};
+  const dimensions = params.dimensionsMm || {};
+  const pending = generationIsPending(revision);
+  const previewEngine = previewEngineForRevision(revision);
   return `
     <div class="preview-card">
-      <canvas data-device-canvas width="760" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
+      <span class="preview-engine-badge" data-model-render-status="inspector">${escapeHtml(renderPreviewStatus(revision))}</span>
+      <canvas data-device-canvas="inspector" data-preview-id="inspector" data-preview-engine="${escapeHtml(previewEngine)}" width="760" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
     </div>
+    ${renderPreviewControls()}
+    ${pending ? `<div class="model-action-row"><button class="snapshot-link primary" type="button" data-model-action="generate">${escapeHtml(t("generateModelCta"))}</button></div>` : ""}
     <div class="kv-list">
-      <span>Viewer <strong>${escapeHtml(model.viewerType || "placeholder_3d")}</strong></span>
-      <span>Mode <strong>${escapeHtml(model.generationMode || "ai_provider_reserved")}</strong></span>
-      <span>${escapeHtml(t("modelNotCad"))} <strong>${escapeHtml(params.manufacturingPath || "standardized_3d_print")}</strong></span>
+      <span>${escapeHtml(t("modelShellPath"))} <strong>${escapeHtml(t("standardShell"))}</strong></span>
+      <span>${escapeHtml(t("modelDimensions"))} <strong>${escapeHtml(formatDimensions(dimensions))}</strong></span>
+      <span>${escapeHtml(t("modelOpenings"))} <strong>${escapeHtml(openingSummary(params.openings, revision.modules))}</strong></span>
+      <span>${escapeHtml(t("sections.parts"))} <strong>${escapeHtml(placedPartsSummary(revision))}</strong></span>
+      <span>${escapeHtml(t("modelReviewReady"))} <strong>${escapeHtml(t("modelPreviewState"))}</strong></span>
+      <span>${escapeHtml(t("modelArtifacts"))} <strong>${escapeHtml(artifactSummary(revision))}</strong></span>
+      <span>${escapeHtml(t("geometryValidation"))} <strong>${escapeHtml(validationSummary(revision))}</strong></span>
     </div>
-    <p class="section-note">${escapeHtml((model.notes || [])[0] || "")}</p>
+    <p class="section-note">${escapeHtml(t("modelViewerHint"))}</p>
+    <p class="section-note">${escapeHtml(t("modelInternalFilesNote"))}</p>
+    <p class="section-note">${escapeHtml(t("modifyThroughChat"))}</p>
   `;
+}
+
+function renderPreviewControls() {
+  return `
+    <div class="preview-controls" aria-label="${escapeHtml(t("prototypeViewLabel"))}">
+      <span>${escapeHtml(t("prototypeViewLabel"))}</span>
+      ${["appearance", "components"].map((mode) => `
+        <button class="${state.previewMode === mode ? "active" : ""}" type="button" data-preview-mode="${escapeHtml(mode)}">
+          ${escapeHtml(t(`previewModes.${mode}`))}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function formatDimensions(dimensions) {
+  const width = dimensions.width || dimensions.widthMm;
+  const height = dimensions.height || dimensions.heightMm;
+  const depth = dimensions.depth || dimensions.depthMm;
+  if (!width || !height || !depth) return "-";
+  return `${width} x ${height} x ${depth} mm`;
+}
+
+function openingSummary(openings = [], modules = []) {
+  const hasDisplay = openings.some((opening) => opening.type === "display") || modules.some((module) => module.category === "Display");
+  const hasUsb = openings.some((opening) => opening.id === "usb_c_rear") || modules.some((module) => /usb/i.test(module.name || ""));
+  const count = [hasDisplay, hasUsb].filter(Boolean).length || openings.length;
+  if (state.lang === "zh") return `${count || 2} 项已标注`;
+  return `${count || 2} marked`;
+}
+
+function artifactSummary(revision) {
+  if (generationIsPending(revision)) return t("generationPending");
+  if (revision.modelArtifacts?.status === "blocked") return t("generationInsufficient");
+  const artifacts = revision.modelArtifacts?.artifacts || revision.modelPreview?.assets || {};
+  const ready = ["glb", "stl", "step"].filter((key) => artifacts[key]);
+  if (ready.length === 0) return state.lang === "zh" ? "待生成" : "pending";
+  return t("modelArtifactSummary");
+}
+
+function generationIsPending(revision) {
+  return revision?.generationStatus === "pending_confirmation"
+    || revision?.modelArtifacts?.status === "pending_confirmation";
+}
+
+function placedPartsSummary(revision) {
+  return t("placedParts", placedModules(revision).length);
+}
+
+function placedModules(revision) {
+  return (revision?.geometrySpec?.modules || []).filter((module) => {
+    if (module.category === "Shell") return false;
+    if (module.geometryStatus !== "ready") return false;
+    if (module.capabilities?.includes("servo_motion")) return false;
+    return Boolean(module.dimensionsMm && module.placement?.positionMm);
+  });
+}
+
+function validationSummary(revision) {
+  const validation = revision.geometryValidation || revision.modelArtifacts?.validation || revision.modelPreview?.validation;
+  if (!validation) return "-";
+  if (validation.canGenerateArtifacts) return t("geometryPassed");
+  return t("geometryBlocked");
 }
 
 function renderLayoutSection(revision) {
@@ -613,7 +955,32 @@ function renderPopovers() {
   dom.scopePopover.innerHTML = `<strong>${escapeHtml(t("sections.scope"))}</strong><p>${escapeHtml(revision.spec?.user_request || "")}</p>`;
   dom.bomPopover.innerHTML = `<strong>${escapeHtml(t("sections.parts"))}</strong>${renderPartsSection(revision)}`;
   dom.guardrailsPopover.innerHTML = `<strong>${escapeHtml(t("sections.risk"))}</strong>${renderRiskSection(revision)}`;
-  dom.dfmPopover.innerHTML = `<strong>${escapeHtml(t("sections.model"))}</strong><p>${escapeHtml(revision.modelPreview?.notes?.join(" ") || "")}</p>`;
+  dom.dfmPopover.innerHTML = `
+    <strong>${escapeHtml(t("sections.model"))}</strong>
+    <p>${escapeHtml(t("prototypePreviewSubtitle"))}</p>
+    <div class="popover-row selected">
+      <span>${escapeHtml(t("shellLabel"))}</span>
+      <small>${escapeHtml(t("modelPreviewState"))}</small>
+    </div>
+    <div class="popover-row selected">
+      <span>${escapeHtml(t("screenOpening"))}</span>
+      <small>${escapeHtml(t("modelOpenings"))}</small>
+    </div>
+    <div class="popover-row selected">
+      <span>${escapeHtml(t("usbCRear"))}</span>
+      <small>${escapeHtml(t("modelReviewReady"))}</small>
+    </div>
+    <div class="popover-row selected">
+      <span>${escapeHtml(t("modelArtifacts"))}</span>
+      <small>${escapeHtml(artifactSummary(revision))}</small>
+    </div>
+    <div class="popover-row selected">
+      <span>${escapeHtml(t("sections.parts"))}</span>
+      <small>${escapeHtml(placedPartsSummary(revision))}</small>
+    </div>
+    <p>${escapeHtml(t("modifyThroughChat"))}</p>
+    ${generationIsPending(revision) ? `<button class="snapshot-link primary" type="button" data-model-action="generate">${escapeHtml(t("generateModelCta"))}</button>` : ""}
+  `;
 }
 
 function currentRevision() {
@@ -650,34 +1017,83 @@ function planStatusText() {
   return t("planReady");
 }
 
-function fallbackProductPlan(message = t("demoRequest")) {
+function fallbackProductPlan(message = t("demoRequest"), options = {}) {
   const now = new Date().toISOString();
-  const revision = {
-    revisionId: "fallback-rev",
-    productCategory: "standard_desktop_display",
-    spec: {
-      product_type: "ai_desktop_display",
-      user_request: message,
-      enclosure: {
-        standardization: "3d_print_only",
-        finish: "woodgrain",
-        screen_size_in: 3.5
-      },
-      power: "usb_c_low_voltage"
-    },
-    modules: [
-      { id: "core.y_core_lite", category: "Core", name: "Y-Core Lite", unitCost: 58, status: "approved" },
-      { id: "display.tft_3_5", category: "Display", name: "3.5 inch TFT", unitCost: 28, status: "approved" },
-      { id: "enclosure.woodgrain", category: "Shell", name: "Woodgrain 3D printed shell", unitCost: 24, status: "approved" }
-    ],
-    riskReport: { blocked: false, items: [{ level: "ok", text: "Local placeholder keeps the standard desktop display boundary." }] },
-    quote: { range: "$210-$265" },
-    quoteEstimate: { range: "$210-$265", assumptions: ["Local placeholder estimate."] },
-    modelPreview: { viewerType: "placeholder_3d", generationMode: "ai_provider_reserved", modelParameters: { dimensionsMm: { width: 132, height: 84, depth: 36 }, finish: "woodgrain", manufacturingPath: "standardized_3d_print" }, notes: ["This is a structure preview placeholder, not final CAD."] },
-    electronicsLayout: { placements: [], conflicts: [{ level: "ok", note: "Placeholder layout." }] },
-    assumptions: ["Local fallback"],
-    createdAt: now
+  const useDemoConversation = Boolean(options.useDemoConversation);
+  const userTurns = useDemoConversation ? demoConversationTurns() : [message];
+  const generatedArtifacts = {
+    glb: { assetId: "fallback-model-glb", type: "glb", source: "local_fallback", caption: "Local 3D model preview" },
+    stl: { assetId: "fallback-model-stl", type: "stl", source: "local_fallback", caption: "Local shell file placeholder" },
+    step: { assetId: "fallback-model-step", type: "step", source: "local_fallback", caption: "Local internal engineering file placeholder" }
   };
+  const fallbackModules = [
+    { id: "core.y_core_lite", category: "Core", name: "Y-Core Lite", unitCost: 58, status: "approved" },
+    { id: "display.tft_3_5", category: "Display", name: "3.5 inch TFT", unitCost: 28, status: "approved" },
+    { id: "power.usb_c_low_voltage", category: "Power", name: "USB-C low voltage", unitCost: 18, status: "approved" },
+    { id: "sensor.ambient_light", category: "Sensor", name: "Ambient light", unitCost: 8, status: "approved" },
+    { id: "enclosure.woodgrain", category: "Shell", name: "Woodgrain 3D printed shell", unitCost: 24, status: "approved" }
+  ];
+  const fallbackGeometrySpec = {
+    enclosure: { dimensionsMm: { width: 132, height: 84, depth: 36 }, finish: "woodgrain" },
+    modules: [
+      { moduleId: "core.y_core_lite", category: "Core", name: "Y-Core Lite", status: "approved", role: "core_board", geometryStatus: "ready", dimensionsMm: { width: 48, height: 38, depth: 7 }, placement: { positionMm: { x: 0, y: 0, z: -6 }, orientation: "internal" } },
+      { moduleId: "display.tft_3_5", category: "Display", name: "3.5 inch TFT", status: "approved", role: "front_display", geometryStatus: "ready", dimensionsMm: { width: 76, height: 50, depth: 5 }, placement: { positionMm: { x: 0, y: 0, z: 15.5 }, orientation: "front" } },
+      { moduleId: "power.usb_c_low_voltage", category: "Power", name: "USB-C low voltage", status: "approved", role: "rear_connector", geometryStatus: "ready", dimensionsMm: { width: 12, height: 8, depth: 5 }, placement: { positionMm: { x: 0, y: -28, z: -16 }, orientation: "back" } },
+      { moduleId: "sensor.ambient_light", category: "Sensor", name: "Ambient light", status: "approved", role: "front_sensor", geometryStatus: "ready", dimensionsMm: { width: 9, height: 6, depth: 3 }, placement: { positionMm: { x: 42, y: 24, z: 16 }, orientation: "front" } }
+    ],
+    cableRoutes: [
+      { id: "fallback_power_route", from: "power.usb_c_low_voltage", to: "core.y_core_lite", pointsMm: [{ x: 0, y: -28, z: -16 }, { x: 0, y: 0, z: -6 }] }
+    ]
+  };
+  const buildRevision = (turnText, index) => {
+    const isFinal = useDemoConversation && index === userTurns.length - 1;
+    const status = isFinal ? "generated" : "pending_confirmation";
+    return {
+      revisionId: `fallback-rev-${index + 1}`,
+      sourceTurnId: `fallback-user-${index + 1}`,
+      productCategory: "standard_desktop_display",
+      requestText: userTurns.slice(0, index + 1).join("\nUpdate: "),
+      spec: {
+        product_type: "ai_desktop_display",
+        user_request: turnText,
+        module_stack: fallbackModules.map((module) => module.name),
+        enclosure: {
+          standardization: "3d_print_only",
+          finish: "woodgrain",
+          screen_size_in: 3.5
+        },
+        power: "usb_c_low_voltage"
+      },
+      modules: fallbackModules,
+      riskReport: { blocked: false, items: [{ level: "ok", text: "Local fallback preview keeps the standard desktop display boundary." }] },
+      quote: { range: "$268-$338" },
+      quoteEstimate: { range: "$268-$338", assumptions: ["Local fallback visual estimate."] },
+      geometrySpec: fallbackGeometrySpec,
+      modelArtifacts: {
+        status,
+        artifacts: isFinal ? { ...generatedArtifacts } : { glb: null, stl: null, step: null },
+        validation: { canGenerateArtifacts: true }
+      },
+      geometryValidation: { canGenerateArtifacts: true },
+      generationStatus: status,
+      generationConfirmed: isFinal,
+      modelPreview: {
+        viewerType: isFinal ? "interactive_glb_preview" : "pending_generation_preview",
+        generationMode: "local_fallback_visual",
+        modelParameters: { dimensionsMm: { width: 132, height: 84, depth: 36 }, finish: "woodgrain", manufacturingPath: "standardized_3d_print" },
+        notes: ["Local read-only 3D prototype preview."]
+      },
+      electronicsLayout: { placements: fallbackGeometrySpec.modules, conflicts: [{ level: "ok", note: "Local fallback layout preview." }] },
+      assumptions: ["Local fallback"],
+      createdAt: now
+    };
+  };
+  const revisions = userTurns.map(buildRevision);
+  const revision = revisions.at(-1);
+  const conversation = userTurns.flatMap((turnText, index) => [
+    { turnId: `fallback-user-${index + 1}`, role: "user", text: turnText, assetIds: [], createdAt: now },
+    { turnId: `fallback-ai-${index + 1}`, role: "assistant", text: fallbackAssistantText(index, userTurns.length, useDemoConversation), assetIds: [], createdAt: now }
+  ]);
   return {
     planId: "fallback-plan",
     status: "standard_supported",
@@ -688,18 +1104,28 @@ function fallbackProductPlan(message = t("demoRequest")) {
       finish: { confirmed: true, value: "woodgrain" },
       missing: []
     },
-    conversation: [
-      { turnId: "fallback-user", role: "user", text: message, assetIds: [], createdAt: now },
-      { turnId: "fallback-ai", role: "assistant", text: t("fallbackNotice"), assetIds: [], createdAt: now }
-    ],
-    revisions: [revision],
-    assets: [],
+    conversation,
+    revisions,
+    assets: useDemoConversation ? Object.values(generatedArtifacts) : [],
     jobs: [],
     contactInfo: { name: "", email: "" },
     reviewSubmission: null,
     createdAt: now,
     updatedAt: now
   };
+}
+
+function fallbackAssistantText(index, total, useDemoConversation) {
+  if (!useDemoConversation) return t("fallbackNotice");
+  const isFinal = index === total - 1;
+  if (state.lang === "zh") {
+    return isFinal
+      ? "本地示例已根据模拟对话生成带零件布局的 3D 原型预览。"
+      : "本地示例已更新 ProductPlan 草案，继续按模拟对话补充结构信息。";
+  }
+  return isFinal
+    ? "The local example generated a 3D prototype preview with placed parts from the simulated conversation."
+    : "The local example updated the ProductPlan draft and continues collecting structure details from the simulated conversation.";
 }
 
 function openFloating(name) {
@@ -752,10 +1178,290 @@ function setNotice(message) {
   }, 2200);
 }
 
+function modelGlbUrl(revision) {
+  const artifact = revision?.modelArtifacts?.artifacts?.glb || revision?.modelPreview?.assets?.glb;
+  return revision?.modelArtifacts?.status === "generated" && artifact?.url
+    ? artifact.url
+    : "";
+}
+
+function previewEngineForRevision(revision) {
+  return modelGlbUrl(revision) ? "three" : "canvas2d";
+}
+
+function renderPreviewStatus(revision) {
+  if (previewEngineForRevision(revision) === "three") return t("modelLoading");
+  if (revision?.modelArtifacts?.status === "generated") return t("modelLoadFailed");
+  return t("modelSketchPreview");
+}
+
 function drawPreview() {
-  const canvas = document.querySelector("[data-device-canvas]");
   const revision = currentRevision();
-  if (!canvas || !revision) return;
+  if (!revision) return;
+  cleanupThreePreviews();
+  document.querySelectorAll("[data-device-canvas]").forEach((canvas) => {
+    if (canvas.dataset.previewEngine === "three") {
+      drawThreePreview(canvas, revision);
+    } else {
+      disposeThreePreview(canvas.dataset.previewId);
+      drawDevicePreview(canvas, revision);
+    }
+  });
+}
+
+function drawThreePreview(canvas, revision) {
+  const previewId = canvas.dataset.previewId || "default";
+  const glbUrl = modelGlbUrl(revision);
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(260, rect.width || 280);
+  const height = Math.max(150, rect.height || 180);
+  let instance = threePreviewInstances.get(previewId);
+  if (!instance || instance.canvas !== canvas || instance.glbUrl !== glbUrl) {
+    disposeThreePreview(previewId);
+    instance = createThreePreviewInstance({ canvas, previewId, glbUrl, width, height });
+    threePreviewInstances.set(previewId, instance);
+    loadThreeModel(instance, revision);
+  }
+  resizeThreePreview(instance, width, height);
+  applyThreePreviewMode(instance);
+}
+
+function createThreePreviewInstance({ canvas, previewId, glbUrl, width, height }) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setClearColor(0xf6f6f2, 1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, width / height, 0.01, 100);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.enablePan = true;
+  controls.enableZoom = true;
+  controls.screenSpacePanning = true;
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN
+  };
+  controls.touches = {
+    ONE: THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN
+  };
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d0c0, 2.2));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+  keyLight.position.set(2.2, 2.8, 3.2);
+  scene.add(keyLight);
+  const fillLight = new THREE.DirectionalLight(0xcfe5ff, 0.9);
+  fillLight.position.set(-2.4, 1.2, -2.2);
+  scene.add(fillLight);
+  const instance = {
+    previewId,
+    canvas,
+    glbUrl,
+    renderer,
+    scene,
+    camera,
+    controls,
+    root: null,
+    basePositions: new Map(),
+    status: "loading",
+    animationFrame: 0,
+    leftButtonMode: THREE.MOUSE.ROTATE
+  };
+  canvas.addEventListener("pointerdown", (event) => {
+    instance.leftButtonMode = controls.mouseButtons.LEFT;
+    if (event.shiftKey) controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+  });
+  canvas.addEventListener("pointerup", () => {
+    controls.mouseButtons.LEFT = instance.leftButtonMode;
+  });
+  canvas.addEventListener("pointerleave", () => {
+    controls.mouseButtons.LEFT = instance.leftButtonMode;
+  });
+  setRenderStatus(previewId, t("modelLoading"));
+  return instance;
+}
+
+function loadThreeModel(instance, revision) {
+  const loader = new GLTFLoader();
+  loader.load(
+    instance.glbUrl,
+    (gltf) => {
+      instance.root = gltf.scene;
+      instance.root.name = "forge_generated_3d_preview";
+      instance.scene.add(instance.root);
+      instance.root.traverse((node) => {
+        if (!node.isObject3D) return;
+        instance.basePositions.set(node.uuid, node.position.clone());
+        if (node.isMesh) {
+          node.castShadow = false;
+          node.receiveShadow = false;
+          node.material = normalizeThreeMaterial(node.material);
+          node.userData.baseMaterial = Array.isArray(node.material)
+            ? node.material.map((material) => material.clone())
+            : node.material?.clone?.();
+        }
+      });
+      instance.status = "loaded";
+      frameThreeModel(instance, revision);
+      applyThreePreviewMode(instance);
+      setRenderStatus(instance.previewId, t("modelLoaded"));
+      animateThreePreview(instance);
+    },
+    undefined,
+    () => {
+      instance.status = "failed";
+      setRenderStatus(instance.previewId, t("modelLoadFailed"));
+      instance.renderer.render(instance.scene, instance.camera);
+    }
+  );
+}
+
+function normalizeThreeMaterial(material) {
+  if (!material) return material;
+  const normalized = material.clone();
+  if (normalized.opacity < 1 || normalized.transparent) {
+    normalized.transparent = true;
+    normalized.depthWrite = false;
+  }
+  normalized.needsUpdate = true;
+  return normalized;
+}
+
+function frameThreeModel(instance) {
+  if (!instance.root) return;
+  const box = new THREE.Box3().setFromObject(instance.root);
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  box.getCenter(center);
+  box.getSize(size);
+  instance.controls.target.copy(center);
+  instance.controls.update();
+  instance.scene.userData.modelCenter = center;
+  instance.scene.userData.modelRadius = Math.max(size.x, size.y, size.z, 1);
+}
+
+function resizeThreePreview(instance, width, height) {
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  instance.renderer.setPixelRatio(ratio);
+  instance.renderer.setSize(width, height, false);
+  instance.camera.aspect = width / height;
+  instance.camera.updateProjectionMatrix();
+}
+
+function applyThreePreviewMode(instance) {
+  if (!instance.root || instance.status !== "loaded") return;
+  const center = instance.scene.userData.modelCenter || new THREE.Vector3(0, 0, 0);
+  const radius = instance.scene.userData.modelRadius || 1.8;
+  const componentsVisible = state.previewMode === "components";
+  instance.root.traverse((node) => {
+    const base = instance.basePositions.get(node.uuid);
+    if (base) node.position.copy(base);
+    applyLayerVisibility(node, componentsVisible);
+  });
+  setCameraPreset(instance, new THREE.Vector3(center.x + radius * 0.34, center.y + radius * 0.16, center.z + radius * 2.18));
+}
+
+function applyLayerVisibility(node, componentsVisible) {
+  if (!node.isObject3D) return;
+  const isShell = node.name === "shell.standard_desktop_display_shell";
+  const isModule = node.name?.startsWith("module.");
+  const isInterface = node.name?.startsWith("interface.");
+  const isRoute = node.name?.startsWith("route.");
+  const isExteriorModule = ["front_display", "front_sensor", "front_camera_review"].includes(node.userData?.role);
+  const isInterfaceLayerObject = isInterface || isRoute || nodeHasMaterialName(node, ["interface_marker", "cable_route"]);
+  if (isShell) {
+    node.visible = true;
+    applyNodeMaterialLayer(node, {
+      opacity: componentsVisible ? 0.18 : 1,
+      transparent: componentsVisible,
+      depthWrite: !componentsVisible
+    });
+    return;
+  }
+  if (isModule) {
+    node.visible = componentsVisible || isExteriorModule;
+    applyNodeMaterialLayer(node, {
+      opacity: componentsVisible || isExteriorModule ? 1 : 0,
+      transparent: !(componentsVisible || isExteriorModule),
+      depthWrite: componentsVisible || isExteriorModule
+    });
+    return;
+  }
+  if (isInterfaceLayerObject) {
+    node.visible = componentsVisible;
+    applyNodeMaterialLayer(node, {
+      opacity: componentsVisible ? 1 : 0,
+      transparent: !componentsVisible,
+      depthWrite: componentsVisible
+    });
+  }
+}
+
+function nodeHasMaterialName(node, names) {
+  const materials = Array.isArray(node.material) ? node.material : [node.material];
+  return materials.some((material) => material?.name && names.includes(material.name));
+}
+
+function applyNodeMaterialLayer(node, { opacity, transparent, depthWrite }) {
+  const apply = (material, index = 0) => {
+    if (!material) return;
+    const base = Array.isArray(node.userData.baseMaterial)
+      ? node.userData.baseMaterial[index]
+      : node.userData.baseMaterial;
+    if (base && material.color && base.color) material.color.copy(base.color);
+    material.opacity = opacity;
+    material.transparent = transparent || opacity < 1;
+    material.depthWrite = depthWrite && opacity >= 0.5;
+    material.needsUpdate = true;
+  };
+  if (Array.isArray(node.material)) node.material.forEach(apply);
+  else apply(node.material);
+}
+
+function setCameraPreset(instance, position) {
+  const target = instance.scene.userData.modelCenter || new THREE.Vector3(0, 0, 0);
+  instance.camera.position.copy(position);
+  instance.controls.target.copy(target);
+  instance.controls.update();
+}
+
+function animateThreePreview(instance) {
+  if (!threePreviewInstances.has(instance.previewId)) return;
+  instance.controls.update();
+  instance.renderer.render(instance.scene, instance.camera);
+  instance.animationFrame = window.requestAnimationFrame(() => animateThreePreview(instance));
+}
+
+function setRenderStatus(previewId, message) {
+  const safePreviewId = String(previewId).replace(/"/g, "");
+  document.querySelectorAll(`[data-model-render-status="${safePreviewId}"]`).forEach((element) => {
+    element.textContent = message;
+  });
+}
+
+function cleanupThreePreviews() {
+  for (const [previewId, instance] of threePreviewInstances) {
+    if (!instance.canvas.isConnected) disposeThreePreview(previewId);
+  }
+}
+
+function disposeThreePreview(previewId) {
+  if (!previewId) return;
+  const instance = threePreviewInstances.get(previewId);
+  if (!instance) return;
+  window.cancelAnimationFrame(instance.animationFrame);
+  instance.controls?.dispose();
+  instance.scene?.traverse((node) => {
+    if (!node.isMesh) return;
+    node.geometry?.dispose?.();
+    if (Array.isArray(node.material)) node.material.forEach((material) => material.dispose?.());
+    else node.material?.dispose?.();
+  });
+  instance.renderer?.dispose();
+  threePreviewInstances.delete(previewId);
+}
+
+function drawDevicePreview(canvas, revision) {
   const rect = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
   const width = Math.max(260, rect.width || 280);
@@ -765,6 +1471,7 @@ function drawPreview() {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, width, height);
+  const viewer = state.viewer || { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 };
   const finish = revision.spec?.enclosure?.finish || "woodgrain";
   const colors = {
     woodgrain: ["#9a6534", "#4d2d16"],
@@ -775,13 +1482,28 @@ function drawPreview() {
   ctx.fillStyle = "#f6f6f2";
   roundedRect(ctx, 0, 0, width, height, 8);
   ctx.fill();
-  const frameWidth = Math.min(width * 0.68, width - 48);
-  const frameHeight = frameWidth * 0.58;
-  const x = (width - frameWidth) / 2;
-  const y = height * 0.18;
+  const orbitScale = Math.max(0.72, Math.min(1.42, viewer.zoom || 1));
+  const yawScale = 0.86 + Math.abs(Math.cos(viewer.yaw || 0)) * 0.14;
+  const frameWidth = Math.min(width * 0.68, width - 48) * orbitScale * yawScale;
+  const frameHeight = frameWidth * (0.58 + Math.sin(viewer.pitch || 0) * 0.04);
+  const x = (width - frameWidth) / 2 + (viewer.panX || 0);
+  const y = height * 0.18 + (viewer.panY || 0);
   const gradient = ctx.createLinearGradient(x, y, x + frameWidth, y + frameHeight);
   gradient.addColorStop(0, colors[0]);
   gradient.addColorStop(1, colors[1]);
+
+  if (state.previewMode === "components") {
+    drawComponentsLayerPreview(ctx, x, y, frameWidth, frameHeight, gradient, revision);
+  } else {
+    drawAppearanceLayerPreview(ctx, x, y, frameWidth, frameHeight, gradient, revision);
+  }
+
+  ctx.fillStyle = "rgba(31,33,29,.18)";
+  roundedRect(ctx, width * 0.28, height * 0.8, width * 0.44, 14, 7);
+  ctx.fill();
+}
+
+function drawAppearanceLayerPreview(ctx, x, y, frameWidth, frameHeight, gradient, revision) {
   ctx.fillStyle = gradient;
   roundedRect(ctx, x, y, frameWidth, frameHeight, 18);
   ctx.fill();
@@ -794,9 +1516,98 @@ function drawPreview() {
   ctx.fillStyle = "#2f6f9f";
   roundedRect(ctx, x + frameWidth * 0.56, y + 40, frameWidth * 0.24, 18, 6);
   ctx.fill();
-  ctx.fillStyle = "rgba(31,33,29,.18)";
-  roundedRect(ctx, width * 0.28, height * 0.8, width * 0.44, 14, 7);
+  drawLabel(ctx, x + 30, y + frameHeight + 22, t("screenOpening"));
+}
+
+function drawComponentsLayerPreview(ctx, x, y, frameWidth, frameHeight, gradient, revision) {
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = gradient;
+  roundedRect(ctx, x, y, frameWidth, frameHeight, 18);
   ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.22)";
+  roundedRect(ctx, x + 24, y + 24, frameWidth - 48, frameHeight - 48, 12);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#1e2422";
+  roundedRect(ctx, x + frameWidth * 0.42, y + frameHeight * 0.68, frameWidth * 0.16, 12, 5);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.36)";
+  [0.28, 0.72].forEach((left) => {
+    [0.3, 0.58].forEach((top) => {
+      ctx.beginPath();
+      ctx.arc(x + frameWidth * left, y + frameHeight * top, 5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+  drawProjectedModules(ctx, revision, x, y, frameWidth, frameHeight);
+  drawProjectedRoutes(ctx, revision, x, y, frameWidth, frameHeight);
+  drawLabel(ctx, x, y + frameHeight + 22, t("shellLabel"));
+  drawLabel(ctx, x + frameWidth * 0.48, y + frameHeight + 22, t("coreBoard"));
+}
+
+function drawProjectedModules(ctx, revision, x, y, frameWidth, frameHeight) {
+  const spec = revision.geometrySpec || {};
+  const dimensions = spec.enclosure?.dimensionsMm || {};
+  const modules = placedModules(revision);
+  modules.forEach((module) => {
+    const position = module.placement.positionMm || {};
+    const moduleDimensions = module.dimensionsMm || {};
+    const centerX = x + frameWidth * (0.5 + Number(position.x || 0) / (dimensions.width || 1));
+    const centerY = y + frameHeight * (0.5 - Number(position.y || 0) / (dimensions.height || 1));
+    const w = Math.max(10, frameWidth * Number(moduleDimensions.width || 10) / (dimensions.width || 1));
+    const h = Math.max(8, frameHeight * Number(moduleDimensions.height || 8) / (dimensions.height || 1));
+    ctx.fillStyle = moduleColor(module);
+    roundedRect(ctx, centerX - w / 2, centerY - h / 2, w, h, 5);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.58)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawTinyLabel(ctx, centerX - w / 2, centerY - h / 2 - 4, module.category);
+  });
+}
+
+function drawProjectedRoutes(ctx, revision, x, y, frameWidth, frameHeight) {
+  const spec = revision.geometrySpec || {};
+  const dimensions = spec.enclosure?.dimensionsMm || {};
+  ctx.save();
+  ctx.strokeStyle = "rgba(47,50,46,.45)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  for (const route of spec.cableRoutes || []) {
+    const points = route.pointsMm || [];
+    if (points.length < 2) continue;
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const px = x + frameWidth * (0.5 + Number(point.x || 0) / (dimensions.width || 1));
+      const py = y + frameHeight * (0.5 - Number(point.y || 0) / (dimensions.height || 1));
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function moduleColor(module) {
+  if (module.status === "review") return "rgba(214, 132, 38, .88)";
+  if (module.category === "Display") return "rgba(18, 25, 25, .9)";
+  if (module.category === "Core") return "rgba(61, 128, 93, .86)";
+  if (module.category === "Power") return "rgba(53, 91, 156, .86)";
+  if (module.category === "Sensor") return "rgba(95, 151, 138, .86)";
+  if (module.category === "Audio") return "rgba(114, 109, 142, .86)";
+  return "rgba(91, 99, 108, .82)";
+}
+
+function drawTinyLabel(ctx, x, y, label) {
+  ctx.font = "10px Inter, system-ui, sans-serif";
+  ctx.fillStyle = "#535851";
+  ctx.fillText(String(label || "").slice(0, 18), x, y);
+}
+
+function drawLabel(ctx, x, y, label) {
+  ctx.font = "12px Inter, system-ui, sans-serif";
+  ctx.fillStyle = "#555b55";
+  ctx.fillText(label, x, y);
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
@@ -844,6 +1655,34 @@ document.querySelector(".thread-list")?.addEventListener("click", (event) => {
 });
 
 dom.workspaceView.addEventListener("click", (event) => {
+  if (handlePreviewModeClick(event)) return;
+  const dialogTrigger = event.target.closest("[data-open-dialog]");
+  if (dialogTrigger) {
+    openFloating(dialogTrigger.dataset.openDialog);
+    return;
+  }
+  const historyRevision = event.target.closest("[data-history-revision]");
+  if (historyRevision) {
+    state.productPlan.currentRevisionId = historyRevision.dataset.historyRevision;
+    state.activeSidebar = "chat";
+    setNotice(`${t("currentRevision")}: ${historyRevision.dataset.historyRevision}`);
+    render();
+    return;
+  }
+  const modelAction = event.target.closest("[data-model-action]");
+  if (modelAction?.dataset.modelAction === "generate") {
+    triggerModelGeneration();
+    return;
+  }
+  const reviewAction = event.target.closest("[data-review-action]");
+  if (reviewAction?.dataset.reviewAction === "submit") {
+    submitForReview();
+    return;
+  }
+  if (reviewAction?.dataset.reviewAction === "contact") {
+    setNotice(t("reviewContactCta"));
+    return;
+  }
   const step = event.target.closest("[data-step]");
   if (step) {
     setNotice(step.querySelector("strong")?.textContent || "");
@@ -851,6 +1690,12 @@ dom.workspaceView.addEventListener("click", (event) => {
 });
 
 dom.inspectorContent.addEventListener("click", (event) => {
+  if (handlePreviewModeClick(event)) return;
+  const modelAction = event.target.closest("[data-model-action]");
+  if (modelAction?.dataset.modelAction === "generate") {
+    triggerModelGeneration();
+    return;
+  }
   const toggle = event.target.closest("[data-inspector-toggle]");
   if (toggle) {
     const key = toggle.dataset.inspectorToggle;
@@ -867,11 +1712,66 @@ dom.inspectorContent.addEventListener("click", (event) => {
   }
 });
 
+function handlePreviewModeClick(event) {
+  const previewMode = event.target.closest("[data-preview-mode]");
+  if (!previewMode) return false;
+  state.previewMode = previewMode.dataset.previewMode || "appearance";
+  render();
+  return true;
+}
+
+async function triggerModelGeneration() {
+  if (!currentRevision() || state.loading) return;
+  await sendTurn(t("generateModelCommand"));
+}
+
 dom.inspectorContent.addEventListener("input", (event) => {
   const field = event.target.closest("[data-contact-field]");
   if (!field) return;
   state.contactInfo[field.dataset.contactField] = field.value;
 });
+
+document.addEventListener("pointerdown", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const canvas = target?.closest("[data-device-canvas]");
+  if (!canvas) return;
+  if (canvas.dataset.previewEngine === "three") return;
+  state.viewer.dragging = true;
+  state.viewer.dragMode = event.shiftKey ? "pan" : "orbit";
+  state.viewer.lastX = event.clientX;
+  state.viewer.lastY = event.clientY;
+  canvas.setPointerCapture?.(event.pointerId);
+});
+
+document.addEventListener("pointermove", (event) => {
+  if (!state.viewer.dragging) return;
+  const dx = event.clientX - state.viewer.lastX;
+  const dy = event.clientY - state.viewer.lastY;
+  state.viewer.lastX = event.clientX;
+  state.viewer.lastY = event.clientY;
+  if (state.viewer.dragMode === "pan") {
+    state.viewer.panX += dx;
+    state.viewer.panY += dy;
+  } else {
+    state.viewer.yaw += dx * 0.014;
+    state.viewer.pitch = Math.max(-0.8, Math.min(0.8, state.viewer.pitch + dy * 0.008));
+  }
+  drawPreview();
+});
+
+document.addEventListener("pointerup", () => {
+  state.viewer.dragging = false;
+});
+
+document.addEventListener("wheel", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const canvas = target?.closest("[data-device-canvas]");
+  if (!canvas || canvas.dataset.previewEngine === "three") return;
+  event.preventDefault();
+  const nextZoom = state.viewer.zoom + (event.deltaY > 0 ? -0.08 : 0.08);
+  state.viewer.zoom = Math.max(0.72, Math.min(1.42, nextZoom));
+  drawPreview();
+}, { passive: false });
 
 dom.form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -882,14 +1782,14 @@ dom.form.addEventListener("submit", async (event) => {
 });
 
 dom.copySpec.addEventListener("click", () => {
-  const revision = currentRevision();
-  setNotice(revision ? `${t("previewSnapshot")}: ${revision.revisionId}` : t("noPlan"));
+  if (!currentRevision()) {
+    setNotice(t("noPlan"));
+    return;
+  }
+  openFloating("dfm");
 });
 
 dom.submitReview.addEventListener("click", submitForReview);
-document.addEventListener("click", (event) => {
-  if (event.target.closest("#submitReview")) submitForReview();
-});
 window.yWorkbenchSubmitForReview = submitForReview;
 dom.openThreadMenu.addEventListener("click", () => openFloating("thread"));
 dom.openSettings.addEventListener("click", () => openFloating("settings"));
@@ -916,6 +1816,11 @@ dom.floatingLayer.addEventListener("click", (event) => {
   if (action) {
     setNotice(`${t("actionNotice")}${action.textContent.trim()}`);
     closeFloating();
+  }
+  const modelAction = event.target.closest("[data-model-action]");
+  if (modelAction?.dataset.modelAction === "generate") {
+    closeFloating();
+    triggerModelGeneration();
   }
 });
 
