@@ -61,6 +61,9 @@ Current known local limitation:
 - `src/contracts/workbench_contract.mjs`: shared contract constants for chain steps, API routes, statuses, and supported languages.
 - `src/core/product_plan.mjs`: ProductPlan creation, turn handling, revision creation, and local review submission orchestration.
 - `src/core/forge_actions.mjs`: stable backend action contract for future chat/tool-calling layers; supports summaries, component search, proposals, staged patches, committed revision creation, regeneration, validation, revert, and artifact retrieval without direct mesh/file mutation.
+- `src/core/project_workspace.mjs`: file-backed Forge project runtime for `data/workspaces/<planId>/`, including project manifests, current ProductPlan files, append-only events, proposal files, revision folders, revision-scoped artifacts, review files, and generated markdown indexes.
+- `src/core/context_pack_builder.mjs`: compact project-folder context builder for future chat/runtime layers; summarizes current state, revisions, proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without loading raw GLB/STL/STEP bytes.
+- `src/core/tool_registry.mjs`: Tool Protocol metadata for existing Forge actions, including schemas, confirmation policy, read/write behavior, side effects, concurrency locks, rollback strategy, and disallowed raw mutation targets.
 - `src/core/jobs.mjs`: unified generation job system for model generation, electronics layout, quote estimate, review packet, and AI chat reserved capability.
 - `src/core/workspace_state.mjs`: structured ProductPlan/workspace state helpers and deterministic mock plan adapter for conversation-derived plan updates.
 - `src/core/component_assets/*/descriptor.json`: ComponentDescriptor v2 seed assets for mechanical proxy dimensions, mounting holes, connectors, external features, keepouts, access volumes, risk flags, asset paths, and source notes.

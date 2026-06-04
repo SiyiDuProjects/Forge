@@ -1,6 +1,13 @@
 import { JOB_CAPABILITY, PRODUCT_PLAN_STATUS, SUPPORTED_LANGUAGES } from "../contracts/workbench_contract.mjs";
 import { registerAssets } from "./assets.mjs";
 import { createGenerationJob } from "./jobs.mjs";
+import {
+  appendWorkspaceEvent,
+  persistProjectPlan,
+  persistReviewSubmission,
+  persistRevision,
+  persistRevisionRevert
+} from "./project_workspace.mjs";
 import { createReviewSubmission } from "./review_queue.mjs";
 import { isGenerationRequest, processUserTurn } from "./sparker_orchestrator.mjs";
 import { includesAny, makeId } from "./utils.mjs";
@@ -66,6 +73,26 @@ export function createProductPlan({ message, initialMessage, assets = [], langua
   plan.conversation.push(assistantTurn);
   plan.updatedAt = assistantTurn.createdAt;
   plans.set(plan.planId, plan);
+  appendWorkspaceEvent({
+    plan,
+    type: "user_message",
+    actor: "user",
+    payload: {
+      turnId: userTurn.turnId,
+      text: userTurn.text,
+      assetIds: userTurn.assetIds
+    }
+  });
+  appendWorkspaceEvent({
+    plan,
+    type: "assistant_message",
+    actor: "assistant",
+    payload: {
+      turnId: assistantTurn.turnId,
+      text: assistantTurn.text
+    }
+  });
+  persistProjectPlan({ plan });
   return { productPlan: plan, revision, assistantMessage: assistantTurn };
 }
 
@@ -85,6 +112,16 @@ export function addProductPlanTurn({ planId, message, assetIds = [], assets = []
     assetIds: [...assetIds, ...assetRefs.map((asset) => asset.assetId)]
   });
   plan.conversation.push(turn);
+  appendWorkspaceEvent({
+    plan,
+    type: "user_message",
+    actor: "user",
+    payload: {
+      turnId: turn.turnId,
+      text: turn.text,
+      assetIds: turn.assetIds
+    }
+  });
 
   const previous = currentRevision(plan);
   const previousProductPlan = previous?.productPlanSnapshot
@@ -116,6 +153,16 @@ export function addProductPlanTurn({ planId, message, assetIds = [], assets = []
   });
   plan.conversation.push(assistantTurn);
   plan.updatedAt = assistantTurn.createdAt;
+  appendWorkspaceEvent({
+    plan,
+    type: "assistant_message",
+    actor: "assistant",
+    payload: {
+      turnId: assistantTurn.turnId,
+      text: assistantTurn.text
+    }
+  });
+  persistProjectPlan({ plan });
   return { productPlan: plan, revision, assistantMessage: assistantTurn };
 }
 
@@ -140,12 +187,19 @@ export function revertProductPlanRevision({ planId, revisionId } = {}) {
     error.statusCode = 404;
     throw error;
   }
+  const fromRevisionId = plan.currentRevisionId || "";
   plan.currentRevisionId = revision.revisionId;
   if (plan.workspaceState) {
     plan.workspaceState.currentRevisionId = revision.revisionId;
     plan.workspaceState.productPlan = clone(revision.productPlanSnapshot || plan.workspaceState.productPlan);
   }
   plan.updatedAt = new Date().toISOString();
+  persistRevisionRevert({
+    plan,
+    fromRevisionId,
+    toRevisionId: revision.revisionId
+  });
+  persistProjectPlan({ plan });
   return { productPlan: plan, revision };
 }
 
@@ -255,6 +309,12 @@ export async function submitProductPlanReview({ planId, revisionId, contactInfo 
   plan.status = PRODUCT_PLAN_STATUS.SUBMITTED_FOR_REVIEW;
   plan.reviewSubmission = submission;
   plan.updatedAt = new Date().toISOString();
+  persistReviewSubmission({
+    plan,
+    revision,
+    submission
+  });
+  persistProjectPlan({ plan });
   return { productPlan: plan, submission };
 }
 
@@ -362,6 +422,10 @@ function createRevisionForTurn({
       createdAt: revision.createdAt
     });
   }
+  persistRevision({
+    plan,
+    revision
+  });
   return revision;
 }
 

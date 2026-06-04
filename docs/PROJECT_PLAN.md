@@ -17,6 +17,7 @@ The product should let a user describe a custom desk hardware idea, then convert
 - ProductPlan revisions created from ongoing conversation
 - Prototype structure preview (3D) and electronics-layout generation jobs
 - Stable Forge action contract for future chat/tool-calling layers to inspect, propose, stage, commit, validate, regenerate, revert, and retrieve artifacts without owning Forge state
+- File-backed Forge project folders for durable workspace state, append-only events, proposals, immutable revision snapshots, context packs, and generated artifacts
 
 The UI should preserve the Codex interaction model: left workspace sidebar, center thread, bottom composer, right-side live output/inspector, settings dialog, and floating menus. The visible labels, buttons, workflows, and output content must be our own hardware-build language.
 
@@ -333,6 +334,19 @@ Implemented Forge action contract:
 - `rejectStagedChange` marks proposals rejected so they cannot be committed later.
 - Patch validation fails safely for unknown patch types, unknown paths, unknown components, unsupported component types, unsupported semantic positions, and unsupported shape profiles.
 
+Implemented project folder runtime and tool metadata:
+
+- Each ProductPlan now has a durable local project folder under `data/workspaces/<planId>/`.
+- `project_manifest.json` is the entry point; it points to `product_plan.json`, `events.jsonl`, `proposals/`, `revisions/`, `source-materials/`, and `review/`.
+- `events.jsonl` is append-only. Current event types include `workspace_created`, `user_message`, `assistant_message`, `tool_called`, `tool_failed`, `proposal_created`, `proposal_staged`, `proposal_committed`, `proposal_rejected`, `revision_created`, `revision_reverted`, `validation_completed`, `artifacts_generated`, and review submission events.
+- Proposals persist under `proposals/<proposalId>.json`; committed or rejected proposal status is written back without deleting history.
+- Every revision persists under `revisions/<revisionId>/` with `revision_manifest.json`, `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `validation_report.json`, `design_summary.md`, and `generation_inputs.json`.
+- Generated GLB/STL/STEP outputs are copied under `revisions/<revisionId>/artifacts/` as derived artifacts. They remain outputs, not editable source.
+- Project folders generate human-readable `CURRENT_STATE.md`, `WORK_INDEX.md`, and `DECISIONS.md` summaries from JSON/events. These files are context aids, not the primary source of truth.
+- `src/core/context_pack_builder.mjs` builds compact project context for future chat/runtime layers without loading raw GLB/STL/STEP bytes or full event history.
+- `src/core/tool_registry.mjs` wraps existing Forge actions with Tool Protocol metadata: schemas, confirmation policy, read/write behavior, side effects, concurrency lock, rollback strategy, and disallowed raw mutation targets.
+- HTTP wrappers expose `GET /api/workspaces/:workspaceId/context-pack` and `GET /api/workspaces/:workspaceId/tools`.
+
 Real-generation direction:
 
 - Long conversation context may be delegated to an open-source memory/chat-context project later; do not design Forge as if this layer has already been chosen.
@@ -399,6 +413,9 @@ The project should not be considered done until:
 - Component asset quality and validation status are visible in the UI and generated evidence. Current proxy components must not be presented as production ready.
 - The 3D preview is visible as an outcome snapshot and allows rotate, zoom, pan, and appearance/component layer switching, but does not introduce modeling-editor behavior.
 - Future chatbot, agent, or LLM tool-calling runtimes can drive Forge by calling a small safe set of backend actions rather than directly mutating files or geometry.
+- Each ProductPlan can be represented as a durable local project folder with `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, persistent proposals, immutable revision folders, markdown indexes, and revision-scoped generated artifacts.
+- Context packs summarize current project state, current ProductPlan, current revision, open proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without embedding raw GLB/STL/STEP bytes.
+- Tool Protocol metadata exists for every Forge action and correctly marks confirmation, read/write behavior, side effects, concurrency safety, and disallowed raw mutation targets.
 - Proposal and discussion flows can create `workspaceState.proposals` without generating committed revisions.
 - Staged/committed action flows preserve revision-specific artifacts and do not overwrite old revision artifacts.
 - Patch application rejects unsafe or unsupported changes with structured errors.

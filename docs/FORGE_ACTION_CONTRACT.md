@@ -12,6 +12,7 @@ Forge state remains the source of truth:
 Chat / AI runtime
   -> Forge actions
   -> ProductPlan / WorkspaceState
+  -> Forge project folder
   -> revision jobs
   -> GeometrySpec validation
   -> confirmed GLB/STL/STEP artifacts
@@ -19,9 +20,16 @@ Chat / AI runtime
 
 The action layer does not add a chatbot framework, live LLM calls, memory, RAG, CAD editing, drag-to-edit geometry, supplier ordering, PCB design, or electrical validation.
 
+The local file-backed workspace is written under `data/workspaces/<planId>/`. It contains `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, `proposals/`, `revisions/`, `source-materials/`, `review/`, and generated markdown indexes. JSON/events remain authoritative; markdown indexes are summaries.
+
+Generated GLB/STL/STEP files under `revisions/<revisionId>/artifacts/` are derived outputs. They are not editable source and must still be regenerated from ProductPlan, ComponentDescriptor selections, and GeometrySpec through Forge actions.
+
+Tool Protocol metadata lives in `src/core/tool_registry.mjs`. Future chat runtimes should inspect it before action calls so they can respect confirmation gates, read/write behavior, side effects, concurrency locks, rollback policy, and disallowed raw mutation targets.
+
 ## Proposal Model
 
 Workspace proposals live on `workspaceState.proposals`.
+They are also persisted under `data/workspaces/<planId>/proposals/<proposalId>.json`.
 
 ```json
 {
@@ -177,7 +185,7 @@ Output includes:
 - `validationPreview`
 - `requiresConfirmation`
 
-Side effects: appends a proposal to `workspaceState.proposals`.
+Side effects: appends a proposal to `workspaceState.proposals`, writes `proposals/<proposalId>.json`, and appends `tool_called` plus `proposal_created` events.
 
 Creates revision: no.
 
@@ -208,7 +216,7 @@ Output includes:
 - `canCommit`
 - `validationPreview`
 
-Side effects: appends a staged proposal.
+Side effects: appends a staged proposal, writes `proposals/<proposalId>.json`, and appends `tool_called` plus `proposal_staged` events.
 
 Creates revision: no.
 
@@ -239,7 +247,7 @@ Output includes:
 - `artifactPaths.shellFrontStl`
 - `artifactPaths.shellBackStl`
 
-Side effects: applies proposal patches, creates a ProductPlan revision, runs component selection/layout/GeometrySpec/validation, writes revision-specific artifacts when validation allows, and marks the proposal `committed`.
+Side effects: applies proposal patches, creates a ProductPlan revision, runs component selection/layout/GeometrySpec/validation, writes revision-specific artifacts when validation allows, marks the proposal `committed`, writes the proposal and revision under the project folder, and appends `tool_called`, `revision_created`, `artifacts_generated` when applicable, and `proposal_committed` events.
 
 Creates revision: yes.
 
@@ -276,7 +284,7 @@ Output includes:
 - `validationReport`
 - `artifactPaths`
 
-Side effects: creates a new ProductPlan revision and revision-specific generated artifacts when validation allows.
+Side effects: creates a new ProductPlan revision, writes revision files and revision-specific generated artifacts when validation allows, updates `project_manifest.json`, and appends `tool_called`, `revision_created`, and `artifacts_generated` when applicable.
 
 Creates revision: yes.
 
@@ -306,7 +314,7 @@ Output includes:
 - `artifactPaths`
 - `validationReport`
 
-Side effects: creates a new revision with the same `ProductPlan` snapshot and fresh revision-specific artifacts.
+Side effects: creates a new revision with the same `ProductPlan` snapshot, writes fresh revision-specific artifacts, updates the project folder, and appends `tool_called`, `revision_created`, and `artifacts_generated` when applicable.
 
 Creates revision: yes.
 
@@ -343,7 +351,7 @@ Output includes:
 - `blocked`
 - `geometryValidation`
 
-Side effects: none.
+Side effects: appends `tool_called` and `validation_completed` events. It does not write model artifacts or mutate the current ProductPlan state.
 
 Creates revision: no.
 
@@ -371,7 +379,7 @@ Output includes:
 - `artifactPaths`
 - `summary`
 
-Side effects: updates `currentRevisionId` and restores `workspaceState.productPlan` from the selected revision snapshot.
+Side effects: updates `currentRevisionId`, restores `workspaceState.productPlan` from the selected revision snapshot, updates the project manifest/indexes, and appends `tool_called` plus `revision_reverted` events. It does not delete or rewrite old revisions.
 
 Creates revision: no.
 
@@ -434,7 +442,7 @@ Output includes:
 - `proposalId`
 - `status: rejected`
 
-Side effects: marks the proposal rejected.
+Side effects: marks the proposal rejected, writes `proposals/<proposalId>.json`, and appends `tool_called` plus `proposal_rejected` events.
 
 Creates revision: no.
 
@@ -448,6 +456,8 @@ The server exposes thin HTTP wrappers around the same core actions:
 
 - `GET /api/workspaces/:workspaceId/summary`
 - `GET /api/workspaces/:workspaceId/artifacts/:revisionId`
+- `GET /api/workspaces/:workspaceId/context-pack`
+- `GET /api/workspaces/:workspaceId/tools`
 - `POST /api/workspaces/:workspaceId/components/search`
 - `POST /api/workspaces/:workspaceId/proposals`
 - `POST /api/workspaces/:workspaceId/proposals/:proposalId/commit`

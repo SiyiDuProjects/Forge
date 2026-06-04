@@ -8,6 +8,11 @@ import {
   regenerateProductPlanRevision,
   revertProductPlanRevision
 } from "./product_plan.mjs";
+import {
+  appendWorkspaceEvent,
+  persistProposal,
+  persistValidationEvent
+} from "./project_workspace.mjs";
 import { processUserTurn } from "./sparker_orchestrator.mjs";
 import { makeId } from "./utils.mjs";
 import { applyWorkspacePatches, clone, createEmptyProductPlan, productPlanToDraft } from "./workspace_state.mjs";
@@ -155,6 +160,9 @@ export function proposeDesignChange({ workspaceId, message = "" } = {}) {
   const planResult = resolvePlan(workspaceId);
   if (!planResult.ok) return planResult;
   const { plan } = planResult;
+  recordToolCalled(plan, "proposeDesignChange", {
+    messageLength: String(message || "").length
+  });
   const baseRevision = currentRevision(plan);
   const baseProductPlan = baseRevision?.productPlanSnapshot
     || plan.workspaceState?.productPlan
@@ -166,9 +174,15 @@ export function proposeDesignChange({ workspaceId, message = "" } = {}) {
     userMessage: message
   });
   const validationResult = validateActionPatches(sparkerResult.appliedPatches);
-  if (!validationResult.ok) return validationResult;
+  if (!validationResult.ok) {
+    recordToolFailed(plan, "proposeDesignChange", validationResult.error);
+    return validationResult;
+  }
   const preview = previewForPatches(baseProductPlan, validationResult.patches);
-  if (!preview.ok) return preview;
+  if (!preview.ok) {
+    recordToolFailed(plan, "proposeDesignChange", preview.error);
+    return preview;
+  }
   const proposal = createProposal(plan, {
     status: "proposed",
     source: {
@@ -200,14 +214,23 @@ export function stageDesignPatch({ workspaceId, patches = [], summary = "" } = {
   const planResult = resolvePlan(workspaceId);
   if (!planResult.ok) return planResult;
   const { plan } = planResult;
+  recordToolCalled(plan, "stageDesignPatch", {
+    patchCount: Array.isArray(patches) ? patches.length : 0
+  });
   const validationResult = validateActionPatches(patches);
-  if (!validationResult.ok) return validationResult;
+  if (!validationResult.ok) {
+    recordToolFailed(plan, "stageDesignPatch", validationResult.error);
+    return validationResult;
+  }
   const baseRevision = currentRevision(plan);
   const baseProductPlan = baseRevision?.productPlanSnapshot
     || plan.workspaceState?.productPlan
     || createEmptyProductPlan();
   const preview = previewForPatches(baseProductPlan, validationResult.patches);
-  if (!preview.ok) return preview;
+  if (!preview.ok) {
+    recordToolFailed(plan, "stageDesignPatch", preview.error);
+    return preview;
+  }
   const proposal = createProposal(plan, {
     status: "staged",
     source: { type: "structured_patch" },
@@ -237,14 +260,23 @@ export function commitStagedChange({ workspaceId, proposalId } = {}) {
   const proposalResult = resolveProposal(plan, proposalId);
   if (!proposalResult.ok) return proposalResult;
   const { proposal } = proposalResult;
+  recordToolCalled(plan, "commitStagedChange", {
+    proposalId
+  });
   if (proposal.status === "rejected" || proposal.status === "expired") {
-    return fail("PROPOSAL_NOT_COMMITTABLE", `Proposal ${proposalId} is ${proposal.status}.`);
+    const result = fail("PROPOSAL_NOT_COMMITTABLE", `Proposal ${proposalId} is ${proposal.status}.`);
+    recordToolFailed(plan, "commitStagedChange", result.error);
+    return result;
   }
   if (proposal.status === "committed") {
-    return fail("PROPOSAL_ALREADY_COMMITTED", `Proposal ${proposalId} is already committed.`);
+    const result = fail("PROPOSAL_ALREADY_COMMITTED", `Proposal ${proposalId} is already committed.`);
+    recordToolFailed(plan, "commitStagedChange", result.error);
+    return result;
   }
   if (proposal.validationPreview?.blocked) {
-    return fail("VALIDATION_BLOCKED", `Proposal ${proposalId} is blocked by validation.`);
+    const result = fail("VALIDATION_BLOCKED", `Proposal ${proposalId} is blocked by validation.`);
+    recordToolFailed(plan, "commitStagedChange", result.error);
+    return result;
   }
 
   const result = safeCreateRevision({
@@ -254,11 +286,21 @@ export function commitStagedChange({ workspaceId, proposalId } = {}) {
     source: "commit_staged_change",
     generateArtifacts: true
   });
-  if (!result.ok) return result;
+  if (!result.ok) {
+    recordToolFailed(plan, "commitStagedChange", result.error);
+    return result;
+  }
 
   proposal.status = "committed";
   proposal.committedRevisionId = result.revision.revisionId;
   proposal.committedAt = new Date().toISOString();
+  proposal.updatedAt = proposal.committedAt;
+  persistProposal({
+    plan,
+    proposal,
+    eventType: "proposal_committed",
+    actor: "assistant"
+  });
   return ok({
     committed: true,
     newRevisionId: result.revision.revisionId,
@@ -271,8 +313,14 @@ export function commitStagedChange({ workspaceId, proposalId } = {}) {
 export function applyDesignPatch({ workspaceId, message = "", patches = [] } = {}) {
   const planResult = resolvePlan(workspaceId);
   if (!planResult.ok) return planResult;
+  recordToolCalled(planResult.plan, "applyDesignPatch", {
+    patchCount: Array.isArray(patches) ? patches.length : 0
+  });
   const validationResult = validateActionPatches(patches);
-  if (!validationResult.ok) return validationResult;
+  if (!validationResult.ok) {
+    recordToolFailed(planResult.plan, "applyDesignPatch", validationResult.error);
+    return validationResult;
+  }
   const result = safeCreateRevision({
     planId: planResult.plan.planId,
     patches: validationResult.patches,
@@ -280,7 +328,10 @@ export function applyDesignPatch({ workspaceId, message = "", patches = [] } = {
     source: "apply_design_patch",
     generateArtifacts: true
   });
-  if (!result.ok) return result;
+  if (!result.ok) {
+    recordToolFailed(planResult.plan, "applyDesignPatch", result.error);
+    return result;
+  }
   return ok({
     applied: true,
     newRevisionId: result.revision.revisionId,
@@ -293,6 +344,10 @@ export function applyDesignPatch({ workspaceId, message = "", patches = [] } = {
 export function regenerateRevision({ workspaceId, revisionId = "", reason = "manual_regeneration" } = {}) {
   const planResult = resolvePlan(workspaceId);
   if (!planResult.ok) return planResult;
+  recordToolCalled(planResult.plan, "regenerateRevision", {
+    revisionId,
+    reason
+  });
   try {
     const result = regenerateProductPlanRevision({
       planId: planResult.plan.planId,
@@ -307,7 +362,9 @@ export function regenerateRevision({ workspaceId, revisionId = "", reason = "man
       validationReport: clone(result.revision.geometryValidation || {})
     });
   } catch (error) {
-    return errorFromException(error, "REGENERATION_FAILED");
+    const result = errorFromException(error, "REGENERATION_FAILED");
+    recordToolFailed(planResult.plan, "regenerateRevision", result.error);
+    return result;
   }
 }
 
@@ -315,6 +372,11 @@ export function validateDesign({ workspaceId, proposalId = "", patches = null, m
   const planResult = resolvePlan(workspaceId);
   if (!planResult.ok) return planResult;
   const { plan } = planResult;
+  recordToolCalled(plan, "validateDesign", {
+    proposalId,
+    patchCount: Array.isArray(patches) ? patches.length : 0,
+    mode
+  });
   const baseRevision = currentRevision(plan);
   const baseProductPlan = baseRevision?.productPlanSnapshot
     || plan.workspaceState?.productPlan
@@ -324,22 +386,34 @@ export function validateDesign({ workspaceId, proposalId = "", patches = null, m
 
   if (proposalId) {
     const proposalResult = resolveProposal(plan, proposalId);
-    if (!proposalResult.ok) return proposalResult;
+    if (!proposalResult.ok) {
+      recordToolFailed(plan, "validateDesign", proposalResult.error);
+      return proposalResult;
+    }
     const preview = previewForPatches(baseProductPlan, proposalResult.proposal.patches);
-    if (!preview.ok) return preview;
+    if (!preview.ok) {
+      recordToolFailed(plan, "validateDesign", preview.error);
+      return preview;
+    }
     planToValidate = preview.productPlan;
     source = "proposal";
   } else if (Array.isArray(patches)) {
     const validationResult = validateActionPatches(patches);
-    if (!validationResult.ok) return validationResult;
+    if (!validationResult.ok) {
+      recordToolFailed(plan, "validateDesign", validationResult.error);
+      return validationResult;
+    }
     const preview = previewForPatches(baseProductPlan, validationResult.patches);
-    if (!preview.ok) return preview;
+    if (!preview.ok) {
+      recordToolFailed(plan, "validateDesign", preview.error);
+      return preview;
+    }
     planToValidate = preview.productPlan;
     source = "patches";
   }
 
   const validation = validationForProductPlan(planToValidate);
-  return ok({
+  const result = ok({
     source,
     status: actionValidationStatus(validation),
     errors: validation.issues.filter((issue) => issue.level === "block"),
@@ -347,11 +421,21 @@ export function validateDesign({ workspaceId, proposalId = "", patches = null, m
     blocked: !validation.canGenerateArtifacts,
     geometryValidation: validation
   });
+  persistValidationEvent({
+    plan,
+    status: result.status,
+    proposalId,
+    source
+  });
+  return result;
 }
 
 export function revertRevision({ workspaceId, revisionId } = {}) {
   const planResult = resolvePlan(workspaceId);
   if (!planResult.ok) return planResult;
+  recordToolCalled(planResult.plan, "revertRevision", {
+    revisionId
+  });
   try {
     const result = revertProductPlanRevision({
       planId: planResult.plan.planId,
@@ -364,7 +448,9 @@ export function revertRevision({ workspaceId, revisionId } = {}) {
       summary: `Reverted to ${result.revision.revisionId}.`
     });
   } catch (error) {
-    return errorFromException(error, "REVERT_FAILED");
+    const result = errorFromException(error, "REVERT_FAILED");
+    recordToolFailed(planResult.plan, "revertRevision", result.error);
+    return result;
   }
 }
 
@@ -391,12 +477,24 @@ export function rejectStagedChange({ workspaceId, proposalId, reason = "" } = {}
   const proposalResult = resolveProposal(planResult.plan, proposalId);
   if (!proposalResult.ok) return proposalResult;
   const { proposal } = proposalResult;
+  recordToolCalled(planResult.plan, "rejectStagedChange", {
+    proposalId
+  });
   if (proposal.status === "committed") {
-    return fail("PROPOSAL_ALREADY_COMMITTED", `Proposal ${proposalId} is already committed.`);
+    const result = fail("PROPOSAL_ALREADY_COMMITTED", `Proposal ${proposalId} is already committed.`);
+    recordToolFailed(planResult.plan, "rejectStagedChange", result.error);
+    return result;
   }
   proposal.status = "rejected";
   proposal.rejectedAt = new Date().toISOString();
   proposal.rejectionReason = String(reason || "rejected_by_user");
+  proposal.updatedAt = proposal.rejectedAt;
+  persistProposal({
+    plan: planResult.plan,
+    proposal,
+    eventType: "proposal_rejected",
+    actor: "user"
+  });
   return ok({
     rejected: true,
     proposalId: proposal.proposalId,
@@ -548,7 +646,38 @@ function createProposal(plan, fields) {
     committedRevisionId: null
   };
   proposalStore(plan).push(proposal);
+  persistProposal({
+    plan,
+    proposal,
+    eventType: proposal.status === "staged" ? "proposal_staged" : "proposal_created",
+    actor: proposal.source?.type === "structured_patch" ? "user" : "assistant"
+  });
   return proposal;
+}
+
+function recordToolCalled(plan, tool, payload = {}) {
+  appendWorkspaceEvent({
+    plan,
+    type: "tool_called",
+    actor: "assistant",
+    payload: {
+      tool,
+      ...payload
+    }
+  });
+}
+
+function recordToolFailed(plan, tool, error = {}) {
+  appendWorkspaceEvent({
+    plan,
+    type: "tool_failed",
+    actor: "system",
+    payload: {
+      tool,
+      code: error.code || "TOOL_FAILED",
+      message: error.message || "Forge tool failed."
+    }
+  });
 }
 
 function proposalStore(plan) {

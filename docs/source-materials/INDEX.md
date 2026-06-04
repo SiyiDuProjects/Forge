@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-04
 
+### GPT Pro Project Folder Runtime Recommendation
+
+- File: `docs/source-materials/2026-06-04-gpt-pro-project-folder-runtime-recommendation.md`
+- Status: summarized and implemented.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`
+- Key handles: Forge Project Folder Runtime, Tool Protocol Metadata, project_manifest.json, events.jsonl, ContextPack, workspace-write lock, source of truth, derived artifacts.
+
 ### Claude Code Analysis And File-Backed Hardware Workbench Notes
 
 - File: `docs/source-materials/2026-06-04-claude-code-analysis-file-backed-hardware-workbench-notes.md`

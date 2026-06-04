@@ -94,6 +94,16 @@ export const API_CONTRACT = [
     response: ["ok", "revisionId", "artifacts", "artifactPaths", "directEditingAllowed"]
   },
   {
+    method: "GET",
+    path: "/api/workspaces/:workspaceId/context-pack",
+    response: ["ok", "workspaceId", "projectSummary", "currentProductPlanSummary", "currentRevisionSummary", "allowedTools", "artifactSummary"]
+  },
+  {
+    method: "GET",
+    path: "/api/workspaces/:workspaceId/tools",
+    response: ["ok", "workspaceId", "tools"]
+  },
+  {
     method: "POST",
     path: "/api/workspaces/:workspaceId/components/search",
     body: ["query", "componentType", "limit"],

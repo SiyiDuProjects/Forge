@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { API_CONTRACT, CONTRACT_VERSION, WORKBENCH_CHAIN } from "./src/contracts/workbench_contract.mjs";
 import { createLogger, durationMs } from "./src/core/observability.mjs";
 import { registerAsset } from "./src/core/assets.mjs";
+import { buildContextPack } from "./src/core/context_pack_builder.mjs";
 import {
   applyDesignPatch,
   commitStagedChange,
@@ -21,6 +22,7 @@ import {
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn, createProductPlan, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
+import { listToolMetadata } from "./src/core/tool_registry.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const threeDir = fileURLToPath(new URL("./node_modules/three/", import.meta.url));
@@ -112,6 +114,24 @@ async function handleApi(request, response, url) {
       workspaceId: workspaceArtifactsMatch[1],
       revisionId: workspaceArtifactsMatch[2]
     }));
+    return;
+  }
+
+  const workspaceContextPackMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/context-pack$/);
+  if (request.method === "GET" && workspaceContextPackMatch) {
+    sendActionJson(response, buildContextPack({
+      workspaceId: workspaceContextPackMatch[1]
+    }));
+    return;
+  }
+
+  const workspaceToolsMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/tools$/);
+  if (request.method === "GET" && workspaceToolsMatch) {
+    sendActionJson(response, {
+      ok: true,
+      workspaceId: workspaceToolsMatch[1],
+      tools: listToolMetadata()
+    });
     return;
   }
 

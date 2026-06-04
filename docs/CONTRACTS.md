@@ -53,6 +53,45 @@ User preview uses the same `GeometrySpec` as the generated GLB and supports rota
 
 ProductPlan conversation turns default to `generateArtifacts: false`, so they validate geometry but do not write GLB/STL/STEP until the user confirms generation. Direct model APIs default to generating artifacts unless `generateArtifacts` is explicitly false.
 
+## Forge Project Folder Runtime
+
+Forge project folders live under `data/workspaces/<planId>/` in the local runtime.
+
+Required top-level files and folders:
+
+- `project_manifest.json`: project entry point with workspace ID, title, current revision, and relative paths.
+- `product_plan.json`: current editable ProductPlan source object.
+- `events.jsonl`: append-only event log. Existing lines must not be rewritten.
+- `proposals/`: persisted proposal JSON files.
+- `revisions/`: immutable revision folders.
+- `source-materials/`: local uploaded/source references for the project.
+- `review/`: local human-review request and notes.
+- `CURRENT_STATE.md`, `WORK_INDEX.md`, and `DECISIONS.md`: generated markdown summaries for human/AI context. They are not primary source of truth.
+
+Revision folders use `revision_manifest.json`, `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `validation_report.json`, `design_summary.md`, `generation_inputs.json`, and derived files under `artifacts/`.
+
+Source of truth:
+
+- `project_manifest.json`
+- `product_plan.json`
+- `events.jsonl`
+- `proposals/*.json`
+- `revisions/*/revision_manifest.json`
+- `revisions/*/product_plan.json`
+- `revisions/*/geometry-spec.json`
+- `revisions/*/component_descriptors.json`
+
+Derived artifacts:
+
+- GLB, STL, and STEP files under `revisions/*/artifacts/`
+- `validation_report.json`
+- `component_asset_manifest.json`
+- `design_summary.md`
+
+Important events include `workspace_created`, `user_message`, `assistant_message`, `tool_called`, `tool_failed`, `proposal_created`, `proposal_staged`, `proposal_committed`, `proposal_rejected`, `revision_created`, `revision_reverted`, `validation_completed`, `artifacts_generated`, `review_submitted`, and `review_submission_failed`.
+
+Context packs are built by `src/core/context_pack_builder.mjs`. They summarize the project folder and explicitly exclude raw GLB/STL/STEP bytes, full `events.jsonl`, arbitrary file contents, and direct GeometrySpec mutation instructions.
+
 ## Forge Action Contract
 
 The source of truth for action implementations is `src/core/forge_actions.mjs`. Detailed schemas are documented in `docs/FORGE_ACTION_CONTRACT.md`.
@@ -84,6 +123,28 @@ Proposal states:
 - `committed`
 - `rejected`
 - `expired`
+
+Tool Protocol metadata lives in `src/core/tool_registry.mjs`.
+
+Every Forge action has:
+
+- `name`
+- `description`
+- `inputSchema`
+- `outputSchema`
+- `permission.requiresConfirmation`
+- `behavior.readOnly`
+- `behavior.destructive`
+- `behavior.createsRevision`
+- `behavior.writesArtifacts`
+- `behavior.mutatesCurrentState`
+- `concurrency.safeToRunInParallel`
+- `concurrency.lock`
+- `sideEffects`
+- `rollback`
+- `disallowedTargets`
+
+Read-only tools are safe to run in parallel. Revision-writing or current-state-mutating tools use the `workspace-write` lock and require confirmation in future chat runtimes.
 
 ## ComponentDescriptor v2 Contract
 
@@ -142,6 +203,14 @@ Returns compact workspace summary for chat/UI context. It does not include large
 ### `GET /api/workspaces/:workspaceId/artifacts/:revisionId`
 
 Returns compact artifact links and metadata for a revision, including ProductPlan, GeometrySpec, component selections, component descriptors, component asset manifest, GLB, shell STL, validation report, and design summary when present.
+
+### `GET /api/workspaces/:workspaceId/context-pack`
+
+Returns a compact context pack built from the project folder: project summary, ProductPlan summary, current revision summary, open proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata. It does not include raw model bytes or full event history.
+
+### `GET /api/workspaces/:workspaceId/tools`
+
+Returns Tool Protocol metadata for the Forge action set.
 
 ### `POST /api/workspaces/:workspaceId/components/search`
 

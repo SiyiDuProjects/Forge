@@ -20,6 +20,23 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-04 - Project Folder Runtime And Tool Protocol Metadata
+
+- Scope: implement GPT Pro's recommended `Forge Project Folder Runtime + Tool Protocol Metadata` direction as the durable file-backed workspace layer for Forge.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-04-gpt-pro-project-folder-runtime-recommendation.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`
+- Key code handles:
+  - `src/core/project_workspace.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/tool_registry.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/forge_actions.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: project_manifest.json, product_plan.json, events.jsonl, proposals, revisions, revision_manifest.json, artifacts folder, ContextPack, Tool Protocol metadata, workspace-write lock, append-only event log.
+- Verification: `node --test tests/project_workspace.test.mjs` passes; `node --test tests/forge_actions.test.mjs` passes; `node --test tests/core_pipeline.test.mjs` passes; `npm run check` passes with 38 tests.
+- Next: future chat adapters should build ContextPack from the project folder and call Tool Protocol actions instead of reading raw artifacts or mutating source files directly.
+
 ### 2026-06-04 - Claude Code Analysis For File-Backed Forge Direction
 
 - Scope: clone and review `liuup/claude-code-analysis` as a reference for a hardware Codex/Claude Code-style Forge direction where project source files live in real folders.

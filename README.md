@@ -14,6 +14,8 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 - Core planning pipeline under `src/core`
 - ProductPlan, asset, job, GeometrySpec, generated model artifact, electronics layout preview, quote assumption, and local review APIs
 - Forge action contract under `src/core/forge_actions.mjs` for future chat/tool-calling layers to inspect summaries, stage proposals, apply patches, validate designs, regenerate revisions, revert revisions, and retrieve artifacts without direct mesh or file mutation
+- File-backed Forge project folders under `data/workspaces/<planId>/` with `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, persistent proposals, immutable revision folders, context markdown indexes, review files, and revision-scoped generated artifacts
+- Tool Protocol metadata under `src/core/tool_registry.mjs` and ContextPack summaries under `src/core/context_pack_builder.mjs` for future chat/runtime layers
 - Confirmed first-generation model artifacts under `data/models`: GLB with placed part placeholders for preview, STL shell-only print/quote handoff, STEP for internal engineering review, validation reports, and a CadQuery adapter script
 - Shared contracts under `src/contracts`
 - Project and architecture docs under `docs`

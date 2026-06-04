@@ -6,3 +6,5 @@ external/
 data/reviews/*.json
 data/models/*
 !data/models/.gitkeep
+data/workspaces/*
+!data/workspaces/.gitkeep
