@@ -11,7 +11,8 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 - `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
 - `src/contracts`: stable names for API routes, chain steps, statuses, and supported languages.
 - `tests`: Node built-in test suite for pipeline behavior and frontend copy invariants.
-- `docs`: planning, architecture, contracts, and operations notes.
+- `docs`: planning, architecture, contracts, operations notes, work index, and source-material index.
+- `docs/source-materials`: preserved source notes for reusable requirements, comments, and planning material. Start with `docs/source-materials/INDEX.md` instead of opening raw notes first.
 
 ## Flow
 
@@ -33,7 +34,7 @@ The current frontend prefers the backend ProductPlan API for user input, but kee
 
 The primary UI is conversation-first:
 
-- Left: project history/drafts.
+- Left: a single new-project action plus a compact ProductPlan project/revision list.
 - Center: continuous conversation.
 - Right: live ProductPlan packet with scope, parts, prototype structure preview, electronics layout, quote assumptions, risks, and review submission.
 
@@ -51,3 +52,11 @@ Visible UI copy must remain bilingual:
 - English
 
 New UI states, notices, dialogs, mock scenarios, docs, and tests should update both languages in the same change.
+
+## Context Organization
+
+Future work should start from the lightweight documentation routing layer before opening raw notes:
+
+- `docs/WORK_INDEX.md`: recent work blocks, artifacts, retrieval handles, and next steps.
+- `docs/source-materials/INDEX.md`: source-note inventory and metadata pattern.
+- `docs/PROJECT_PLAN.md`: durable product decisions, implementation status, and acceptance criteria.

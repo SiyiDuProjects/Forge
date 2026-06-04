@@ -16,6 +16,7 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 - Confirmed first-generation model artifacts under `data/models`: GLB with placed part placeholders for preview, STL shell-only print/quote handoff, STEP for internal engineering review, validation reports, and a CadQuery adapter script
 - Shared contracts under `src/contracts`
 - Project and architecture docs under `docs`
+- Lightweight work and source-material indexes for future context recovery
 - Node built-in test suite under `tests`
 - GitHub Actions check workflow under `.github/workflows/check.yml`
 
@@ -55,6 +56,8 @@ Every visible button should still produce a concrete UI state: view switch, popo
 ## Key Docs
 
 - [Project Plan](docs/PROJECT_PLAN.md)
+- [Work Index](docs/WORK_INDEX.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contracts](docs/CONTRACTS.md)
 - [Observability](docs/operations/OBSERVABILITY.md)
+- [Source Materials Index](docs/source-materials/INDEX.md)

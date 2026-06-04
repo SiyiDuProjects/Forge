@@ -71,21 +71,25 @@ Enclosure boundary:
 
 ### Left Sidebar
 
-Purpose: Navigate project history and internal ProductPlan drafts.
+Purpose: Start a new ProductPlan and select an existing project/revision without making history or review feel like separate primary products.
 
 Current direction:
 
-- `对话生成`
-- `项目历史`
-- `审核包`
-- Forge project: `Forge Lab`
-- Drafts such as `木纹桌面屏` and `人工扩展草案`
-- `Forge 设置`
+- One primary `新项目` button at the top.
+- `新项目` should stay visually neutral by default with no filled background; use a subtle background only on hover/focus interaction.
+- A compact project/revision list below it. ProductPlan revisions such as `r4`, `r3`, and `r2` are selected from this list instead of a separate `项目历史` tab.
+- Project/revision rows show only the project name in the visible UI; do not add subtitle explanations such as status, model state, or quote text under each row.
+- The `方案菜单` / project actions `...` button belongs on the right side of the left-sidebar `项目` header, not in the center thread topbar.
+- `Forge 设置` stays in the lower-left footer.
+- Review submission APIs and internal review material remain available through the plan/review flow, but `审核包` should not be a left-sidebar primary entry during the current 3D-generation focus.
 
 Avoid:
 
 - Generic Codex labels that do not map to hardware
 - Extra placeholder buttons with no workflow meaning
+- Large thread cards that make project rows look like equal top-level views
+- Separate left-sidebar blocks for `对话生成`, `项目历史`, or `审核包`
+- Fake operating-system chrome such as macOS traffic-light window controls in the web prototype, unless Forge is actually running inside a native Mac shell.
 
 ### Center Thread
 
@@ -97,36 +101,33 @@ Required content:
 - Bench agent response
 - Prominent `原型快照` result card after the bench response
 - ProductPlan revision run log
-- Bottom composer with hardware-specific controls
+- Bottom composer for hardware request entry and send/update only
 
 Composer actions:
 
-- `+` add build input
-- `范围`
-- `零件`
-- `风险`
-- `3D预览`
 - Send/update ProductPlan button
+- Do not keep `+`, `范围`, `零件`, `风险`, or `3D预览` chips in the composer unless they become real implemented workflows. Current scope/parts/risk/model information lives in the thread, right inspector, and explicit model-generation controls.
 
 ### Right Inspector
 
-Purpose: Live structured output, not a generic dashboard.
+Purpose: Focused live structure output, not a generic dashboard or review packet page.
 
 Current sections:
 
 - `原型结构预览（3D）`
-- `范围`
-- `零件清单（BOM）`
-- `电子零件布局`
-- `估算+假设`
-- `风险限制`
-- `审核提交状态`
+
+The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, and structure checks visible. The generated/pending 3D state belongs in the section header summary, not as a duplicate fact row. Scope, parts list (BOM), quote, risk limits, and review status can remain in the ProductPlan thread/run log and review flow, but should not make the inspector feel like a stacked packet list.
 
 Visual direction:
 
 - More like Codex inspector output than rounded dashboard cards
 - Keep the prototype structure preview near the top and expanded by default.
-- Use layer states rather than CAD-style camera presets: `外观层` shows the outside shell as the product result, and `元器件层` makes the shell transparent so internal components, interface markers, cable routes, and risk colors can be inspected.
+- Use layer states rather than camera presets: switching `外观层` / `元器件层` must not rotate, pan, zoom, or reset the current view. `外观层` keeps normal/default material opacity, so the 3D printed shell stays opaque and any genuinely exposed components remain visible. `元器件层` keeps the same camera and makes every shell surface semi-transparent so internal components, interface markers, cable routes, and risk colors can be inspected.
+- Layer implementation must cover shell nodes, shell materials, shell roles, and shell-derived structural feature nodes such as openings, cutouts, windows, vents, standoffs, and bays. Browser verification must use screenshots to confirm the main visible shell turns transparent; a tiny pixel diff or a single small part changing color is not enough.
+- Add a compact fullscreen preview button on the 3D preview itself; it should open a larger read-only preview and allow returning to the normal inspector size.
+- Show generated artifact links only as compact read-only evidence links after confirmed generation; do not make them CAD editing, export, checkout, or production controls. Review contact/person fields belong in the separate submission dialog.
+- Keep the preview, layer controls, and structure fact rows on one consistent indentation grid; avoid flex rows that make labels, values, and chips jump between different left edges.
+- Avoid instruction paragraphs under the inspector preview; interaction affordances should be discoverable from the 3D surface and the fullscreen button.
 - Low shadow
 - Thin dividers
 - Dense, scan-friendly sections
@@ -137,11 +138,8 @@ Visual direction:
 Required floating surfaces:
 
 - Thread menu
-- Add build input menu
-- MVP 范围 popover
-- 零件清单（BOM）popover
-- 风险限制 popover
-- 原型结构预览（3D）popover
+- Prototype structure preview (3D) popover from explicit preview actions
+- Review contact dialog for `提交审核下单`
 - Forge 设置 dialog
 
 Settings sections:
@@ -182,16 +180,19 @@ Implemented:
 - Hardware-specific button labels
 - Right inspector changed toward flat section styling
 - Local fallback when API fetch fails, so the UI can still render a complete bench draft
-- Conversation-first ProductPlan flow with project history, center chat, and live right-side plan packet
+- Conversation-first ProductPlan flow with compact left-side project/revision selection, center chat, and live right-side plan packet
 - Center `原型快照` result card that gives the 3D preview stronger product presence without turning the app into a modeling tool
 - Right-side `原型结构预览（3D）` section pinned near the top, expanded by default, with `外观层` and `元器件层` transparency states
 - Three complete mock scenarios: Woodgrain desk display, Motion companion, and Booth counter unit
 - Expanded UI-only flow states for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet
-- Popovers for add input, scope, parts list (BOM), risk limits, manufacturing check (DFM), thread actions, and bench settings
+- Popovers/dialogs for manufacturing check (DFM), thread actions, review contact submission, and bench settings
+- Composer placeholder shortcuts removed; scope, parts list (BOM), and risk limits remain visible through the ProductPlan thread output, while the right inspector focuses on 3D state instead of composer chips.
+- Right inspector simplified to a 3D-focused panel: preview canvas, layer controls, shell dimensions, structure checks, and model state only.
 - Bilingual UI copy across the shell, mock scenarios, popovers, inspector, and settings
 - Language settings panel with `简体中文` and `English` options
 - Git repository initialized
 - README, architecture, contract, and observability docs
+- Lightweight work and source-material indexes for future context recovery
 - Node built-in tests for pipeline behavior, blocking rules, firmware preview, contracts, and bilingual UI assets
 - GitHub Actions workflow that runs `npm run check`
 - JSON request logging in the local server
@@ -285,7 +286,7 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, and confirmed placed-part GLB pass complete.
+Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, and ComponentDescriptor v2 mechanical proxy pass complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype.
 
 - Keep user turns creating ProductPlan revisions.
 - Keep prototype structure preview (3D), electronics layout, quote, and review submission on unified jobs.
@@ -295,12 +296,29 @@ Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact ge
 - Keep the viewer read-only except rotate, zoom, pan, risk markers, and appearance/component layer switching.
 - Keep non-standard hardware in `manual_expansion_draft`.
 
+Implemented V1 conversational hardware prototype path:
+
+- Treat the conversation-derived `ProductPlan` / `WorkspaceState` as structured state. The generator does not create geometry directly from raw chat prose.
+- Use a finite `ComponentDescriptor` library for known hardware modules: display, core board, USB-C breakout, ambient sensor, speaker, camera, battery, and button descriptors.
+- Store ComponentDescriptor v2 assets under `src/core/component_assets/<component_id>/descriptor.json` with companion `sources.md` notes. Current seed assets are mechanical proxies with explicit `unverified_proxy` validation status, not vendor-verified mechanical models.
+- Resolve component assets by purpose through `resolveComponentAsset(componentId, purpose)`: preview, mechanical, validation, and manufacturing. Current fallback uses procedural visual/mechanical proxies unless vendor/proxy asset paths are later added.
+- Write `component_descriptors.json` and `component_asset_manifest.json` for each confirmed revision so the generated model can be traced back to descriptor asset quality, validation status, and source paths.
+- Run deterministic component selection before geometry: pick supported modules, preserve assumptions and risk tags, and keep unsupported/missing geometry from producing fake artifacts.
+- Convert selected components into a `GeometrySpec` through a layout engine that derives enclosure dimensions, screen opening, USB-C rear opening, standoffs, interface points, and coarse cable routes.
+- Derive openings, standoffs, connector markers, routes, keepouts, and access-volume markers from descriptor fields such as `externalFeatures`, `mountingHoles`, `connectors`, `keepouts`, and `accessVolumes`; do not infer those semantics from arbitrary mesh geometry.
+- Validate the `GeometrySpec` before writing files. Missing component descriptors, invalid schema, missing dimensions, route endpoints without real connectors, blocked motion structures, and insufficient geometry should stay visible as blocked or pending states instead of silent model output.
+- Generate a semantic `model.glb` with stable nodes under `shell.*`, `feature.*`, `module.*`, `interface.*`, and `route.*`. The current GLB shows a standard desktop display shell, screen opening, rear USB-C opening, ambient sensor opening, back-frame access, core board, USB-C, ambient sensor, mounting points, connector markers, keepout/access-volume proxy markers, chips, and cable-route geometry.
+- Keep shell print handoff split into `shell_front.stl` and `shell_back.stl`; electronics are excluded from printable STL output.
+- Persist generation evidence files with each revision: `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `model.glb`, shell STL files, `design_summary.md`, `validation_report.json`, STEP handoff summary, and the CadQuery adapter script.
+- Keep the UI as a read-only result preview. Users can switch `外观层` / `元器件层`, rotate, zoom, pan, view component asset quality, view warnings, and open generated evidence links, but they cannot drag parts, edit holes, or modify geometry directly.
+
 Real-generation direction:
 
 - Long conversation context may be delegated to an open-source memory/chat-context project later; do not design Forge as if this layer has already been chosen.
 - The first-generation core route is `ProductPlan revision -> GeometrySpec -> confirmed generation -> CadQuery/OpenCascade target -> GLB user preview + STL/STEP internal files`.
 - The structured generation state describes selected options and physical build state: requested modules, camera/battery decisions, enclosure finish, part positions, mounting holes, interface directions, connector openings, and other geometry-relevant constraints.
 - The parts library should keep expanding machine-readable physical metadata such as dimensions, mounting hole patterns, interfaces, clearance needs, and fit notes.
+- Future real supplier assets should be attached through descriptor asset paths such as `vendor.glb`, `vendor.step`, `proxy_visual.glb`, and `proxy_mechanical.step`; the current implementation reserves those slots but does not require files to exist.
 - The current runtime writes deterministic v1 artifacts and emits a CadQuery script after confirmation; a later service can replace that writer with real CadQuery/OpenCascade execution.
 - SolidWorks is not the first-generation core. Forge exports STEP as an internal reviewer/post-processing target that an engineer can open in SolidWorks.
 - "Connections" in the first version mean interface direction and coarse cable routing shown in GeometrySpec, GLB nodes, and canvas preview: USB-C, display ribbon, sensor/speaker/camera/battery interfaces, rough route paths, and interference risk. They do not mean PCB design, schematic generation, circuit verification, or electrical validation.
@@ -321,7 +339,7 @@ Future Markdown-first ProductPlan direction:
 
 Next:
 
-- Tune visual density after a stable unrestricted-browser screenshot capture.
+- Keep tuning right-inspector density from real desktop screenshots.
 - Add richer contact/review affordances after internal testing.
 - Decide later whether the deterministic writer should be replaced by a real CadQuery/OpenCascade service, Onshape integration, or another engineering adapter.
 
@@ -335,8 +353,10 @@ Required:
 - Capture desktop screenshot
 - Test settings dialog
 - Test thread menu
-- Test add-build-input menu
-- Test MVP scope popover
+- Confirm the composer has no placeholder shortcut chips.
+- Confirm the right inspector only shows generated artifact links as read-only evidence for generated revisions, with no modeling, CAD editing, checkout, or production controls.
+- Confirm the right inspector has no duplicated 3D status row or review contact/person fields.
+- Confirm the 3D fullscreen preview opens, keeps layer switching, and can be closed back to the compact inspector.
 - Test prototype structure preview (3D) popover and `外观层` / `元器件层` transparency states
 - Test camera/battery human-review risk flow
 - Test blocked motion flow
@@ -351,9 +371,11 @@ The project should not be considered done until:
 - All visible buttons use Forge hardware language.
 - Unneeded Codex-style buttons are removed.
 - Settings and floating menus open, close, and show useful product-specific content.
-- Right inspector reads as a live build output surface, not a generic dashboard.
+- Right inspector reads as a focused 3D structure preview, not a generic dashboard or contact form. Read-only generated evidence links may appear after confirmed generation.
 - A normal request produces a ProductPlan revision with scope, parts list (BOM), GeometrySpec, pending prototype structure preview (3D), electronics layout, quote assumptions, and risk limits.
 - A confirmed generation request writes a new revision with GLB/STL/STEP, validation report, and placed part volumes in the GLB.
+- A confirmed generation request also writes ComponentDescriptor v2 evidence: `component_descriptors.json` and `component_asset_manifest.json`.
+- Component asset quality and validation status are visible in the UI and generated evidence. Current proxy components must not be presented as production ready.
 - The 3D preview is visible as an outcome snapshot and allows rotate, zoom, pan, and appearance/component layer switching, but does not introduce modeling-editor behavior.
 - A camera/battery request remains reviewable and shows clear human-review risk messaging.
 - A motion request is blocked from the standard desktop screen path.
@@ -363,8 +385,9 @@ The project should not be considered done until:
 ## 10. Immediate Next Steps
 
 1. Capture a stable desktop screenshot in an unrestricted browser session.
-2. Tune right inspector spacing and density from that screenshot.
+2. Continue screenshot-based right inspector spacing checks after each UI pass.
 3. Deepen the ProductPlan right-side sections as read-only workflow surfaces unless the product boundary changes.
 4. Audit every visible button after each UI pass; no button should remain if it has no visible result.
 5. Add focused tests around blocked-module behavior and bilingual-copy regression.
 6. Keep `src/contracts/workbench_contract.mjs` updated when API routes, statuses, languages, or chain steps change.
+7. Keep `docs/WORK_INDEX.md` and `docs/source-materials/INDEX.md` updated after meaningful work blocks or preserved source-material additions.

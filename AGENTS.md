@@ -16,6 +16,7 @@ Primary job:
 - Keep all MVP enclosures on the standardized 3D printed shell path; surface requests such as woodgrain, sage, graphite, or brand color are finish treatments, not different manufacturing processes.
 - Treat `ProductPlan` as the central object. Conversation, revisions, assets, jobs, model preview, electronics layout, quote assumptions, and review submission should hang off the plan or a plan revision.
 - Treat `GeometrySpec` as the only 3D-generation input source for a locked revision. Do not generate model files directly from raw chat prose, and do not write GLB/STL/STEP from ordinary conversation turns before explicit generation confirmation.
+- Treat `ComponentDescriptor v2` as the source of truth for component mechanical proxy metadata. Do not infer holes, connectors, openings, mounting, keepouts, access volumes, cable exits, or manufacturing shell features from arbitrary meshes or raw chat prose.
 - Treat the 3D view as a prototype-result preview, not a modeling editor. It should help users understand what the planned prototype will look like and what must be checked, without exposing CAD/modeling controls.
 
 Product planning source:
@@ -24,10 +25,17 @@ Product planning source:
 
 Read that file before making broad UI, workflow, naming, or scope changes.
 
+Context routing sources:
+
+- `docs/WORK_INDEX.md`: lightweight work-block index for recent changes, artifacts, retrieval handles, and next steps.
+- `docs/source-materials/INDEX.md`: searchable index for preserved source notes under `docs/source-materials/`.
+
+After reading `AGENTS.md` and `README.md`, use these indexes before opening raw source notes.
+
 Current product boundary:
 
 - Build a complete clickable UI prototype.
-- The first real 3D core is bounded to `ProductPlan revision -> GeometrySpec -> confirmed deterministic artifacts/CadQuery adapter -> GLB/STL/STEP`. Do not broaden it into a CAD editor or manufacturing system.
+- The first real 3D core is bounded to `ProductPlan revision -> ComponentDescriptor v2 selections -> GeometrySpec -> confirmed deterministic artifacts/CadQuery adapter -> GLB/STL/STEP`. Do not broaden it into a CAD editor or manufacturing system.
 - Do not add real manufacturing, real upload, real checkout, real supplier ordering, user-facing CAD export, or real production behavior unless the user explicitly changes the product direction.
 - Do not broaden the enclosure path beyond standardized 3D printing. Do not add woodwork, CNC, injection molding, metal casing, or SolidWorks/Onshape as the user generation core unless the product direction changes.
 - Every visible button must open a concrete view, state, panel, popover, filter, or mock flow result.
@@ -53,7 +61,17 @@ Current known local limitation:
 - `src/contracts/workbench_contract.mjs`: shared contract constants for chain steps, API routes, statuses, and supported languages.
 - `src/core/product_plan.mjs`: ProductPlan creation, turn handling, revision creation, and local review submission orchestration.
 - `src/core/jobs.mjs`: unified generation job system for model generation, electronics layout, quote estimate, review packet, and AI chat reserved capability.
-- `src/core/geometry_generation.mjs`: GeometrySpec creation, validation, pending-confirmation handling, deterministic placed-part GLB/STL/STEP artifact writing, and CadQuery/OpenCascade adapter script emission.
+- `src/core/workspace_state.mjs`: structured ProductPlan/workspace state helpers and deterministic mock plan adapter for conversation-derived plan updates.
+- `src/core/component_assets/*/descriptor.json`: ComponentDescriptor v2 seed assets for mechanical proxy dimensions, mounting holes, connectors, external features, keepouts, access volumes, risk flags, asset paths, and source notes.
+- `src/core/component_descriptor_schema.mjs`: ComponentDescriptor v2 schema validation and normalization helpers.
+- `src/core/component_library.mjs`: descriptor loader for `src/core/component_assets/*/descriptor.json`.
+- `src/core/component_asset_resolver.mjs`: resolves preview, mechanical, validation, and manufacturing purposes to vendor/proxy/procedural descriptor-backed sources.
+- `src/core/component_asset_manifest.mjs`: writes per-revision asset quality and validation-status manifests.
+- `src/core/proxy_geometry_builder.mjs`: procedural proxy geometry functions for display, PCB, USB-C, sensor, speaker, camera, battery, button, mounting holes, connectors, keepouts, and access volumes.
+- `src/core/component_selection.mjs`: deterministic selection from ProductPlan requirements to supported ComponentDescriptors, assumptions, warnings, and risk module ids.
+- `src/core/layout_engine.mjs`: standard desktop display layout rules that derive enclosure dimensions, placements, openings, standoffs, interfaces, and cable routes from descriptor fields.
+- `src/core/validation_engine.mjs`: geometry validation checks for descriptor existence/schema/dimensions, standard shell fit, required features, route endpoints, keepout/access proxy volumes, missing geometry, and blocked/manual-expansion states.
+- `src/core/geometry_generation.mjs`: GeometrySpec creation, validation, pending-confirmation handling, deterministic descriptor-driven semantic GLB generation, shell-only STL artifact writing, STEP handoff summary, descriptor/manifest evidence writing, design summary, and CadQuery/OpenCascade adapter script emission.
 - `src/core/assets.mjs`: metadata-only asset registration for text, images, references, and generated placeholder assets.
 - `src/core/model_preview.mjs`: prototype structure preview output, generated model artifact references, and read-only viewer policy.
 - `src/core/electronics_layout.mjs`: placeholder electronics positions, interface directions, cable notes, and conflict checks.
@@ -118,24 +136,28 @@ Preserve Codex-like interaction structure:
 
 Required UI-only views:
 
-- `对话生成`: central continuous conversation and ProductPlan revision flow.
-- `项目历史`: left-side internal drafts/history.
-- `审核包`: local human review packet status.
+- `新项目`: left-side entry that clears the current workbench into a blank ProductPlan input state.
+- New project button visual state: default should be transparent/no filled background; use subtle color only for hover/focus feedback.
+- Compact project/revision list: left-side selection for ProductPlan revisions and project rows; do not make project history a separate large top-level tab. Visible rows should show only the project name, without status/model/quote subtitle explanations.
+- Project actions menu: the `...` / `方案菜单` trigger belongs on the right side of the left-sidebar project header, next to `项目`, not in the center thread topbar.
+- Conversation flow: central continuous conversation and ProductPlan revision updates.
+- Internal review material: keep the local human review submission capability in the plan/review flow, but do not expose `审核包` as a left-sidebar primary entry while the current priority is conversation-driven 3D generation.
 
 Right inspector guidance:
 
-- It should read as a live output surface, not a generic analytics dashboard.
+- It should read as a focused 3D structure output surface, not a generic analytics dashboard or review packet page.
 - Keep `原型结构预览（3D）` near the top and expanded by default when possible.
-- The 3D preview should use layer states rather than CAD-style front/back/exploded view controls: `外观层` shows the outside shell as the primary product result, and `元器件层` makes the shell transparent so placed components, interface markers, cable routes, and risk colors from GeometrySpec are visible. Orbit rotate, zoom, and pan are allowed. Do not add modeling/editor controls such as drag-to-edit geometry, parametric handles, material authoring, CAD export, timeline tools, or mesh operations.
+- The 3D preview should use layer states rather than CAD-style front/back/exploded view controls: switching `外观层` / `元器件层` must not rotate, pan, zoom, or reset the current view. `外观层` keeps normal/default material opacity, so the 3D printed shell stays opaque and any genuinely exposed components remain visible. `元器件层` keeps the same camera and makes every shell surface semi-transparent so placed components, interface markers, cable routes, and risk colors from GeometrySpec are visible. Orbit rotate, zoom, and pan are allowed. Do not add modeling/editor controls such as drag-to-edit geometry, parametric handles, material authoring, CAD export, timeline tools, or mesh operations.
+- Keep the 3D preview, layer controls, shell/dimension/structure-check rows, component asset quality list, read-only generated evidence links, and a compact fullscreen preview affordance in the right inspector. Do not turn artifact links into CAD editing, production, checkout, or manufacturing controls. Do not put review contact/person fields in this page; use internal review material and the separate review contact dialog instead.
+- Keep the right inspector on a consistent indentation grid: preview, layer controls, labels, and values should share stable gutters instead of shifting between unrelated flex alignments.
 - Prefer thin dividers, low shadow, dense sections, and restrained visual hierarchy.
 - Keep controls usable, but avoid large decorative rounded cards.
 
 Composer guidance:
 
-- Keep actions hardware-specific and understandable, such as `范围`, `零件`, `风险`, and `3D预览`.
+- The composer should stay focused on hardware request text plus one send/update action.
 - The send button creates or updates a ProductPlan revision through the backend API when available.
-- The `+` menu is for adding build inputs such as sketches, product references, and CAD outlines.
-- Do not keep voice, generic goal, or vague guard buttons unless they have a real UI-only flow in this product.
+- Do not keep `+`, `范围`, `零件`, `风险`, `3D预览`, voice, generic goal, or vague guard buttons unless they map to a real implemented workflow. Scope, parts, risk, and 3D state should be shown in the ProductPlan thread and right inspector, not as placeholder composer chips.
 
 ## MVP Workflow
 
@@ -147,7 +169,7 @@ The expected flow is:
 4. Risk-limit gate flags camera and battery for human review and blocks deferred motion structures from the standard path.
 5. Quote estimator creates hardware/build/manufacturing-check cost bands.
 6. ProductPlan creates a new revision and unified generation jobs.
-7. GeometrySpec, validation, pending/generated model state, prototype structure preview, and electronics layout are attached to the revision; GLB/STL/STEP are written only after explicit generation confirmation.
+7. ComponentDescriptor snapshots, component asset manifest, GeometrySpec, validation, pending/generated model state, prototype structure preview, and electronics layout are attached to the revision; GLB/STL/STEP are written only after explicit generation confirmation.
 8. Local human review packet can be written after name/email are provided.
 
 Do not broaden the MVP into real checkout, real supplier ordering, user-facing CAD editing/export, user accounts, or certification workflows unless the user explicitly asks for that product direction change.
@@ -186,7 +208,7 @@ For broader UI or behavior changes, also verify:
 - Settings tabs have matching settings panels.
 - Old generic button labels have not returned.
 - `src/contracts/workbench_contract.mjs` still matches API routes and core statuses.
-- Geometry generation still emits GLB/STL/STEP only when validation passes and `generateArtifacts` is true; pending, blocked, or missing geometry must not output fake model files.
+- Geometry generation still emits GLB/STL/STEP only when validation passes and `generateArtifacts` is true; pending, blocked, missing descriptors, invalid descriptor schema, missing dimensions, or missing connector endpoints must not output fake model files.
 - Bilingual UI assets still include Simplified Chinese and English.
 - ProductPlan revisions, jobs, and local review packets remain covered by tests when changing core APIs.
 
@@ -205,7 +227,7 @@ When local browser access is available, complete visual verification:
 - Start the local server.
 - Open the app in Browser.
 - Capture the first viewport.
-- Test bench settings, thread menu, add-build-input menu, MVP scope popover, and manufacturing check (DFM) popover.
+- Test bench settings, thread menu, composer no-placeholder state, and manufacturing check (DFM) popover.
 - Test normal, camera/battery human-review risk, and blocked motion flows.
 - Compare the right inspector against the intended Codex-like density.
 - Confirm settings exposes language switching and both `简体中文` and `English` are selectable.
@@ -224,6 +246,8 @@ When the user provides a long requirement, screenshot interpretation, copied pro
 
 - Summarize the durable decisions into `docs/PROJECT_PLAN.md`.
 - If the raw material needs to be preserved, create a small note under `docs/source-materials/` using the metadata pattern from the global rules.
+- Add or update the matching entry in `docs/source-materials/INDEX.md`.
+- Add or update the matching work block in `docs/WORK_INDEX.md` after meaningful implementation, documentation, architecture, or durable-analysis work.
 - Keep source notes searchable with concrete handles such as button names, screen names, product terms, and blocked decisions.
 
 Prefer explicit uncertainty over invented product logic. If a workflow is not yet decided, mark it as pending in the plan instead of guessing.

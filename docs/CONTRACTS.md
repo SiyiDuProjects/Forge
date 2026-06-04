@@ -44,12 +44,48 @@ All accepted MVP drafts should keep `spec.enclosure.method` on `parameterized_3d
 Generated revisions may include:
 
 - `geometrySpec`: the single structured input for 3D generation.
-- `modelArtifacts`: either `pending_confirmation`, `generated`, or `blocked`. Generated artifacts include GLB/STL/STEP paths plus the GeometrySpec, validation report, and CadQuery adapter script.
-- `geometryValidation`: pass/warn/block checks for module geometry, standard shell fit, interface directions, cable-route placeholders, camera/battery review risks, and blocked motion structures.
+- `componentDescriptors`: ComponentDescriptor v2 records selected for this revision. They are the source for component dimensions, mounting holes, connectors, interfaces, external features, keepouts, access volumes, cable exits, risk flags, asset paths, and source notes.
+- `componentAssetManifest`: per-revision resolver output showing preview/mechanical/validation/manufacturing asset resolution, asset quality, validation status, vendor/proxy availability, and whether procedural proxies were used.
+- `modelArtifacts`: either `pending_confirmation`, `generated`, or `blocked`. Generated artifacts include the semantic GLB preview, shell-only STL files, STEP handoff summary, ProductPlan snapshot, component selections, ComponentDescriptor snapshot, component asset manifest, GeometrySpec, validation report, design summary, and CadQuery adapter script.
+- `geometryValidation`: pass/warn/block checks for descriptor existence/schema/dimensions, standard shell fit, external feature openings, connector cutouts, standoffs from mounting holes, route endpoints that reference real connectors, keepout/access proxy volumes, camera/battery review risks, asset quality reporting, shell-only STL output, and blocked motion structures.
 
-User preview uses the same `GeometrySpec` as the generated GLB and supports rotate, zoom, pan, and view switching. Direct geometry edits, part dragging, hole edits, and user CAD export are outside the public interface.
+User preview uses the same `GeometrySpec` as the generated GLB and supports rotate, zoom, pan, and appearance/component layer switching. Direct geometry edits, part dragging, hole edits, and user CAD export are outside the public interface.
 
 ProductPlan conversation turns default to `generateArtifacts: false`, so they validate geometry but do not write GLB/STL/STEP until the user confirms generation. Direct model APIs default to generating artifacts unless `generateArtifacts` is explicitly false.
+
+## ComponentDescriptor v2 Contract
+
+Descriptor files live under `src/core/component_assets/<component_id>/descriptor.json` with a companion `sources.md`.
+
+Required descriptor fields:
+
+- `identity`
+- `versioning`
+- `assetQuality`
+- `validationStatus`
+- `dimensionsMm`
+- `coordinateSystem`
+- `visualProxy`
+- `mechanicalProxy`
+- `mountingHoles`
+- `connectors`
+- `interfaces`
+- `externalFeatures`
+- `keepouts`
+- `accessVolumes`
+- `cableExitDirections`
+- `riskFlags`
+- `assetPaths`
+- `sourceNotes`
+
+Supported asset-resolution purposes:
+
+- `preview`: vendor GLB, proxy visual GLB, then procedural visual proxy.
+- `mechanical`: vendor STEP, proxy mechanical STEP, then procedural mechanical proxy.
+- `validation`: descriptor data.
+- `manufacturing`: descriptor-driven shell features only.
+
+Current descriptors are mechanical proxies with `validationStatus: unverified_proxy`. They are acceptable for read-only prototype preview and internal review evidence, not production readiness.
 
 ## Job Status
 
