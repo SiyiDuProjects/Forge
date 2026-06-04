@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "component_descriptor_v2",
+  "identity": {
+    "id": "speaker_20mm",
+    "displayName": "20 mm Speaker Proxy",
+    "category": "speaker",
+    "legacyCategory": "Audio",
+    "manufacturer": "Forge proxy seed",
+    "partNumber": "SPK-20MM-PROXY"
+  },
+  "versioning": {
+    "descriptorVersion": "0.2.0",
+    "updated": "2026-06-04",
+    "compatibility": ["reference_build_001_optional"]
+  },
+  "assetQuality": "mechanical_proxy",
+  "validationStatus": "unverified_proxy",
+  "dimensionsMm": { "width": 22, "height": 22, "depth": 6 },
+  "coordinateSystem": {
+    "origin": "component_center",
+    "units": "mm",
+    "x": "width",
+    "y": "height",
+    "z": "depth",
+    "front": "-z"
+  },
+  "visualProxy": {
+    "shape": "speaker_disc",
+    "materialHint": "dark_speaker",
+    "appearanceLayerVisible": false,
+    "componentLayerOpacity": 1
+  },
+  "mechanicalProxy": {
+    "bodyType": "round_speaker_disc",
+    "mountingMethod": "grille_mount"
+  },
+  "mountingHoles": [],
+  "connectors": [
+    {
+      "id": "signal",
+      "type": "jst",
+      "positionLocalMm": [0, 10, -2],
+      "orientation": "+y",
+      "mating": ["core_board_esp32_s3.speaker"]
+    }
+  ],
+  "interfaces": [
+    { "id": "speaker_signal", "connectorId": "signal", "signalType": "audio", "requiredClearanceMm": 4 }
+  ],
+  "externalFeatures": [
+    {
+      "id": "speaker_vents",
+      "type": "speaker_vents",
+      "face": "back",
+      "positionLocalMm": [0, 0, -3],
+      "openingSizeMm": [24, 12],
+      "ventCount": 5
+    }
+  ],
+  "keepouts": [
+    {
+      "id": "acoustic_clearance",
+      "type": "acoustic",
+      "positionLocalMm": [0, 0, -6],
+      "sizeMm": [26, 26, 10]
+    }
+  ],
+  "accessVolumes": [
+    {
+      "id": "speaker_wire_access",
+      "connectorId": "signal",
+      "positionLocalMm": [0, 14, -2],
+      "sizeMm": [14, 10, 8]
+    }
+  ],
+  "cableExitDirections": [
+    { "connectorId": "signal", "direction": "+y_to_core_board" }
+  ],
+  "riskFlags": {
+    "requiresManualValidation": false,
+    "severity": "low",
+    "reason": "Acoustic fit and grille pattern need human review.",
+    "warnings": ["Speaker grille and acoustic clearance are proxy values."]
+  },
+  "assetPaths": {
+    "proxyVisualGlb": null,
+    "proxyMechanicalStep": null,
+    "vendorGlb": null,
+    "vendorStep": null
+  },
+  "sourceNotes": {
+    "summary": "Optional 20 mm speaker proxy for schema coverage and future reference builds.",
+    "sourcesFile": "sources.md",
+    "confidence": "proxy_seed"
+  }
+}

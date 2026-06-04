@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "component_descriptor_v2",
+  "identity": {
+    "id": "battery_18650_holder",
+    "displayName": "18650 Battery Holder Proxy",
+    "category": "battery",
+    "legacyCategory": "Power",
+    "manufacturer": "Forge proxy seed",
+    "partNumber": "BAT-18650-HOLDER-PROXY"
+  },
+  "versioning": {
+    "descriptorVersion": "0.2.0",
+    "updated": "2026-06-04",
+    "compatibility": ["reference_build_001_optional"]
+  },
+  "assetQuality": "mechanical_proxy",
+  "validationStatus": "unverified_proxy",
+  "dimensionsMm": { "width": 78, "height": 22, "depth": 20 },
+  "coordinateSystem": {
+    "origin": "component_center",
+    "units": "mm",
+    "x": "width",
+    "y": "height",
+    "z": "depth",
+    "front": "+z"
+  },
+  "visualProxy": {
+    "shape": "battery_holder_block",
+    "materialHint": "review_amber",
+    "appearanceLayerVisible": false,
+    "componentLayerOpacity": 1
+  },
+  "mechanicalProxy": {
+    "bodyType": "cylindrical_cell_holder",
+    "mountingMethod": "screw_or_adhesive_tray",
+    "retentionLipMm": 1.4
+  },
+  "mountingHoles": [],
+  "connectors": [
+    {
+      "id": "power_leads",
+      "type": "power_leads",
+      "positionLocalMm": [0, 11, 0],
+      "orientation": "+y",
+      "mating": ["core_board_esp32_s3.usb_c"]
+    }
+  ],
+  "interfaces": [
+    { "id": "holder_power", "connectorId": "power_leads", "signalType": "battery_power", "requiredClearanceMm": 8 }
+  ],
+  "externalFeatures": [],
+  "keepouts": [
+    {
+      "id": "cell_access_keepout",
+      "type": "battery_access_and_thermal",
+      "positionLocalMm": [0, 0, 0],
+      "sizeMm": [84, 28, 24]
+    }
+  ],
+  "accessVolumes": [
+    {
+      "id": "cell_replacement_access",
+      "connectorId": "power_leads",
+      "positionLocalMm": [0, 16, 0],
+      "sizeMm": [84, 16, 24]
+    }
+  ],
+  "cableExitDirections": [
+    { "connectorId": "power_leads", "direction": "+y_to_core_board" }
+  ],
+  "riskFlags": {
+    "requiresManualValidation": true,
+    "severity": "medium",
+    "reason": "Battery holder, cell access, charging, thermal behavior, and safety require human validation.",
+    "warnings": [
+      "18650 holder proxy is not electrically, thermally, or safety verified.",
+      "Cell retention, access, polarity, charging, and certification are outside the MVP generator."
+    ]
+  },
+  "assetPaths": {
+    "proxyVisualGlb": null,
+    "proxyMechanicalStep": null,
+    "vendorGlb": null,
+    "vendorStep": null
+  },
+  "sourceNotes": {
+    "summary": "Optional 18650 holder proxy. Always remains a manual validation risk in the MVP path.",
+    "sourcesFile": "sources.md",
+    "confidence": "proxy_seed"
+  }
+}

@@ -1,9 +1,10 @@
 import { JOB_CAPABILITY, PRODUCT_PLAN_STATUS, SUPPORTED_LANGUAGES } from "../contracts/workbench_contract.mjs";
 import { registerAssets } from "./assets.mjs";
 import { createGenerationJob } from "./jobs.mjs";
-import { createDraft } from "./pipeline.mjs";
 import { createReviewSubmission } from "./review_queue.mjs";
+import { isGenerationRequest, processUserTurn } from "./sparker_orchestrator.mjs";
 import { includesAny, makeId } from "./utils.mjs";
+import { clone, createEmptyProductPlan, createRevisionDiff, createWorkspaceState, productPlanToDraft } from "./workspace_state.mjs";
 
 const plans = new Map();
 
@@ -13,6 +14,10 @@ export function createProductPlan({ message, initialMessage, assets = [], langua
   const now = new Date().toISOString();
   const planId = makeId("plan");
   const assetRefs = registerAssets(assets);
+  const workspaceState = createWorkspaceState({
+    workspaceId: planId,
+    title: text || "Forge hardware prototype"
+  });
   const userTurn = createTurn({
     role: "user",
     text,
@@ -26,6 +31,7 @@ export function createProductPlan({ message, initialMessage, assets = [], langua
     requiredInputs: {},
     conversation: [userTurn],
     revisions: [],
+    workspaceState,
     assets: assetRefs,
     jobs: [],
     contactInfo: { name: "", email: "" },
@@ -35,11 +41,21 @@ export function createProductPlan({ message, initialMessage, assets = [], langua
     updatedAt: now
   };
 
+  const sparkerResult = processUserTurn({
+    workspaceState,
+    currentProductPlan: workspaceState.productPlan,
+    currentConversation: plan.conversation,
+    userMessage: text
+  });
+  workspaceState.productPlan = sparkerResult.productPlan;
   const revision = createRevisionForTurn({
     plan,
     turn: userTurn,
     requestText: text,
-    generateArtifacts: false
+    structuredProductPlan: sparkerResult.productPlan,
+    patches: sparkerResult.appliedPatches,
+    sparkerResult,
+    generateArtifacts: sparkerResult.shouldRegenerate
   });
   const assistantTurn = createTurn({
     role: "assistant",
@@ -70,15 +86,28 @@ export function addProductPlanTurn({ planId, message, assetIds = [], assets = []
   plan.conversation.push(turn);
 
   const previous = currentRevision(plan);
-  const requestText = [previous?.spec?.user_request, turn.text]
+  const previousProductPlan = previous?.productPlanSnapshot
+    || plan.workspaceState?.productPlan
+    || createEmptyProductPlan();
+  const sparkerResult = processUserTurn({
+    workspaceState: plan.workspaceState,
+    currentProductPlan: previousProductPlan,
+    currentConversation: plan.conversation,
+    userMessage: turn.text
+  });
+  const requestText = [previous?.requestText, turn.text]
     .filter(Boolean)
     .join("\nUpdate: ");
   const revision = createRevisionForTurn({
     plan,
     turn,
     requestText,
+    structuredProductPlan: sparkerResult.productPlan,
+    patches: sparkerResult.appliedPatches,
+    sparkerResult,
+    previousRevision: previous,
     overrides,
-    generateArtifacts: isGenerationConfirmation(turn.text)
+    generateArtifacts: sparkerResult.shouldRegenerate || isGenerationConfirmation(turn.text)
   });
   const assistantTurn = createTurn({
     role: "assistant",
@@ -95,6 +124,28 @@ export function getProductPlan(planId) {
 
 export function listProductPlans() {
   return [...plans.values()];
+}
+
+export function revertProductPlanRevision({ planId, revisionId } = {}) {
+  const plan = plans.get(planId);
+  if (!plan) {
+    const error = new Error(`Unknown ProductPlan: ${planId}`);
+    error.statusCode = 404;
+    throw error;
+  }
+  const revision = plan.revisions.find((item) => item.revisionId === revisionId);
+  if (!revision) {
+    const error = new Error(`Unknown revision for ProductPlan: ${planId}`);
+    error.statusCode = 404;
+    throw error;
+  }
+  plan.currentRevisionId = revision.revisionId;
+  if (plan.workspaceState) {
+    plan.workspaceState.currentRevisionId = revision.revisionId;
+    plan.workspaceState.productPlan = clone(revision.productPlanSnapshot || plan.workspaceState.productPlan);
+  }
+  plan.updatedAt = new Date().toISOString();
+  return { productPlan: plan, revision };
 }
 
 export async function submitProductPlanReview({ planId, revisionId, contactInfo = {} } = {}) {
@@ -130,15 +181,28 @@ export async function submitProductPlanReview({ planId, revisionId, contactInfo 
   return { productPlan: plan, submission };
 }
 
-function createRevisionForTurn({ plan, turn, requestText, overrides = {}, generateArtifacts = false }) {
-  const draft = createDraft({ requestText, overrides });
+function createRevisionForTurn({
+  plan,
+  turn,
+  requestText,
+  structuredProductPlan = createEmptyProductPlan(),
+  patches = [],
+  sparkerResult = {},
+  previousRevision = currentRevision(plan),
+  generateArtifacts = false
+}) {
+  const draft = productPlanToDraft({
+    productPlan: structuredProductPlan,
+    requestText
+  });
   const revisionId = makeId("rev");
-  const status = classifyPlanStatus(requestText, draft);
+  const status = classifyPlanStatus(requestText, draft, structuredProductPlan, sparkerResult);
   const modelJob = createGenerationJob({
     planId: plan.planId,
     revisionId,
     capability: JOB_CAPABILITY.MODEL_GENERATION,
     input: {
+      productPlan: structuredProductPlan,
       spec: draft.spec,
       modules: draft.modules,
       riskReport: draft.riskReport,
@@ -150,6 +214,7 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {}, genera
     revisionId,
     capability: JOB_CAPABILITY.ELECTRONICS_LAYOUT,
     input: {
+      productPlan: structuredProductPlan,
       spec: draft.spec,
       modules: draft.modules,
       modelJob
@@ -174,6 +239,11 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {}, genera
       ? "standard_desktop_display"
       : "manual_expansion",
     requestText: draft.requestText,
+    productPlanSnapshot: clone(structuredProductPlan),
+    patches: clone(patches),
+    rejectedPatches: clone(sparkerResult.rejectedPatches || []),
+    unsupportedReasons: clone(sparkerResult.unsupportedReasons || []),
+    intent: sparkerResult.intent || "",
     spec: draft.spec,
     modules: draft.modules,
     riskReport: draft.riskReport,
@@ -189,6 +259,12 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {}, genera
     quoteEstimate: quoteJob.output?.quoteEstimate,
     createdAt: new Date().toISOString()
   };
+  revision.diff = createRevisionDiff({
+    previousRevision,
+    nextRevision: revision,
+    previousProductPlan: previousRevision?.productPlanSnapshot,
+    nextProductPlan: structuredProductPlan
+  });
 
   plan.assets.push(...generatedAssetsFromRevision(revision));
   plan.status = status;
@@ -196,6 +272,18 @@ function createRevisionForTurn({ plan, turn, requestText, overrides = {}, genera
   plan.requiredInputs = requiredInputsFor(requestText, draft);
   plan.revisions.push(revision);
   plan.jobs.push(modelJob, layoutJob, quoteJob);
+  if (plan.workspaceState) {
+    plan.workspaceState.productPlan = clone(structuredProductPlan);
+    plan.workspaceState.currentRevisionId = revision.revisionId;
+    plan.workspaceState.revisions.push({
+      revisionId: revision.revisionId,
+      sourceTurnId: turn.turnId,
+      patches: revision.patches,
+      diff: revision.diff,
+      artifactPaths: artifactPathsForRevision(revision),
+      createdAt: revision.createdAt
+    });
+  }
   return revision;
 }
 
@@ -206,16 +294,28 @@ function generatedAssetsFromRevision(revision) {
     assets.preview,
     assets.glb,
     assets.stl,
+    assets.shellFront,
+    assets.shellBack,
     assets.step,
     assets.cad,
+    assets.productPlan,
+    assets.componentSelections,
+    assets.componentDescriptors,
+    assets.componentAssetManifest,
     assets.geometrySpec,
     assets.validationReport,
+    assets.designSummary,
     assets.cadqueryScript,
+    artifactAssets.productPlan,
     artifactAssets.geometrySpec,
+    artifactAssets.componentSelections,
     artifactAssets.validationReport,
+    artifactAssets.designSummary,
     artifactAssets.cadqueryScript,
     artifactAssets.glb,
     artifactAssets.stl,
+    artifactAssets.shellFront,
+    artifactAssets.shellBack,
     artifactAssets.step,
     ...(assets.renders || [])
   ].filter(Boolean);
@@ -225,6 +325,15 @@ function generatedAssetsFromRevision(revision) {
     seen.add(asset.assetId);
     return true;
   });
+}
+
+function artifactPathsForRevision(revision) {
+  const artifacts = revision.modelArtifacts?.artifacts || {};
+  return Object.fromEntries(
+    Object.entries(artifacts)
+      .filter(([, asset]) => asset?.localPath || asset?.url)
+      .map(([key, asset]) => [key, asset.localPath || asset.url])
+  );
 }
 
 function currentRevision(plan) {
@@ -242,7 +351,10 @@ function createTurn({ role, text, assetIds = [], createdAt = new Date().toISOStr
   };
 }
 
-function classifyPlanStatus(text, draft) {
+function classifyPlanStatus(text, draft, structuredProductPlan = {}, sparkerResult = {}) {
+  if (structuredProductPlan.productType === "manual_expansion" || sparkerResult.unsupportedReasons?.length) {
+    return PRODUCT_PLAN_STATUS.MANUAL_EXPANSION_DRAFT;
+  }
   const lower = String(text || "").toLowerCase();
   const nonStandardWords = [
     "cup",
@@ -340,33 +452,22 @@ function requiredInputsFor(text, draft) {
 }
 
 function isGenerationConfirmation(text) {
-  const lower = String(text || "").toLowerCase();
-  if (includesAny(lower, ["不要生成", "别生成", "not ready", "do not generate", "don't generate"])) {
-    return false;
-  }
-  return includesAny(lower, [
-    "生成模型",
-    "生成一下",
-    "现在造",
-    "现在造一下",
-    "可以了",
-    "开始生成",
-    "开始造",
-    "造一下",
-    "确认生成",
-    "generate model",
-    "generate the model",
-    "build it",
-    "make it now",
-    "ready to build",
-    "this is ready",
-    "ready"
-  ]);
+  return isGenerationRequest(text);
 }
 
 function assistantMessageForPlan(plan, revision) {
   const missing = plan.requiredInputs.missing || [];
   const isZh = plan.language !== "en";
+  if (revision.unsupportedReasons?.length) {
+    return isZh
+      ? `这个请求需要人工扩展验证：${revision.unsupportedReasons.join(" ")} 我可以保留一个不含运动/高风险系统的外壳概念，但不能把它当作标准桌面电子原型直接生成。`
+      : `This request needs manual expansion validation: ${revision.unsupportedReasons.join(" ")} I can keep a reduced non-motion enclosure concept, but it cannot be treated as a standard desktop electronics prototype.`;
+  }
+  if (revision.rejectedPatches?.length) {
+    return isZh
+      ? `我拒绝了 ${revision.rejectedPatches.length} 个不安全或不支持的结构化修改，其余 ProductPlan 状态已更新。`
+      : `I rejected ${revision.rejectedPatches.length} unsafe or unsupported structured change and updated the remaining ProductPlan state.`;
+  }
   if (missing.length > 0) {
     const labels = isZh
       ? { purpose: "用途", screenSize: "屏幕尺寸", finish: "外观风格" }
@@ -383,15 +484,19 @@ function assistantMessageForPlan(plan, revision) {
   }
   const hasReviewRisk = (revision.riskReport?.items || []).some((item) => item.level === "warn");
   const modules = revision.spec.module_stack?.join(isZh ? "、" : ", ");
+  const changeCount = revision.diff?.changes?.length || 0;
+  const changePrefix = changeCount
+    ? isZh ? `已记录 ${changeCount} 项结构化修改。` : `${changeCount} structured change(s) recorded. `
+    : "";
   if (revision.generationStatus === "pending_confirmation") {
     return isZh
-      ? `已更新标准桌面屏方案：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : ""}3D 装配预览等待你确认生成；现在不会生成新的 3D 模型文件。`
-      : `Updated the standard desktop display plan: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review. " : ""}The 3D assembly preview is waiting for generation confirmation; no new 3D model file has been generated yet.`;
+      ? `${changePrefix}已更新标准桌面屏方案：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : ""}3D 装配预览等待你确认生成；现在不会生成新的 3D 模型文件。`
+      : `${changePrefix}Updated the standard desktop display plan: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review. " : ""}The 3D assembly preview is waiting for generation confirmation; no new 3D model file has been generated yet.`;
   }
   if (revision.generationStatus === "generated") {
     return isZh
-      ? `已生成带零件布局的 3D 装配预览：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : "3D 模型已挂到当前版本。"}`
-      : `Generated the 3D assembly preview with placed parts: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review." : "The 3D model is attached to this revision."}`;
+      ? `${changePrefix}已生成带零件布局的 3D 装配预览：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : "3D 模型已挂到当前版本。"}`
+      : `${changePrefix}Generated the 3D assembly preview with placed parts: ${modules}. ${hasReviewRisk ? "Camera, battery, or other risks are marked for human review." : "The 3D model is attached to this revision."}`;
   }
   if (isZh) {
     return `已更新标准桌面屏方案：${modules}。${hasReviewRisk ? "摄像头/电池等风险已标为人工审核项。" : "右侧方案包已刷新。"}`;

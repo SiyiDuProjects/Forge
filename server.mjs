@@ -7,7 +7,7 @@ import { createLogger, durationMs } from "./src/core/observability.mjs";
 import { registerAsset } from "./src/core/assets.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
-import { addProductPlanTurn, createProductPlan, getProductPlan, submitProductPlanReview } from "./src/core/product_plan.mjs";
+import { addProductPlanTurn, createProductPlan, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const threeDir = fileURLToPath(new URL("./node_modules/three/", import.meta.url));
@@ -105,6 +105,16 @@ async function handleApi(request, response, url) {
       assetIds: body.assetIds || [],
       assets: body.assets || [],
       overrides: body.overrides || {}
+    }));
+    return;
+  }
+
+  const planRevertMatch = url.pathname.match(/^\/api\/plans\/([^/]+)\/revert$/);
+  if (request.method === "POST" && planRevertMatch) {
+    const body = await readJsonBody(request);
+    sendJson(response, 200, revertProductPlanRevision({
+      planId: planRevertMatch[1],
+      revisionId: body.revisionId
     }));
     return;
   }

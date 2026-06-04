@@ -8,23 +8,17 @@ const threePreviewInstances = new Map();
 const copy = {
   zh: {
     appTitle: "Forge",
-    navChat: "对话生成",
-    navHistory: "项目历史",
-    navReview: "审核包",
-    projectLabel: "内部草稿",
-    projectName: "Forge 实验室",
+    newProject: "新项目",
+    projectActionsAria: "项目操作",
+    projectLabel: "项目",
+    projectListAria: "ProductPlan 项目",
     settingsButton: "Forge 设置",
     uiPrototype: "内部 MVP",
     topbarStatus: "ProductPlan 实时方案",
     submitOrder: "提交审核下单",
     previewSnapshot: "预览原型快照",
-    composerDefault: "持续对话会更新 ProductPlan、原型结构预览（3D）、零件、估算和审核状态",
+    composerDefault: "描述硬件需求，发送后更新 ProductPlan 和 3D 生成状态",
     composerPlaceholder: "说出你想做的硬件，例如：我想做一个小型木纹桌面屏，显示天气和照片，3.5 英寸，USB-C 供电。",
-    addInputAria: "添加输入资产",
-    scope: "范围",
-    partsChip: "零件",
-    modelChip: "3D预览",
-    riskChip: "风险",
     runChainAria: "发送需求并更新方案",
     inspectorAria: "实时方案包",
     settingsTitle: "Forge 设置",
@@ -33,28 +27,28 @@ const copy = {
     langEn: "English",
     languageSelectAria: "界面语言",
     threadMenuAria: "方案菜单",
-    attachSketch: "注册草图",
-    attachReference: "注册参考链接",
-    attachConstraints: "添加约束说明",
-    attachBehavior: "添加设备行为",
     threadRename: "重命名方案",
+    threadHistory: "查看版本记录",
     threadDuplicate: "复制草稿",
     threadExport: "导出方案快照",
     threadArchive: "归档草稿",
-    viewBuild: "对话生成",
     planReady: "标准桌面屏",
     planManual: "人工扩展草案",
     planSubmitted: "已提交人工审核",
+    newDraftTitle: "未命名硬件项目",
+    newDraftDetail: "输入第一条需求后生成 ProductPlan",
+    newProjectReady: "已准备新项目",
     benchAgent: "原型助手",
     fallbackNotice: "后端暂不可用，正在显示本地 ProductPlan 示例",
     rerunNotice: "已更新 ProductPlan revision",
     submitNeedContact: "请先填写姓名和邮箱",
-    submittedNotice: "已生成本地人工审核包，等待确认；不是付款，也不是立即生产。",
+    submittedNotice: "已生成本地人工审核资料，等待确认；不是付款，也不是立即生产。",
     actionNotice: "已选择：",
-    contactTitle: "提交审核下单",
+    reviewContactTitle: "提交审核下单",
     contactName: "姓名",
     contactEmail: "邮箱",
     contactHint: "内部版只收姓名和邮箱，用于人工审核后联系。",
+    reviewSubmitConfirm: "生成本地审核资料",
     sections: {
       scope: "范围",
       parts: "零件清单（BOM）",
@@ -84,6 +78,44 @@ const copy = {
     modelViewerHint: "拖拽旋转，滚轮缩放，Shift 拖拽平移；外观层看整体外壳，元器件层会把外壳变透明；不能拖动零件或改孔位。",
     modelArtifacts: "3D 模型状态",
     modelArtifactSummary: "3D 模型已生成",
+    componentAssetsTitle: "组件资产来源",
+    assetQuality: "资产质量",
+    validationStatus: "验证状态",
+    resolvedPreview: "预览来源",
+    artifactLinksTitle: "生成证据",
+    proxyComponentNotice: "这个原型使用机械代理组件：尺寸、孔位、接口和避让体积来自 ComponentDescriptor，仍需人工工程验证，不能视为生产就绪。",
+    artifactLabels: {
+      productPlan: "ProductPlan 快照",
+      geometrySpec: "GeometrySpec",
+      componentSelections: "组件选择",
+      componentDescriptors: "组件描述符",
+      componentAssetManifest: "资产清单",
+      validationReport: "验证报告",
+      designSummary: "设计摘要",
+      glb: "3D 模型",
+      stl: "外壳合并文件",
+      shellFront: "前壳文件",
+      shellBack: "后壳文件",
+      step: "内部工程交接"
+    },
+    assetQualityLabels: {
+      mechanical_proxy: "机械代理",
+      procedural_proxy: "程序化代理",
+      vendor_reference: "供应商参考",
+      verified_mechanical: "已验证机械资产",
+      missing: "缺失"
+    },
+    validationStatusLabels: {
+      unverified_proxy: "未验证代理",
+      descriptor_reviewed: "描述符已审核",
+      vendor_supplied: "供应商提供",
+      engineer_verified: "工程师已验证",
+      missing: "缺失"
+    },
+    modelFullscreenAria: "3D 预览全屏",
+    openModelFullscreen: "全屏查看 3D 预览",
+    closeModelFullscreen: "收起全屏预览",
+    modelFitChecks: "结构检查",
     modelLoading: "正在加载 3D 模型",
     modelLoaded: "真实 3D 预览已加载",
     modelLoadFailed: "3D 模型加载失败",
@@ -94,7 +126,6 @@ const copy = {
     generationInsufficient: "信息不足",
     placedParts: (count) => `已放置 ${count} 个零件`,
     modifyThroughChat: "修改结构请继续对话并生成新版本。",
-    modelInternalFilesNote: "用户侧只看可旋转的 3D 模型；工程文件留给内部审核流程。",
     geometryValidation: "几何校验",
     geometryBlocked: "几何信息不足或超出标准路径",
     geometryPassed: "可生成可信预览",
@@ -102,23 +133,43 @@ const copy = {
     usbCRear: "USB-C 后置开口",
     coreBoard: "主板位",
     shellLabel: "标准 3D 打印外壳",
-    historyTitle: "项目历史",
-    historyIntro: "这里显示 ProductPlan 的版本、草稿和人工扩展记录。",
+    historyTitle: "版本记录",
+    historyIntro: "从左侧项目列表选择 ProductPlan 版本；这里仅保留内部记录视图。",
     currentRevision: "当前版本",
     revisionCount: "版本数量",
-    reviewPacketTitle: "内部审核包",
+    revisionBadge: (index) => `r${index + 1}`,
+    revisionDiffTitle: "本版修改",
+    noRevisionDiff: "初始版本",
+    revertRevision: "切回此版本",
+    revisionReverted: "已切回所选版本",
+    diffLabels: {
+      revision_created: "创建版本",
+      product_type_changed: "产品类型",
+      shape_changed: "外壳形状",
+      manufacturing_constraint_changed: "制造约束",
+      dimension_changed: "尺寸约束",
+      requirement_changed: "需求",
+      component_added: "新增零件",
+      component_removed: "移除零件",
+      component_quantity_changed: "零件数量",
+      placement_changed: "位置",
+      warning_added: "新增风险",
+      warning_removed: "移除风险",
+      artifacts_regenerated: "模型状态"
+    },
+    reviewPacketTitle: "内部审核资料",
     reviewAudience: "给内部工程师或合作审核人员使用。",
-    reviewChecklistTitle: "审核包内容",
+    reviewChecklistTitle: "审核资料内容",
     reviewChecklist: ["ProductPlan 当前版本", "原型结构预览（3D）", "零件清单（BOM）", "风险限制", "报价假设"],
     reviewRiskNote: "摄像头和电池进入人工审核风险项；运动结构进入人工扩展草案。",
-    reviewSubmitCta: "生成本地审核包",
-    reviewContactCta: "填写右侧联系信息",
+    reviewSubmitCta: "生成本地审核资料",
+    reviewContactCta: "填写审核联系信息",
     noManufacturing: "不付款、不生产、不联系供应商",
     noPlan: "输入第一条硬件想法后生成方案。",
     standardShell: "标准 3D 打印外壳",
     woodgrainDemo: "木纹桌面屏",
     settingsRows: [
-      ["内部原型模式", "提交只生成本地人工审核包，不付款、不生产、不接供应商。"],
+      ["内部原型模式", "提交只生成本地人工审核资料，不付款、不生产、不接供应商。"],
       ["对话优先", "用户持续聊天，右侧 ProductPlan 实时更新。"],
       ["标准 3D 打印外壳", "木纹、鼠尾草绿、石墨黑都只是标准外壳的表面效果。"],
       ["结果预览优先", "3D 视图用于理解原型结果，不提供建模编辑工具。"],
@@ -129,30 +180,25 @@ const copy = {
       "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电。",
     demoConversationTurns: [
       "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电。",
-      "加一个环境光传感器，夜间自动变暗，还是保持桌面 USB-C 供电。",
-      "结构上先用标准 3D 打印外壳，前面要屏幕开孔，后面留 USB-C 开口。",
+      "把它改成桌面闹钟，加两个按钮放在右侧。",
+      "加一个小蜂鸣器，再做成相框风格。",
+      "顶部加猫耳，USB-C 移到后面偏左。",
       "可以了，生成模型。"
     ]
   },
   en: {
     appTitle: "Forge",
-    navChat: "Conversation",
-    navHistory: "Project history",
-    navReview: "Review packet",
-    projectLabel: "Internal drafts",
-    projectName: "Forge Lab",
+    newProject: "New project",
+    projectActionsAria: "Project actions",
+    projectLabel: "Projects",
+    projectListAria: "ProductPlan projects",
     settingsButton: "Workbench settings",
     uiPrototype: "Internal MVP",
     topbarStatus: "Live ProductPlan",
     submitOrder: "Submit for review/order",
     previewSnapshot: "Preview prototype snapshot",
-    composerDefault: "Conversation updates the ProductPlan, prototype structure preview (3D), parts, estimate, and review state",
+    composerDefault: "Describe the hardware request; sending updates the ProductPlan and 3D generation state",
     composerPlaceholder: "Describe the hardware you want, e.g. a small woodgrain desktop display for weather and photos, 3.5 in, USB-C powered.",
-    addInputAria: "Add input asset",
-    scope: "Scope",
-    partsChip: "Parts",
-    modelChip: "3D preview",
-    riskChip: "Risk",
     runChainAria: "Send request and update plan",
     inspectorAria: "Live plan packet",
     settingsTitle: "Workbench settings",
@@ -161,28 +207,28 @@ const copy = {
     langEn: "English",
     languageSelectAria: "Interface language",
     threadMenuAria: "Plan menu",
-    attachSketch: "Register sketch",
-    attachReference: "Register reference URL",
-    attachConstraints: "Add constraints note",
-    attachBehavior: "Add device behavior",
     threadRename: "Rename plan",
+    threadHistory: "View revisions",
     threadDuplicate: "Duplicate draft",
     threadExport: "Export plan snapshot",
     threadArchive: "Archive draft",
-    viewBuild: "Conversation",
     planReady: "standard desktop display",
     planManual: "manual expansion draft",
     planSubmitted: "submitted for human review",
+    newDraftTitle: "Untitled hardware project",
+    newDraftDetail: "Send the first request to create a ProductPlan",
+    newProjectReady: "New project ready",
     benchAgent: "Prototype assistant",
     fallbackNotice: "Backend unavailable; showing a local ProductPlan example",
     rerunNotice: "ProductPlan revision updated",
     submitNeedContact: "Enter name and email first",
-    submittedNotice: "Local human review packet generated; no payment or manufacturing has started.",
+    submittedNotice: "Local human review material generated; no payment or manufacturing has started.",
     actionNotice: "Selected: ",
-    contactTitle: "Submit for review/order",
+    reviewContactTitle: "Submit for review/order",
     contactName: "Name",
     contactEmail: "Email",
     contactHint: "Internal v1 only collects name and email for human follow-up.",
+    reviewSubmitConfirm: "Generate local review material",
     sections: {
       scope: "Scope",
       parts: "Parts list (BOM)",
@@ -212,6 +258,44 @@ const copy = {
     modelViewerHint: "Drag to rotate, wheel to zoom, Shift-drag to pan; the appearance layer shows the shell, and the components layer makes the shell transparent; parts and holes are not editable.",
     modelArtifacts: "3D model status",
     modelArtifactSummary: "3D model generated",
+    componentAssetsTitle: "Component asset sources",
+    assetQuality: "Asset quality",
+    validationStatus: "Validation",
+    resolvedPreview: "Preview source",
+    artifactLinksTitle: "Generated evidence",
+    proxyComponentNotice: "This prototype uses mechanical proxy components: dimensions, holes, connectors, and keepout/access volumes come from ComponentDescriptor data and still require human engineering validation before production.",
+    artifactLabels: {
+      productPlan: "ProductPlan snapshot",
+      geometrySpec: "GeometrySpec",
+      componentSelections: "Component selections",
+      componentDescriptors: "Component descriptors",
+      componentAssetManifest: "Asset manifest",
+      validationReport: "Validation report",
+      designSummary: "Design summary",
+      glb: "3D model",
+      stl: "Combined shell file",
+      shellFront: "Front shell file",
+      shellBack: "Back shell file",
+      step: "Internal engineering handoff"
+    },
+    assetQualityLabels: {
+      mechanical_proxy: "mechanical proxy",
+      procedural_proxy: "procedural proxy",
+      vendor_reference: "vendor reference",
+      verified_mechanical: "verified mechanical asset",
+      missing: "missing"
+    },
+    validationStatusLabels: {
+      unverified_proxy: "unverified proxy",
+      descriptor_reviewed: "descriptor reviewed",
+      vendor_supplied: "vendor supplied",
+      engineer_verified: "engineer verified",
+      missing: "missing"
+    },
+    modelFullscreenAria: "Fullscreen 3D preview",
+    openModelFullscreen: "Open 3D preview fullscreen",
+    closeModelFullscreen: "Exit fullscreen preview",
+    modelFitChecks: "Structure checks",
     modelLoading: "Loading 3D model",
     modelLoaded: "Real 3D preview loaded",
     modelLoadFailed: "3D model failed to load",
@@ -222,7 +306,6 @@ const copy = {
     generationInsufficient: "insufficient information",
     placedParts: (count) => `${count} placed parts`,
     modifyThroughChat: "To change structure, continue the conversation and generate a new revision.",
-    modelInternalFilesNote: "The user view stays a rotatable 3D model; engineering files stay inside the review flow.",
     geometryValidation: "Geometry validation",
     geometryBlocked: "Geometry is incomplete or outside the standard path",
     geometryPassed: "Trusted preview can be generated",
@@ -230,23 +313,43 @@ const copy = {
     usbCRear: "Rear USB-C cutout",
     coreBoard: "Core board position",
     shellLabel: "Standard 3D printed shell",
-    historyTitle: "Project history",
-    historyIntro: "This view shows ProductPlan versions, drafts, and manual expansion records.",
+    historyTitle: "Revision list",
+    historyIntro: "Choose ProductPlan revisions from the left project list; this view is kept as an internal record surface.",
     currentRevision: "Current revision",
     revisionCount: "Revision count",
-    reviewPacketTitle: "Internal review packet",
+    revisionBadge: (index) => `r${index + 1}`,
+    revisionDiffTitle: "Revision changes",
+    noRevisionDiff: "Initial revision",
+    revertRevision: "Revert to this revision",
+    revisionReverted: "Reverted to selected revision",
+    diffLabels: {
+      revision_created: "Revision created",
+      product_type_changed: "Product type",
+      shape_changed: "Shell shape",
+      manufacturing_constraint_changed: "Manufacturing constraint",
+      dimension_changed: "Dimension constraint",
+      requirement_changed: "Requirement",
+      component_added: "Component added",
+      component_removed: "Component removed",
+      component_quantity_changed: "Component quantity",
+      placement_changed: "Placement",
+      warning_added: "Warning added",
+      warning_removed: "Warning removed",
+      artifacts_regenerated: "Model status"
+    },
+    reviewPacketTitle: "Internal review material",
     reviewAudience: "For internal engineers or partner reviewers.",
-    reviewChecklistTitle: "Packet contents",
+    reviewChecklistTitle: "Review material contents",
     reviewChecklist: ["Current ProductPlan revision", "Prototype structure preview (3D)", "Parts list (BOM)", "Risk limits", "Quote assumptions"],
     reviewRiskNote: "Camera and battery become human-review risk items; motion structures move into manual expansion drafts.",
-    reviewSubmitCta: "Generate local review packet",
-    reviewContactCta: "Fill right-side contact fields",
+    reviewSubmitCta: "Generate local review material",
+    reviewContactCta: "Fill review contact details",
     noManufacturing: "No payment, production, or supplier contact",
     noPlan: "Send the first hardware idea to generate a plan.",
     standardShell: "Standard 3D printed shell",
     woodgrainDemo: "Woodgrain desk display",
     settingsRows: [
-      ["Internal prototype mode", "Submission writes a local human review packet; no payment, production, or supplier order starts."],
+      ["Internal prototype mode", "Submission writes local human review material; no payment, production, or supplier order starts."],
       ["Conversation first", "The user keeps chatting while the right-side ProductPlan updates."],
       ["Standard 3D printed shell", "Woodgrain, sage, and graphite are finish treatments on the same shell path."],
       ["Result preview first", "The 3D view helps users understand the prototype result; it does not expose modeling tools."],
@@ -257,8 +360,9 @@ const copy = {
       "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered.",
     demoConversationTurns: [
       "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered.",
-      "Add an ambient light sensor so it dims at night, and keep it desktop USB-C powered.",
-      "Use the standard 3D printed shell first, with a front screen opening and a rear USB-C cutout.",
+      "Turn it into a desktop clock and add two buttons on the right side.",
+      "Add a small buzzer and make it look like a photo frame.",
+      "Add cat ears to the top corners and move USB-C to the back-left.",
       "Ready, generate model."
     ]
   }
@@ -284,6 +388,7 @@ const state = {
   notice: "",
   loading: false,
   submittingReview: false,
+  workspaceToken: 0,
   contactInfo: { name: "", email: "" }
 };
 
@@ -300,17 +405,10 @@ const dom = {
   copySpec: document.querySelector("#copySpec"),
   submitReview: document.querySelector("#submitReview"),
   openThreadMenu: document.querySelector("#openThreadMenu"),
+  newProject: document.querySelector("#newProject"),
   openSettings: document.querySelector("#openSettings"),
-  openAttach: document.querySelector("#openAttach"),
-  openScope: document.querySelector("#openScope"),
-  openBom: document.querySelector("#openBom"),
-  openGuardrails: document.querySelector("#openGuardrails"),
-  openDfm: document.querySelector("#openDfm"),
   languageSelect: document.querySelector("#languageSelect"),
   floatingLayer: document.querySelector("#floatingLayer"),
-  scopePopover: document.querySelector("#scopePopover"),
-  bomPopover: document.querySelector("#bomPopover"),
-  guardrailsPopover: document.querySelector("#guardrailsPopover"),
   dfmPopover: document.querySelector("#dfmPopover")
 };
 
@@ -335,6 +433,7 @@ async function bootstrap() {
 }
 
 async function createInitialPlan() {
+  const token = state.workspaceToken;
   try {
     const turns = demoConversationTurns();
     const response = await apiPost("/api/plans", {
@@ -346,12 +445,15 @@ async function createInitialPlan() {
       const turnResponse = await apiPost(`/api/plans/${productPlan.planId}/turns`, { message });
       productPlan = turnResponse.productPlan;
     }
+    if (token !== state.workspaceToken) return;
     state.productPlan = productPlan;
     state.contactInfo = productPlan.contactInfo || state.contactInfo;
   } catch {
+    if (token !== state.workspaceToken) return;
     state.productPlan = fallbackProductPlan(t("demoRequest"), { useDemoConversation: true });
     setNotice(t("fallbackNotice"));
   }
+  if (token !== state.workspaceToken) return;
   render();
 }
 
@@ -362,18 +464,24 @@ function demoConversationTurns() {
 }
 
 async function sendTurn(message) {
+  const token = ++state.workspaceToken;
   state.loading = true;
   render();
   try {
     const response = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback")
       ? await apiPost(`/api/plans/${state.productPlan.planId}/turns`, { message })
       : await apiPost("/api/plans", { initialMessage: message, language: state.lang });
+    if (token !== state.workspaceToken) return;
     state.productPlan = response.productPlan;
+    state.activeSidebar = "chat";
     setNotice(t("rerunNotice"));
   } catch {
+    if (token !== state.workspaceToken) return;
     state.productPlan = fallbackProductPlan(message);
+    state.activeSidebar = "chat";
     setNotice(t("fallbackNotice"));
   } finally {
+    if (token !== state.workspaceToken) return;
     state.loading = false;
     render();
   }
@@ -400,11 +508,36 @@ async function submitForReview() {
     state.productPlan = response.productPlan || state.productPlan;
     state.productPlan.reviewSubmission = response.submission || state.productPlan.reviewSubmission;
     setNotice(t("submittedNotice"));
+    closeFloating();
   } catch {
     setNotice(t("fallbackNotice"));
   } finally {
     state.loading = false;
     state.submittingReview = false;
+    render();
+  }
+}
+
+async function revertToRevision(revisionId) {
+  if (!state.productPlan || !revisionId) return;
+  if (state.productPlan.planId?.startsWith("fallback")) {
+    state.productPlan.currentRevisionId = revisionId;
+    state.activeSidebar = "chat";
+    setNotice(t("revisionReverted"));
+    render();
+    return;
+  }
+  state.loading = true;
+  render();
+  try {
+    const response = await apiPost(`/api/plans/${state.productPlan.planId}/revert`, { revisionId });
+    state.productPlan = response.productPlan || state.productPlan;
+    state.activeSidebar = "chat";
+    setNotice(t("revisionReverted"));
+  } catch {
+    setNotice(t("fallbackNotice"));
+  } finally {
+    state.loading = false;
     render();
   }
 }
@@ -431,9 +564,10 @@ async function apiPost(path, body) {
 function render() {
   renderStaticText();
   renderActiveStates();
-  renderHistory();
+  renderProjectList();
   renderConversation();
   renderInspector();
+  renderModelFullscreen();
   renderPopovers();
   window.requestAnimationFrame(drawPreview);
 }
@@ -441,39 +575,33 @@ function render() {
 function renderStaticText() {
   document.documentElement.lang = state.lang === "zh" ? "zh-CN" : "en";
   document.title = t("appTitle");
-  setText('[data-view="chat"] span:last-child', t("navChat"));
-  setText('[data-view="history"] span:last-child', t("navHistory"));
-  setText('[data-view="review"] span:last-child', t("navReview"));
+  setText("#newProject span:last-child", t("newProject"));
   setText(".sidebar-label", t("projectLabel"));
-  setText(".project-row span:last-child", t("projectName"));
   setText("#openSettings span:last-child", t("settingsButton"));
   setText("#copySpec", t("previewSnapshot"));
   setText("#submitReview", t("submitOrder"));
-  setText("#openScope", t("scope"));
-  setText("#openBom", t("partsChip"));
-  setText("#openGuardrails", t("riskChip"));
-  setText("#openDfm", t("modelChip"));
   setText("#topbarTitle", t("appTitle"));
   setText("#draftStatus", t("topbarStatus"));
   setText("#composerSummary", state.loading ? "..." : t("composerDefault"));
   setText("#scopeLevel", planStatusText());
+  setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
+  setAttr(".thread-list", "aria-label", t("projectListAria"));
   setAttr(".inspector", "aria-label", t("inspectorAria"));
-  setAttr("#openAttach", "aria-label", t("addInputAria"));
   setAttr("#runChain", "aria-label", t("runChainAria"));
   setAttr("#openThreadMenu", "aria-label", t("threadMenuAria"));
   setAttr("#languageSelect", "aria-label", t("languageSelectAria"));
+  setAttr(".review-contact-dialog", "aria-label", t("reviewContactTitle"));
+  setAttr(".model-fullscreen-dialog", "aria-label", t("modelFullscreenAria"));
+  setAttr(".model-fullscreen-exit", "aria-label", t("closeModelFullscreen"));
   if (dom.ideaInput) dom.ideaInput.placeholder = t("composerPlaceholder");
   if (dom.apiStatus) dom.apiStatus.textContent = state.notice || t("uiPrototype");
 
   const actionLabels = {
     rename: t("threadRename"),
+    history: t("threadHistory"),
     duplicate: t("threadDuplicate"),
     export: t("threadExport"),
-    archive: t("threadArchive"),
-    sketch: t("attachSketch"),
-    reference: t("attachReference"),
-    constraints: t("attachConstraints"),
-    behavior: t("attachBehavior")
+    archive: t("threadArchive")
   };
   Object.entries(actionLabels).forEach(([action, label]) => setText(`[data-action="${action}"]`, label));
 
@@ -491,48 +619,48 @@ function renderStaticText() {
     dom.languageSelect.querySelector('option[value="zh"]').textContent = t("langZh");
     dom.languageSelect.querySelector('option[value="en"]').textContent = t("langEn");
   }
+  setText(".review-contact-dialog .floating-head strong", t("reviewContactTitle"));
+  setText("#reviewContactNameLabel", t("contactName"));
+  setText("#reviewContactEmailLabel", t("contactEmail"));
+  setText("#reviewContactHint", t("contactHint"));
+  setText("#confirmReviewSubmit", t("reviewSubmitConfirm"));
+  syncContactInputValue("name");
+  syncContactInputValue("email");
+}
+
+function syncContactInputValue(fieldName) {
+  const input = document.querySelector(`[data-contact-field="${fieldName}"]`);
+  if (!input || document.activeElement === input) return;
+  input.value = state.contactInfo[fieldName] || "";
 }
 
 function renderActiveStates() {
-  document.querySelectorAll("[data-view]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === state.activeSidebar);
-  });
+  dom.newProject?.classList.toggle("active", !state.productPlan);
 }
 
-function renderHistory() {
+function renderProjectList() {
   const list = document.querySelector(".thread-list");
   if (!list) return;
-  const revision = currentRevision();
-  const title = planTitle(revision);
-  const rows = [
-    {
-      id: "current",
-      title,
-      detail: planStatusText(),
-      meta: state.productPlan?.revisions?.length ? `r${state.productPlan.revisions.length}` : "new"
-    },
-    {
-      id: "woodgrain-demo",
-      title: t("woodgrainDemo"),
-      detail: t("standardShell"),
-      meta: "demo"
-    },
-    {
-      id: "manual",
-      title: state.lang === "zh" ? "人工扩展草案" : "Manual expansion draft",
-      detail: state.lang === "zh" ? "非标准产品内部评估" : "Non-standard internal review",
-      meta: "hold"
-    }
-  ];
+  const revisions = state.productPlan?.revisions || [];
+  if (!revisions.length) {
+    list.innerHTML = `
+      <button class="thread-row active" type="button" data-new-project-row>
+        <span class="project-dot"></span>
+        <strong>${escapeHtml(t("newDraftTitle"))}</strong>
+      </button>
+    `;
+    return;
+  }
+
+  const rows = revisions
+    .map((revision, index) => ({ revision, index }))
+    .reverse();
   list.innerHTML = rows
     .map(
-      (row, index) => `
-        <button class="thread-row ${index === 0 ? "active" : ""}" type="button" data-history="${escapeHtml(row.id)}">
-          <span>
-            <strong>${escapeHtml(row.title)}</strong>
-            <small>${escapeHtml(row.detail)}</small>
-          </span>
-          <em>${escapeHtml(row.meta)}</em>
+      ({ revision, index }) => `
+        <button class="thread-row ${revision.revisionId === state.productPlan.currentRevisionId ? "active" : ""}" type="button" data-sidebar-revision="${escapeHtml(revision.revisionId)}" aria-label="${escapeHtml(`${planTitle(revision)} r${index + 1}`)}">
+          <span class="project-dot"></span>
+          <strong>${escapeHtml(planTitle(revision))}</strong>
         </button>
       `
     )
@@ -565,9 +693,10 @@ function renderChatWorkspace() {
     ${renderPrototypeSnapshot(revision)}
     <section class="inline-panel flow-panel" aria-label="ProductPlan">
       <div class="inline-panel-head">
-        <span class="inline-label">ProductPlan</span>
+        <span class="inline-label">ProductPlan · ${escapeHtml(revisionBadge(revision))}</span>
         <strong>${escapeHtml(planTitle(revision))}</strong>
       </div>
+      ${renderRevisionDiff(revision)}
       <div class="flow-list">
         ${renderPlanSteps(revision)}
       </div>
@@ -601,11 +730,14 @@ function renderHistoryWorkspace() {
       </div>
       <div class="queue-list">
         ${revisions.map((item, index) => `
-          <button class="queue-item ${item.revisionId === state.productPlan.currentRevisionId ? "queued" : ""}" type="button" data-history-revision="${escapeHtml(item.revisionId)}">
-            <span>r${index + 1}</span>
-            <strong>${escapeHtml(planTitle(item))}</strong>
-            <p>${escapeHtml(item.riskReport?.blocked ? t("planManual") : t("planReady"))} · ${escapeHtml(item.quoteEstimate?.range || item.quote?.range || "-")}</p>
-          </button>
+          <div class="queue-item ${item.revisionId === state.productPlan.currentRevisionId ? "queued" : ""}">
+            <button type="button" data-history-revision="${escapeHtml(item.revisionId)}">
+              <span>${escapeHtml(t("revisionBadge", index))}</span>
+              <strong>${escapeHtml(planTitle(item))}</strong>
+              <p>${escapeHtml(compactDiffSummary(item))}</p>
+            </button>
+            ${item.revisionId === state.productPlan.currentRevisionId ? "" : `<button class="queue-revert" type="button" data-revert-revision="${escapeHtml(item.revisionId)}">${escapeHtml(t("revertRevision"))}</button>`}
+          </div>
         `).join("")}
       </div>
     </section>
@@ -736,6 +868,22 @@ function renderPlanSteps(revision) {
     .join("");
 }
 
+function renderRevisionDiff(revision) {
+  const changes = revision?.diff?.changes || [];
+  const visibleChanges = changes.length ? changes.slice(0, 5) : [{ type: "revision_created" }];
+  return `
+    <div class="revision-diff" aria-label="${escapeHtml(t("revisionDiffTitle"))}">
+      <div class="revision-diff-head">
+        <span>${escapeHtml(t("revisionDiffTitle"))}</span>
+        <strong>${escapeHtml(revisionBadge(revision))}</strong>
+      </div>
+      <div class="revision-diff-list">
+        ${visibleChanges.map((change) => `<span>${escapeHtml(formatDiffChange(change))}</span>`).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderInspector() {
   const revision = currentRevision();
   if (!revision) {
@@ -743,13 +891,7 @@ function renderInspector() {
     return;
   }
   const sections = [
-    ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)],
-    ["scope", t("sections.scope"), inspectorSectionSummary("scope", revision), renderScopeSection(revision)],
-    ["parts", t("sections.parts"), inspectorSectionSummary("parts", revision), renderPartsSection(revision)],
-    ["layout", t("sections.layout"), inspectorSectionSummary("layout", revision), renderLayoutSection(revision)],
-    ["quote", t("sections.quote"), inspectorSectionSummary("quote", revision), renderQuoteSection(revision)],
-    ["risk", t("sections.risk"), inspectorSectionSummary("risk", revision), renderRiskSection(revision)],
-    ["review", t("sections.review"), inspectorSectionSummary("review", revision), renderReviewSection()]
+    ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]
   ];
   dom.inspectorContent.innerHTML = sections
     .map(([key, title, summary, body]) => {
@@ -768,6 +910,22 @@ function renderInspector() {
       `;
     })
     .join("");
+}
+
+function renderModelFullscreen() {
+  const dialog = document.querySelector('[data-dialog="modelFullscreen"]');
+  if (!dialog) return;
+  const revision = currentRevision();
+  const canvas = dialog.querySelector('[data-device-canvas="fullscreen"]');
+  if (canvas) {
+    const previewEngine = revision ? previewEngineForRevision(revision) : "canvas2d";
+    canvas.dataset.previewEngine = previewEngine;
+    canvas.setAttribute("aria-label", t("sections.model"));
+  }
+  setText("#modelFullscreenTitle", t("sections.model"));
+  setText("#modelFullscreenStatus", revision ? artifactSummary(revision) : t("noPlan"));
+  const controls = document.querySelector("#modelFullscreenControls");
+  if (controls) controls.innerHTML = revision ? renderPreviewControls() : "";
 }
 
 function inspectorSectionSummary(key, revision) {
@@ -817,9 +975,17 @@ function renderModelSection(revision) {
   const dimensions = params.dimensionsMm || {};
   const pending = generationIsPending(revision);
   const previewEngine = previewEngineForRevision(revision);
+  const fitChecks = [
+    openingSummary(params.openings, revision.modules),
+    placedPartsSummary(revision),
+    validationSummary(revision)
+  ].filter(Boolean).join(" / ");
   return `
     <div class="preview-card">
       <span class="preview-engine-badge" data-model-render-status="inspector">${escapeHtml(renderPreviewStatus(revision))}</span>
+      <button class="preview-fullscreen-button" type="button" data-preview-fullscreen aria-label="${escapeHtml(t("openModelFullscreen"))}">
+        <span aria-hidden="true">⛶</span>
+      </button>
       <canvas data-device-canvas="inspector" data-preview-id="inspector" data-preview-engine="${escapeHtml(previewEngine)}" width="760" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
     </div>
     ${renderPreviewControls()}
@@ -827,27 +993,83 @@ function renderModelSection(revision) {
     <div class="kv-list">
       <span>${escapeHtml(t("modelShellPath"))} <strong>${escapeHtml(t("standardShell"))}</strong></span>
       <span>${escapeHtml(t("modelDimensions"))} <strong>${escapeHtml(formatDimensions(dimensions))}</strong></span>
-      <span>${escapeHtml(t("modelOpenings"))} <strong>${escapeHtml(openingSummary(params.openings, revision.modules))}</strong></span>
-      <span>${escapeHtml(t("sections.parts"))} <strong>${escapeHtml(placedPartsSummary(revision))}</strong></span>
-      <span>${escapeHtml(t("modelReviewReady"))} <strong>${escapeHtml(t("modelPreviewState"))}</strong></span>
+      <span>${escapeHtml(t("modelFitChecks"))} <strong>${escapeHtml(fitChecks)}</strong></span>
       <span>${escapeHtml(t("modelArtifacts"))} <strong>${escapeHtml(artifactSummary(revision))}</strong></span>
-      <span>${escapeHtml(t("geometryValidation"))} <strong>${escapeHtml(validationSummary(revision))}</strong></span>
     </div>
+    ${renderProxyComponentNotice(revision)}
+    ${renderComponentAssetList(revision)}
+    ${renderArtifactLinks(revision)}
     <p class="section-note">${escapeHtml(t("modelViewerHint"))}</p>
-    <p class="section-note">${escapeHtml(t("modelInternalFilesNote"))}</p>
     <p class="section-note">${escapeHtml(t("modifyThroughChat"))}</p>
   `;
+}
+
+function renderProxyComponentNotice(revision) {
+  return revision?.geometrySpec?.componentAssetManifest
+    ? `<p class="proxy-notice">${escapeHtml(t("proxyComponentNotice"))}</p>`
+    : "";
+}
+
+function renderComponentAssetList(revision) {
+  const components = revision?.geometrySpec?.componentAssetManifest?.components || [];
+  if (!components.length) return "";
+  return `
+    <div class="component-assets">
+      <strong>${escapeHtml(t("componentAssetsTitle"))}</strong>
+      ${components.slice(0, 6).map((component) => `
+        <div class="component-asset-row">
+          <span>
+            <b>${escapeHtml(component.displayName || component.componentId)}</b>
+            <small>${escapeHtml(t("assetQuality"))}: ${escapeHtml(assetQualityLabel(component.assetQuality))} / ${escapeHtml(t("validationStatus"))}: ${escapeHtml(validationStatusLabel(component.validationStatus))}</small>
+          </span>
+          <em>${escapeHtml(t("resolvedPreview"))}: ${escapeHtml(resolvedAssetLabel(component.preview?.resolvedType))}</em>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderArtifactLinks(revision) {
+  if (generationIsPending(revision) || revision?.modelArtifacts?.status !== "generated") return "";
+  const artifacts = revision.modelArtifacts?.artifacts || revision.modelPreview?.assets || {};
+  const links = [
+    "productPlan",
+    "geometrySpec",
+    "componentSelections",
+    "componentDescriptors",
+    "componentAssetManifest",
+    "validationReport",
+    "designSummary",
+    "glb",
+    "shellFront",
+    "shellBack",
+    "stl",
+    "step"
+  ]
+    .map((key) => [key, artifacts[key]])
+    .filter(([, artifact]) => artifact?.url)
+    .map(([key, artifact]) => `
+      <a class="artifact-link" href="${escapeHtml(artifact.url)}" target="_blank" rel="noreferrer">
+        ${escapeHtml(t(`artifactLabels.${key}`))}
+      </a>
+    `)
+    .join("");
+  return links
+    ? `<div class="artifact-links"><strong>${escapeHtml(t("artifactLinksTitle"))}</strong><span>${links}</span></div>`
+    : "";
 }
 
 function renderPreviewControls() {
   return `
     <div class="preview-controls" aria-label="${escapeHtml(t("prototypeViewLabel"))}">
-      <span>${escapeHtml(t("prototypeViewLabel"))}</span>
-      ${["appearance", "components"].map((mode) => `
-        <button class="${state.previewMode === mode ? "active" : ""}" type="button" data-preview-mode="${escapeHtml(mode)}">
-          ${escapeHtml(t(`previewModes.${mode}`))}
-        </button>
-      `).join("")}
+      <span class="preview-controls-label">${escapeHtml(t("prototypeViewLabel"))}</span>
+      <span class="preview-control-buttons">
+        ${["appearance", "components"].map((mode) => `
+          <button class="${state.previewMode === mode ? "active" : ""}" type="button" data-preview-mode="${escapeHtml(mode)}" aria-pressed="${state.previewMode === mode ? "true" : "false"}">
+            ${escapeHtml(t(`previewModes.${mode}`))}
+          </button>
+        `).join("")}
+      </span>
     </div>
   `;
 }
@@ -872,9 +1094,21 @@ function artifactSummary(revision) {
   if (generationIsPending(revision)) return t("generationPending");
   if (revision.modelArtifacts?.status === "blocked") return t("generationInsufficient");
   const artifacts = revision.modelArtifacts?.artifacts || revision.modelPreview?.assets || {};
-  const ready = ["glb", "stl", "step"].filter((key) => artifacts[key]);
+  const ready = ["glb", "shellFront", "shellBack", "stl", "step"].filter((key) => artifacts[key]);
   if (ready.length === 0) return state.lang === "zh" ? "待生成" : "pending";
   return t("modelArtifactSummary");
+}
+
+function assetQualityLabel(value = "missing") {
+  return t(`assetQualityLabels.${value}`) || value;
+}
+
+function validationStatusLabel(value = "missing") {
+  return t(`validationStatusLabels.${value}`) || value;
+}
+
+function resolvedAssetLabel(value = "procedural_visual_proxy") {
+  return String(value || "procedural_visual_proxy").replaceAll("_", " ");
 }
 
 function generationIsPending(revision) {
@@ -933,28 +1167,14 @@ function renderRiskSection(revision) {
     .join("");
 }
 
-function renderReviewSection() {
-  const review = state.productPlan.reviewSubmission || {};
-  return `
-    <label class="contact-row">
-      <span>${escapeHtml(t("contactName"))}</span>
-      <input data-contact-field="name" value="${escapeHtml(state.contactInfo.name)}" />
-    </label>
-    <label class="contact-row">
-      <span>${escapeHtml(t("contactEmail"))}</span>
-      <input data-contact-field="email" value="${escapeHtml(state.contactInfo.email)}" />
-    </label>
-    <p class="section-note">${escapeHtml(review.humanReviewNotice || t("contactHint"))}</p>
-    <div class="packet-status ${review.accepted ? "ready" : "quote"}">${escapeHtml(review.status || planStatusText())}</div>
-  `;
-}
-
 function renderPopovers() {
   const revision = currentRevision();
-  if (!revision) return;
-  dom.scopePopover.innerHTML = `<strong>${escapeHtml(t("sections.scope"))}</strong><p>${escapeHtml(revision.spec?.user_request || "")}</p>`;
-  dom.bomPopover.innerHTML = `<strong>${escapeHtml(t("sections.parts"))}</strong>${renderPartsSection(revision)}`;
-  dom.guardrailsPopover.innerHTML = `<strong>${escapeHtml(t("sections.risk"))}</strong>${renderRiskSection(revision)}`;
+  if (!revision) {
+    const empty = `<strong>${escapeHtml(t("newDraftTitle"))}</strong><p>${escapeHtml(t("noPlan"))}</p>`;
+    if (dom.dfmPopover) dom.dfmPopover.innerHTML = empty;
+    return;
+  }
+  if (!dom.dfmPopover) return;
   dom.dfmPopover.innerHTML = `
     <strong>${escapeHtml(t("sections.model"))}</strong>
     <p>${escapeHtml(t("prototypePreviewSubtitle"))}</p>
@@ -991,13 +1211,61 @@ function currentRevision() {
     || null;
 }
 
+function revisionIndex(revision) {
+  const revisions = state.productPlan?.revisions || [];
+  return Math.max(0, revisions.findIndex((item) => item.revisionId === revision?.revisionId));
+}
+
+function revisionBadge(revision) {
+  return t("revisionBadge", revisionIndex(revision));
+}
+
 function planTitle(revision) {
   if (!revision) return t("noPlan");
   const size = revision.spec?.enclosure?.screen_size_in || 5;
   const finish = revision.spec?.enclosure?.finish || "woodgrain";
+  const productType = revision.productPlanSnapshot?.productType || revision.spec?.product_archetype || "desktop_display";
   return state.lang === "zh"
-    ? `${finishLabel(finish)} ${size} 英寸桌面屏`
-    : `${finishLabel(finish)} ${size} in desktop display`;
+    ? `${finishLabel(finish)} ${size} 英寸${productTypeLabel(productType)}`
+    : `${finishLabel(finish)} ${size} in ${productTypeLabel(productType)}`;
+}
+
+function productTypeLabel(productType) {
+  const zh = {
+    desktop_display: "桌面屏",
+    desk_clock: "桌面闹钟",
+    digital_photo_frame: "数字相框",
+    sensor_display: "传感器屏",
+    manual_expansion: "人工扩展原型"
+  };
+  const en = {
+    desktop_display: "desktop display",
+    desk_clock: "desktop clock",
+    digital_photo_frame: "digital photo frame",
+    sensor_display: "sensor display",
+    manual_expansion: "manual expansion prototype"
+  };
+  return (state.lang === "zh" ? zh : en)[productType] || productType;
+}
+
+function compactDiffSummary(revision) {
+  const changes = revision?.diff?.changes || [];
+  if (!changes.length) return t("noRevisionDiff");
+  return changes.slice(0, 3).map(formatDiffChange).join(" · ");
+}
+
+function formatDiffChange(change = {}) {
+  const label = t(`diffLabels.${change.type}`) || change.type;
+  if (change.type === "component_added") return `${label}: ${change.quantity || 1} ${change.componentType}`;
+  if (change.type === "component_removed") return `${label}: ${change.componentType}`;
+  if (change.type === "component_quantity_changed") return `${label}: ${change.componentType} ${change.from} -> ${change.to}`;
+  if (change.type === "placement_changed") return `${label}: ${change.target} ${change.from || "-"} -> ${change.to || "-"}`;
+  if (change.type === "shape_changed") return `${label}: ${change.from || "-"} -> ${change.to || "-"}`;
+  if (change.type === "requirement_changed") return `${label}: ${change.field} ${String(change.from ?? "-")} -> ${String(change.to ?? "-")}`;
+  if (change.type === "artifacts_regenerated") return `${label}: ${change.from || "-"} -> ${change.to || "-"}`;
+  if (change.field) return `${label}: ${change.field}`;
+  if (change.warning) return `${label}: ${change.warning}`;
+  return label;
 }
 
 function finishLabel(finish) {
@@ -1035,6 +1303,18 @@ function fallbackProductPlan(message = t("demoRequest"), options = {}) {
   ];
   const fallbackGeometrySpec = {
     enclosure: { dimensionsMm: { width: 132, height: 84, depth: 36 }, finish: "woodgrain" },
+    componentAssetManifest: {
+      version: "component_asset_manifest_v1",
+      source: "local_fallback_visual",
+      proxyWarning: "Local fallback visual example uses proxy component shapes.",
+      components: [
+        { componentId: "display_3_5_tft", displayName: "3.5 inch TFT Display Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } },
+        { componentId: "core_board_esp32_s3", displayName: "ESP32-S3 Development Board Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } },
+        { componentId: "usb_c_breakout", displayName: "USB-C Breakout Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } },
+        { componentId: "ambient_sensor_basic", displayName: "Ambient Light Sensor Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } }
+      ],
+      directEditingAllowed: false
+    },
     modules: [
       { moduleId: "core.y_core_lite", category: "Core", name: "Y-Core Lite", status: "approved", role: "core_board", geometryStatus: "ready", dimensionsMm: { width: 48, height: 38, depth: 7 }, placement: { positionMm: { x: 0, y: 0, z: -6 }, orientation: "internal" } },
       { moduleId: "display.tft_3_5", category: "Display", name: "3.5 inch TFT", status: "approved", role: "front_display", geometryStatus: "ready", dimensionsMm: { width: 76, height: 50, depth: 5 }, placement: { positionMm: { x: 0, y: 0, z: 15.5 }, orientation: "front" } },
@@ -1134,6 +1414,7 @@ function openFloating(name) {
     dialog.hidden = dialog.dataset.dialog !== name;
   });
   setFloatingTrigger(name);
+  if (name === "modelFullscreen") window.requestAnimationFrame(drawPreview);
 }
 
 function closeFloating() {
@@ -1141,17 +1422,14 @@ function closeFloating() {
   dom.floatingLayer.querySelectorAll("[data-dialog]").forEach((dialog) => {
     dialog.hidden = true;
   });
+  disposeThreePreview("fullscreen");
   setFloatingTrigger("");
 }
 
 function setFloatingTrigger(activeName) {
   const triggers = {
     thread: [dom.openThreadMenu],
-    attach: [dom.openAttach],
-    scope: [dom.openScope],
-    bom: [dom.openBom],
-    guardrails: [dom.openGuardrails],
-    dfm: [dom.openDfm],
+    reviewContact: [dom.submitReview],
     settings: [dom.openSettings]
   };
   Object.entries(triggers).forEach(([name, buttons]) => {
@@ -1178,6 +1456,19 @@ function setNotice(message) {
   }, 2200);
 }
 
+function startNewProject() {
+  state.workspaceToken += 1;
+  state.productPlan = null;
+  state.activeSidebar = "chat";
+  state.contactInfo = { name: "", email: "" };
+  state.loading = false;
+  state.submittingReview = false;
+  if (dom.ideaInput) dom.ideaInput.value = "";
+  render();
+  setNotice(t("newProjectReady"));
+  dom.ideaInput?.focus();
+}
+
 function modelGlbUrl(revision) {
   const artifact = revision?.modelArtifacts?.artifacts?.glb || revision?.modelPreview?.assets?.glb;
   return revision?.modelArtifacts?.status === "generated" && artifact?.url
@@ -1200,6 +1491,10 @@ function drawPreview() {
   if (!revision) return;
   cleanupThreePreviews();
   document.querySelectorAll("[data-device-canvas]").forEach((canvas) => {
+    if (canvas.closest("[hidden]")) {
+      disposeThreePreview(canvas.dataset.previewId);
+      return;
+    }
     if (canvas.dataset.previewEngine === "three") {
       drawThreePreview(canvas, revision);
     } else {
@@ -1263,6 +1558,7 @@ function createThreePreviewInstance({ canvas, previewId, glbUrl, width, height }
     controls,
     root: null,
     basePositions: new Map(),
+    initialCameraFramed: false,
     status: "loading",
     animationFrame: 0,
     leftButtonMode: THREE.MOUSE.ROTATE
@@ -1334,10 +1630,15 @@ function frameThreeModel(instance) {
   const size = new THREE.Vector3();
   box.getCenter(center);
   box.getSize(size);
-  instance.controls.target.copy(center);
-  instance.controls.update();
   instance.scene.userData.modelCenter = center;
   instance.scene.userData.modelRadius = Math.max(size.x, size.y, size.z, 1);
+  instance.controls.target.copy(center);
+  if (!instance.initialCameraFramed) {
+    const radius = instance.scene.userData.modelRadius;
+    instance.camera.position.set(center.x + radius * 0.34, center.y + radius * 0.16, center.z + radius * 2.18);
+    instance.initialCameraFramed = true;
+  }
+  instance.controls.update();
 }
 
 function resizeThreePreview(instance, width, height) {
@@ -1350,51 +1651,84 @@ function resizeThreePreview(instance, width, height) {
 
 function applyThreePreviewMode(instance) {
   if (!instance.root || instance.status !== "loaded") return;
-  const center = instance.scene.userData.modelCenter || new THREE.Vector3(0, 0, 0);
-  const radius = instance.scene.userData.modelRadius || 1.8;
   const componentsVisible = state.previewMode === "components";
   instance.root.traverse((node) => {
     const base = instance.basePositions.get(node.uuid);
     if (base) node.position.copy(base);
     applyLayerVisibility(node, componentsVisible);
   });
-  setCameraPreset(instance, new THREE.Vector3(center.x + radius * 0.34, center.y + radius * 0.16, center.z + radius * 2.18));
 }
 
 function applyLayerVisibility(node, componentsVisible) {
   if (!node.isObject3D) return;
-  const isShell = node.name === "shell.standard_desktop_display_shell";
+  const isShell = isShellLayerNode(node);
   const isModule = node.name?.startsWith("module.");
   const isInterface = node.name?.startsWith("interface.");
   const isRoute = node.name?.startsWith("route.");
-  const isExteriorModule = ["front_display", "front_sensor", "front_camera_review"].includes(node.userData?.role);
+  const isFeature = node.name?.startsWith("feature.");
+  const isShellFeature = isShellFeatureNode(node);
+  const isExteriorFeature = node.name === "feature.opening.screen"
+    || node.name === "feature.opening.usb_c"
+    || node.name === "feature.opening.ambient_sensor"
+    || node.name === "feature.opening.camera"
+    || node.name?.startsWith("feature.opening.speaker_vents");
+  const isInternalFeature = isFeature && !isExteriorFeature;
+  const isExteriorModule = ["front_display", "front_sensor", "front_camera_review", "screen_glass", "sensor_lens"].includes(node.userData?.role);
   const isInterfaceLayerObject = isInterface || isRoute || nodeHasMaterialName(node, ["interface_marker", "cable_route"]);
   if (isShell) {
     node.visible = true;
-    applyNodeMaterialLayer(node, {
-      opacity: componentsVisible ? 0.18 : 1,
-      transparent: componentsVisible,
-      depthWrite: !componentsVisible
-    });
+    if (componentsVisible) {
+      applyNodeMaterialLayer(node, {
+        opacity: 0.12,
+        transparent: true,
+        depthWrite: false
+      });
+    } else {
+      resetNodeMaterialLayer(node);
+    }
+    return;
+  }
+  if (isFeature) {
+    node.visible = componentsVisible || isExteriorFeature;
+    if (componentsVisible && isShellFeature) {
+      applyNodeMaterialLayer(node, {
+        opacity: 0.12,
+        transparent: true,
+        depthWrite: false
+      });
+    } else {
+      resetNodeMaterialLayer(node);
+    }
+    if (isInternalFeature && !componentsVisible) node.visible = false;
     return;
   }
   if (isModule) {
     node.visible = componentsVisible || isExteriorModule;
-    applyNodeMaterialLayer(node, {
-      opacity: componentsVisible || isExteriorModule ? 1 : 0,
-      transparent: !(componentsVisible || isExteriorModule),
-      depthWrite: componentsVisible || isExteriorModule
-    });
+    resetNodeMaterialLayer(node);
     return;
   }
   if (isInterfaceLayerObject) {
     node.visible = componentsVisible;
-    applyNodeMaterialLayer(node, {
-      opacity: componentsVisible ? 1 : 0,
-      transparent: !componentsVisible,
-      depthWrite: componentsVisible
-    });
+    resetNodeMaterialLayer(node);
   }
+}
+
+function isShellLayerNode(node) {
+  const role = String(node.userData?.role || "");
+  return Boolean(
+    node.name?.startsWith("shell.")
+    || nodeHasMaterialName(node, ["shell_finish"])
+    || /shell|bezel|rail|tray|side_wall/.test(role)
+  );
+}
+
+function isShellFeatureNode(node) {
+  const role = String(node.userData?.role || "");
+  const featureType = String(node.userData?.featureType || "");
+  return Boolean(
+    node.name?.startsWith("feature.")
+    && /opening|cutout|window|vents|standoff|battery_bay/.test(`${node.name} ${featureType} ${role}`)
+  );
 }
 
 function nodeHasMaterialName(node, names) {
@@ -1418,11 +1752,20 @@ function applyNodeMaterialLayer(node, { opacity, transparent, depthWrite }) {
   else apply(node.material);
 }
 
-function setCameraPreset(instance, position) {
-  const target = instance.scene.userData.modelCenter || new THREE.Vector3(0, 0, 0);
-  instance.camera.position.copy(position);
-  instance.controls.target.copy(target);
-  instance.controls.update();
+function resetNodeMaterialLayer(node) {
+  const reset = (material, index = 0) => {
+    if (!material) return;
+    const base = Array.isArray(node.userData.baseMaterial)
+      ? node.userData.baseMaterial[index]
+      : node.userData.baseMaterial;
+    if (base && material.color && base.color) material.color.copy(base.color);
+    material.opacity = base?.opacity ?? 1;
+    material.transparent = base?.transparent ?? material.opacity < 1;
+    material.depthWrite = base?.depthWrite ?? material.opacity >= 0.5;
+    material.needsUpdate = true;
+  };
+  if (Array.isArray(node.material)) node.material.forEach(reset);
+  else reset(node.material);
 }
 
 function animateThreePreview(instance) {
@@ -1640,18 +1983,18 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-document.querySelectorAll("[data-view]").forEach((button) => {
-  button.addEventListener("click", () => {
-    state.activeSidebar = button.dataset.view;
-    setNotice(button.textContent.trim());
-    render();
-  });
-});
-
 document.querySelector(".thread-list")?.addEventListener("click", (event) => {
-  const item = event.target.closest("[data-history]");
-  if (!item) return;
-  setNotice(item.querySelector("strong")?.textContent || t("navHistory"));
+  const newProjectRow = event.target.closest("[data-new-project-row]");
+  if (newProjectRow) {
+    startNewProject();
+    return;
+  }
+  const revisionButton = event.target.closest("[data-sidebar-revision]");
+  if (!revisionButton || !state.productPlan) return;
+  state.productPlan.currentRevisionId = revisionButton.dataset.sidebarRevision;
+  state.activeSidebar = "chat";
+  setNotice(`${t("currentRevision")}: ${revisionButton.querySelector("em")?.textContent || revisionButton.dataset.sidebarRevision}`);
+  render();
 });
 
 dom.workspaceView.addEventListener("click", (event) => {
@@ -1669,6 +2012,11 @@ dom.workspaceView.addEventListener("click", (event) => {
     render();
     return;
   }
+  const revertRevision = event.target.closest("[data-revert-revision]");
+  if (revertRevision) {
+    revertToRevision(revertRevision.dataset.revertRevision);
+    return;
+  }
   const modelAction = event.target.closest("[data-model-action]");
   if (modelAction?.dataset.modelAction === "generate") {
     triggerModelGeneration();
@@ -1676,11 +2024,11 @@ dom.workspaceView.addEventListener("click", (event) => {
   }
   const reviewAction = event.target.closest("[data-review-action]");
   if (reviewAction?.dataset.reviewAction === "submit") {
-    submitForReview();
+    openFloating("reviewContact");
     return;
   }
   if (reviewAction?.dataset.reviewAction === "contact") {
-    setNotice(t("reviewContactCta"));
+    openFloating("reviewContact");
     return;
   }
   const step = event.target.closest("[data-step]");
@@ -1691,6 +2039,11 @@ dom.workspaceView.addEventListener("click", (event) => {
 
 dom.inspectorContent.addEventListener("click", (event) => {
   if (handlePreviewModeClick(event)) return;
+  const fullscreenTrigger = event.target.closest("[data-preview-fullscreen]");
+  if (fullscreenTrigger) {
+    openFloating("modelFullscreen");
+    return;
+  }
   const modelAction = event.target.closest("[data-model-action]");
   if (modelAction?.dataset.modelAction === "generate") {
     triggerModelGeneration();
@@ -1704,32 +2057,35 @@ dom.inspectorContent.addEventListener("click", (event) => {
     render();
     return;
   }
-  const field = event.target.closest("[data-contact-field]");
-  if (field) {
-    field.addEventListener("input", () => {
-      state.contactInfo[field.dataset.contactField] = field.value;
-    }, { once: true });
-  }
 });
 
 function handlePreviewModeClick(event) {
   const previewMode = event.target.closest("[data-preview-mode]");
   if (!previewMode) return false;
   state.previewMode = previewMode.dataset.previewMode || "appearance";
-  render();
+  syncPreviewModeUi();
+  applyPreviewModeToInstances();
   return true;
+}
+
+function syncPreviewModeUi() {
+  document.querySelectorAll("[data-preview-mode]").forEach((button) => {
+    const active = button.dataset.previewMode === state.previewMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function applyPreviewModeToInstances() {
+  for (const instance of threePreviewInstances.values()) {
+    applyThreePreviewMode(instance);
+  }
 }
 
 async function triggerModelGeneration() {
   if (!currentRevision() || state.loading) return;
   await sendTurn(t("generateModelCommand"));
 }
-
-dom.inspectorContent.addEventListener("input", (event) => {
-  const field = event.target.closest("[data-contact-field]");
-  if (!field) return;
-  state.contactInfo[field.dataset.contactField] = field.value;
-});
 
 document.addEventListener("pointerdown", (event) => {
   const target = event.target instanceof Element ? event.target : null;
@@ -1789,15 +2145,11 @@ dom.copySpec.addEventListener("click", () => {
   openFloating("dfm");
 });
 
-dom.submitReview.addEventListener("click", submitForReview);
+dom.submitReview.addEventListener("click", () => openFloating("reviewContact"));
 window.yWorkbenchSubmitForReview = submitForReview;
+dom.newProject.addEventListener("click", startNewProject);
 dom.openThreadMenu.addEventListener("click", () => openFloating("thread"));
 dom.openSettings.addEventListener("click", () => openFloating("settings"));
-dom.openAttach.addEventListener("click", () => openFloating("attach"));
-dom.openScope.addEventListener("click", () => openFloating("scope"));
-dom.openBom.addEventListener("click", () => openFloating("bom"));
-dom.openGuardrails.addEventListener("click", () => openFloating("guardrails"));
-dom.openDfm.addEventListener("click", () => openFloating("dfm"));
 
 dom.languageSelect.addEventListener("change", async () => {
   state.lang = dom.languageSelect.value === "en" ? "en" : "zh";
@@ -1812,8 +2164,20 @@ dom.floatingLayer.addEventListener("click", (event) => {
     closeFloating();
     return;
   }
+  if (handlePreviewModeClick(event)) return;
+  const reviewSubmit = event.target.closest("[data-review-submit]");
+  if (reviewSubmit) {
+    submitForReview();
+    return;
+  }
   const action = event.target.closest("[data-action]");
   if (action) {
+    if (action.dataset.action === "history") {
+      state.activeSidebar = "history";
+      closeFloating();
+      render();
+      return;
+    }
     setNotice(`${t("actionNotice")}${action.textContent.trim()}`);
     closeFloating();
   }
@@ -1822,6 +2186,12 @@ dom.floatingLayer.addEventListener("click", (event) => {
     closeFloating();
     triggerModelGeneration();
   }
+});
+
+dom.floatingLayer.addEventListener("input", (event) => {
+  const field = event.target.closest("[data-contact-field]");
+  if (!field) return;
+  state.contactInfo[field.dataset.contactField] = field.value;
 });
 
 document.querySelectorAll("[data-settings-tab]").forEach((button) => {

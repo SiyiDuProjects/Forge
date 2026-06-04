@@ -8,6 +8,8 @@ export function createModelPreview({ spec = {}, modules = [], geometrySpec = nul
   const depthMm = geometrySpec?.enclosure?.dimensionsMm?.depth || (screenSize >= 7 ? 42 : 36);
   const hasSpeaker = modules.some((module) => module.capabilities?.includes("speaker"));
   const hasAmbient = modules.some((module) => module.capabilities?.includes("ambient_light_sensor"));
+  const hasButtons = modules.some((module) => module.capabilities?.includes("button"))
+    || geometrySpec?.componentSelections?.selectedComponentIds?.includes("button_6mm");
   const generatedAssets = modelArtifacts?.artifacts || {};
 
   const previewAsset = generatedAssets.preview || registerAsset({
@@ -58,7 +60,8 @@ export function createModelPreview({ spec = {}, modules = [], geometrySpec = nul
         { id: "screen_bezel", type: "display", sizeIn: screenSize },
         { id: "usb_c_rear", type: "connector", side: "back" },
         ...(hasSpeaker ? [{ id: "speaker_grille", type: "audio", side: "bottom" }] : []),
-        ...(hasAmbient ? [{ id: "ambient_window", type: "sensor", side: "front" }] : [])
+        ...(hasAmbient ? [{ id: "ambient_window", type: "sensor", side: "front" }] : []),
+        ...(hasButtons ? [{ id: "button_holes", type: "input", side: "semantic" }] : [])
       ],
       mounting: ["standard_core_board_standoffs", "front_bezel_mount"]
     },
@@ -66,16 +69,24 @@ export function createModelPreview({ spec = {}, modules = [], geometrySpec = nul
       preview: previewAsset,
       glb: glbAsset,
       stl: stlAsset,
+      shellFront: generatedAssets.shellFront || null,
+      shellBack: generatedAssets.shellBack || null,
       step: stepAsset,
       cad: stepAsset,
+      productPlan: generatedAssets.productPlan || null,
+      componentSelections: generatedAssets.componentSelections || null,
+      componentDescriptors: generatedAssets.componentDescriptors || null,
+      componentAssetManifest: generatedAssets.componentAssetManifest || null,
       geometrySpec: generatedAssets.geometrySpec || null,
       validationReport: generatedAssets.validationReport || null,
+      designSummary: generatedAssets.designSummary || null,
       cadqueryScript: generatedAssets.cadqueryScript || null,
       renders: []
     },
     validation: geometryValidation || modelArtifacts?.validation || null,
     notes: [
       "This is a read-only 3D prototype preview.",
+      "Component geometry is descriptor-driven proxy geometry unless the asset manifest lists verified vendor assets.",
       generatedAssets.glb
         ? "Generated 3D model is for orbit, zoom, and pan preview only; users cannot edit parts or geometry."
         : artifactStatus === "pending_confirmation"

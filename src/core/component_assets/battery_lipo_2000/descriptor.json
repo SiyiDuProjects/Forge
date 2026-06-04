@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "component_descriptor_v2",
+  "identity": {
+    "id": "battery_lipo_2000",
+    "displayName": "2000 mAh LiPo Battery Proxy",
+    "category": "battery",
+    "legacyCategory": "Power",
+    "manufacturer": "Forge proxy seed",
+    "partNumber": "LIPO-2000-PROXY"
+  },
+  "versioning": {
+    "descriptorVersion": "0.2.0",
+    "updated": "2026-06-04",
+    "compatibility": ["reference_build_001"]
+  },
+  "assetQuality": "mechanical_proxy",
+  "validationStatus": "unverified_proxy",
+  "dimensionsMm": { "width": 58, "height": 36, "depth": 8 },
+  "coordinateSystem": {
+    "origin": "component_center",
+    "units": "mm",
+    "x": "width",
+    "y": "height",
+    "z": "depth",
+    "front": "+z"
+  },
+  "visualProxy": {
+    "shape": "battery_pack",
+    "materialHint": "silver_pouch",
+    "appearanceLayerVisible": false,
+    "componentLayerOpacity": 1
+  },
+  "mechanicalProxy": {
+    "bodyType": "lipo_pouch_volume",
+    "mountingMethod": "review_only_retained_bay"
+  },
+  "mountingHoles": [],
+  "connectors": [
+    {
+      "id": "power_lead",
+      "type": "jst",
+      "positionLocalMm": [0, 18, 0],
+      "orientation": "+y",
+      "mating": ["core_board_esp32_s3.usb_c"]
+    }
+  ],
+  "interfaces": [
+    { "id": "battery_power", "connectorId": "power_lead", "signalType": "battery_power", "requiredClearanceMm": 8 }
+  ],
+  "externalFeatures": [],
+  "keepouts": [
+    {
+      "id": "battery_swell_clearance",
+      "type": "safety_clearance",
+      "positionLocalMm": [0, 0, 0],
+      "sizeMm": [64, 42, 12]
+    }
+  ],
+  "accessVolumes": [
+    {
+      "id": "battery_service_volume",
+      "connectorId": "power_lead",
+      "positionLocalMm": [0, 22, 0],
+      "sizeMm": [64, 18, 12]
+    }
+  ],
+  "cableExitDirections": [
+    { "connectorId": "power_lead", "direction": "+y_to_core_board" }
+  ],
+  "riskFlags": {
+    "requiresManualValidation": true,
+    "severity": "warning",
+    "reason": "Battery placement requires human electrical and safety review.",
+    "warnings": ["Battery is review-only in the standard MVP path."]
+  },
+  "assetPaths": {
+    "proxyVisualGlb": null,
+    "proxyMechanicalStep": null,
+    "vendorGlb": null,
+    "vendorStep": null
+  },
+  "sourceNotes": {
+    "summary": "Proxy LiPo battery envelope for review-risk visualization.",
+    "sourcesFile": "sources.md",
+    "confidence": "proxy_seed"
+  }
+}

@@ -97,6 +97,12 @@ export const API_CONTRACT = [
   },
   {
     method: "POST",
+    path: "/api/plans/:planId/revert",
+    body: ["revisionId"],
+    response: ["productPlan", "revision"]
+  },
+  {
+    method: "POST",
     path: "/api/assets/register",
     body: ["type", "source", "url", "localPath", "caption", "linkedJobId"],
     response: ["asset"]

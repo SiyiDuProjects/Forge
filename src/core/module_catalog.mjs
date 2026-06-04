@@ -117,6 +117,22 @@ const catalog = [
     }
   },
   {
+    id: "input.button_6mm",
+    category: "Input",
+    name: "6 mm push button",
+    detail: "Panel input button",
+    capabilities: ["button"],
+    unitCost: 5,
+    status: "approved",
+    geometry: {
+      dimensionsMm: { width: 8, height: 8, depth: 5 },
+      mounting: { type: "panel_button", openingMm: { width: 6, height: 6 } },
+      interfaces: [{ id: "button_gpio", type: "gpio", side: "internal", direction: "internal" }],
+      clearanceMm: { travel: 8, cable: 3 },
+      riskTags: ["fit_review"]
+    }
+  },
+  {
     id: "motion.mini_servo",
     category: "Motion",
     name: "Mini servo",
@@ -179,7 +195,18 @@ export function matchModules(interpreted) {
   ];
 
   if (interpreted.options.ambient) modules.push(findModule("sensor.ambient_light"));
-  if (interpreted.options.speaker) modules.push(findModule("audio.micro_speaker"));
+  if (interpreted.options.speaker || interpreted.options.buzzer) modules.push(findModule("audio.micro_speaker"));
+  if (interpreted.options.buttons) {
+    const button = findModule("input.button_6mm");
+    if (button) {
+      modules.push({
+        ...button,
+        quantity: Number(interpreted.options.buttons || 1),
+        unitCost: Number(button.unitCost || 0) * Number(interpreted.options.buttons || 1),
+        name: `${Number(interpreted.options.buttons || 1)}x ${button.name}`
+      });
+    }
+  }
   if (interpreted.options.motor) modules.push(findModule("motion.mini_servo"));
   if (interpreted.options.camera) modules.push(findModule("vision.camera_request"));
   if (interpreted.options.battery) modules.push(findModule("power.battery_request"));

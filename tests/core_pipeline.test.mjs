@@ -5,7 +5,13 @@ import { API_CONTRACT, JOB_CAPABILITY, PRODUCT_PLAN_STATUS, RISK_STATUS, SUPPORT
 import { createGenerationJob } from "../src/core/jobs.mjs";
 import { createGeometrySpec, generateModelArtifacts } from "../src/core/geometry_generation.mjs";
 import { createDeviceConfig, createDraft, listCatalogModules, submitReview } from "../src/core/pipeline.mjs";
-import { addProductPlanTurn, createProductPlan, submitProductPlanReview } from "../src/core/product_plan.mjs";
+import { addProductPlanTurn, createProductPlan, revertProductPlanRevision, submitProductPlanReview } from "../src/core/product_plan.mjs";
+import { processUserTurn } from "../src/core/sparker_orchestrator.mjs";
+import { resolveComponentAsset } from "../src/core/component_asset_resolver.mjs";
+import { listComponentDescriptorValidation, listComponentDescriptors } from "../src/core/component_library.mjs";
+import { validateComponentDescriptorV2 } from "../src/core/component_descriptor_schema.mjs";
+import { selectComponents } from "../src/core/component_selection.mjs";
+import { applyUserMessageToPlan, applyWorkspacePatches, createEmptyProductPlan } from "../src/core/workspace_state.mjs";
 
 async function readGlbJson(localPath) {
   const buffer = await readFile(localPath);
@@ -138,11 +144,136 @@ test("catalog and API contract expose stable integration handles", () => {
   assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/plans"));
   assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/model/generate"));
   assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/geometry/generate"));
+  assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/plans/:planId/revert"));
+});
+
+test("ComponentDescriptor v2 assets validate and resolve to proxy assets", async () => {
+  const descriptors = listComponentDescriptors();
+  const ids = descriptors.map((descriptor) => descriptor.id);
+  for (const id of [
+    "display_3_5_tft",
+    "core_board_esp32_s3",
+    "usb_c_breakout",
+    "ambient_sensor_basic",
+    "speaker_20mm",
+    "camera_module_basic",
+    "battery_lipo_2000",
+    "battery_18650_holder",
+    "button_6mm"
+  ]) {
+    assert.ok(ids.includes(id), `${id} descriptor should exist`);
+    assert.match(await readFile(new URL(`../src/core/component_assets/${id}/sources.md`, import.meta.url), "utf8"), /proxy seed/);
+  }
+
+  for (const descriptor of descriptors) {
+    const validation = validateComponentDescriptorV2(descriptor, { expectedId: descriptor.id });
+    assert.equal(validation.valid, true, descriptor.id);
+    assert.equal(descriptor.assetQuality, "mechanical_proxy");
+    assert.equal(descriptor.validationStatus, "unverified_proxy");
+    assert.ok(descriptor.dimensionsMm.width > 0);
+    assert.ok(Array.isArray(descriptor.connectors));
+  }
+
+  const descriptorValidation = listComponentDescriptorValidation();
+  assert.ok(descriptorValidation.every((item) => item.valid));
+  assert.equal(descriptors.find((item) => item.id === "camera_module_basic").risk.requiresManualValidation, true);
+  assert.equal(descriptors.find((item) => item.id === "battery_lipo_2000").risk.requiresManualValidation, true);
+
+  const preview = resolveComponentAsset("display_3_5_tft", "preview");
+  assert.equal(preview.resolvedType, "procedural_visual_proxy");
+  assert.equal(preview.assetQuality, "mechanical_proxy");
+  assert.equal(preview.validationStatus, "unverified_proxy");
+  const mechanical = resolveComponentAsset("display_3_5_tft", "mechanical");
+  assert.equal(mechanical.resolvedType, "procedural_mechanical_proxy");
+  const validation = resolveComponentAsset("display_3_5_tft", "validation");
+  assert.equal(validation.resolvedType, "descriptor_data");
+  const manufacturing = resolveComponentAsset("display_3_5_tft", "manufacturing");
+  assert.equal(manufacturing.resolvedType, "descriptor_driven_shell_features_only");
+});
+
+test("mock conversation patches ProductPlan and finite component selection", () => {
+  let productPlan = createEmptyProductPlan();
+  let result = applyUserMessageToPlan({
+    currentProductPlan: productPlan,
+    userMessage: "I want to make a small desktop smart display."
+  });
+  productPlan = result.productPlan;
+  assert.equal(productPlan.requirements.display, true);
+  assert.equal(productPlan.requirements.usbC, true);
+  assert.equal(result.readyToGenerate, true);
+
+  result = applyUserMessageToPlan({
+    currentProductPlan: productPlan,
+    userMessage: "Make it 3.5 inch with an ambient light sensor, USB-C power, no battery or camera."
+  });
+  productPlan = result.productPlan;
+  assert.equal(productPlan.requirements.displaySizeInches, 3.5);
+  assert.equal(productPlan.requirements.ambientSensor, true);
+  assert.equal(productPlan.requirements.battery, false);
+  assert.equal(productPlan.requirements.camera, false);
+  assert.equal(result.readyToGenerate, true);
+
+  const selection = selectComponents(productPlan);
+  assert.ok(selection.selectedComponentIds.includes("display_3_5_tft"));
+  assert.ok(selection.selectedComponentIds.includes("core_board_esp32_s3"));
+  assert.ok(selection.selectedComponentIds.includes("usb_c_breakout"));
+  assert.ok(selection.selectedComponentIds.includes("ambient_sensor_basic"));
+  assert.deepEqual(selection.riskModuleIds, []);
+});
+
+test("Sparker creates structured component and geometry patches", () => {
+  const currentProductPlan = createEmptyProductPlan();
+  const result = processUserTurn({
+    currentProductPlan,
+    userMessage: "Turn this into a desktop clock, add two buttons on the right side, add a small buzzer, and move USB-C to the back-left."
+  });
+
+  assert.equal(result.unsupportedReasons.length, 0);
+  assert.equal(result.rejectedPatches.length, 0);
+  assert.ok(result.appliedPatches.some((patch) => patch.type === "plan_patch"));
+  assert.ok(result.appliedPatches.some((patch) => patch.type === "component_patch"));
+  assert.ok(result.appliedPatches.some((patch) => patch.type === "geometry_preference_patch"));
+  assert.equal(result.productPlan.productType, "desk_clock");
+  assert.equal(result.productPlan.requirements.buttons, 2);
+  assert.equal(result.productPlan.requirements.buzzer, true);
+  assert.equal(result.productPlan.geometryPreferences.placements.buttons.semanticPosition, "right_side");
+  assert.equal(result.productPlan.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
+});
+
+test("workspace patches apply safely without mutating the previous plan", () => {
+  const currentProductPlan = createEmptyProductPlan();
+  const result = applyWorkspacePatches(currentProductPlan, [
+    {
+      type: "component_patch",
+      add: [{ componentType: "button", quantity: 2 }]
+    },
+    {
+      type: "geometry_preference_patch",
+      set: {
+        "enclosure.shapeProfile": "cat_ear_photo_frame",
+        "placements.usb_c.semanticPosition": "back_left"
+      }
+    },
+    {
+      type: "plan_patch",
+      set: {
+        "__proto__.polluted": true
+      }
+    }
+  ]);
+
+  assert.equal(currentProductPlan.requirements.buttons, 0);
+  assert.equal(result.productPlan.requirements.buttons, 2);
+  assert.equal(result.productPlan.geometryPreferences.enclosure.shapeProfile, "cat_ear_photo_frame");
+  assert.equal(result.productPlan.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
+  assert.equal(result.rejectedPatches.length, 1);
+  assert.equal({}.polluted, undefined);
 });
 
 test("frontend keeps Chinese and English language assets", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
   const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
 
   assert.match(packageJson, /"three"/);
@@ -159,7 +290,25 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /正在加载 3D 模型/);
   assert.match(app, /真实 3D 预览已加载/);
   assert.match(app, /3D 模型加载失败/);
-  assert.match(html, /对话生成/);
+  assert.match(html, /新项目/);
+  assert.match(html, /id="newProject"/);
+  assert.match(html, /class="project-menu-button" id="openThreadMenu"/);
+  assert.doesNotMatch(html, /topbar-menu/);
+  assert.doesNotMatch(html, /data-view="(?:chat|history|review)"/);
+  assert.doesNotMatch(html, /toolbar-chip|openAttach|openScope|openBom|openGuardrails|openDfm|模拟原型输入框|运行模拟原型链路/);
+  assert.doesNotMatch(html, /data-dialog="(?:attach|scope|bom|guardrails)"/);
+  assert.match(styles, /\.project-menu-button/);
+  assert.match(styles, /\.new-project-button\s*{\s*background: transparent;\s*box-shadow: none;\s*}/);
+  assert.doesNotMatch(styles, /\.new-project-button\.active,\s*\.thread-row\.active/);
+  assert.match(html, /data-dialog="reviewContact"/);
+  assert.match(html, /data-dialog="modelFullscreen"/);
+  assert.match(html, /data-device-canvas="fullscreen"/);
+  assert.match(app, /data-sidebar-revision/);
+  assert.doesNotMatch(app, /projectRevisionDetail/);
+  assert.doesNotMatch(app, /<small>\$\{escapeHtml\(projectRevisionDetail/);
+  assert.doesNotMatch(styles, /\.thread-row small|\.thread-row em/);
+  assert.match(app, /function startNewProject/);
+  assert.match(app, /workspaceToken/);
   assert.match(html, /提交审核下单/);
   assert.match(html, /ProductPlan/);
   assert.match(app, /木纹桌面屏/);
@@ -173,8 +322,22 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /元器件层/);
   assert.match(app, /Appearance/);
   assert.match(app, /Components/);
-  assert.match(app, /opacity: componentsVisible \? 0\.18 : 1/);
-  assert.match(app, /transparent: componentsVisible/);
+  assert.match(app, /preview-control-buttons/);
+  assert.match(app, /data-preview-fullscreen/);
+  assert.match(app, /modelFullscreenAria/);
+  assert.match(app, /disposeThreePreview\("fullscreen"\)/);
+  assert.match(styles, /\.preview-controls\s*{\s*display: grid;\s*grid-template-columns: 42px minmax\(0, 1fr\);/);
+  assert.match(styles, /\.kv-list span\s*{\s*display: grid;\s*grid-template-columns: 76px minmax\(0, 1fr\);/);
+  assert.match(styles, /\.model-fullscreen-dialog\s*{/);
+  assert.match(styles, /\.model-fullscreen-canvas-wrap \[data-device-canvas\]\s*{\s*width: 100%;\s*height: 100%;/);
+  assert.match(app, /opacity: 0\.12/);
+  assert.match(app, /transparent: true/);
+  assert.match(app, /initialCameraFramed/);
+  assert.doesNotMatch(app, /setCameraPreset/);
+  assert.match(app, /nodeHasMaterialName\(node, \["shell_finish"\]\)/);
+  assert.match(app, /isShellFeatureNode/);
+  assert.match(app, /syncPreviewModeUi/);
+  assert.match(app, /applyPreviewModeToInstances/);
   assert.match(app, /the components layer makes the shell transparent/);
   assert.match(app, /生成模型/);
   assert.match(app, /demoConversationTurns/);
@@ -186,6 +349,16 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /3D 模型已生成/);
   assert.match(app, /read-only 3D preview/);
   assert.match(app, /3D model generated/);
+  assert.match(app, /modelFitChecks/);
+  assert.match(app, /componentAssetsTitle/);
+  assert.match(app, /assetQuality/);
+  assert.match(app, /validationStatus/);
+  assert.match(app, /proxyComponentNotice/);
+  assert.match(app, /renderComponentAssetList/);
+  assert.match(app, /renderArtifactLinks/);
+  assert.match(app, /componentAssetManifest/);
+  assert.match(styles, /component-assets|artifact-links|artifact-link|proxy-notice/);
+  assert.match(app, /<span>\$\{escapeHtml\(t\("modelArtifacts"\)\)\} <strong>\$\{escapeHtml\(artifactSummary\(revision\)\)\}<\/strong><\/span>/);
   assert.match(app, /continue the conversation and generate a new revision/);
   assert.doesNotMatch(app, /爆炸视图|Exploded/);
   assert.doesNotMatch(app, /非最终 CAD|not final CAD|SolidWorks handoff|SolidWorks 后处理|STEP is for internal engineering|GLB \/ STL \/ STEP/);
@@ -273,6 +446,69 @@ test("ProductPlan creates revisions and preview outputs", () => {
   assert.ok(generated.revision.modelArtifacts.artifacts.step.localPath);
 });
 
+test("conversational revision engine evolves shape, components, placement, diff, and revert", async () => {
+  const { productPlan } = createProductPlan({
+    initialMessage: "I want a small desktop smart display, 3.5 inch, USB-C powered.",
+    language: "en"
+  });
+
+  const clock = addProductPlanTurn({
+    planId: productPlan.planId,
+    message: "Turn this into a desktop clock and add two buttons on the right side."
+  });
+  assert.equal(clock.revision.productPlanSnapshot.productType, "desk_clock");
+  assert.equal(clock.revision.productPlanSnapshot.requirements.buttons, 2);
+  assert.ok(clock.revision.patches.some((patch) => patch.type === "component_patch"));
+  assert.ok(clock.revision.diff.changes.some((change) => change.type === "component_added" && change.componentType === "button"));
+  assert.ok(clock.revision.geometrySpec.componentSelections.selectedComponentIds.includes("button_6mm"));
+  assert.ok(clock.revision.geometrySpec.features.some((feature) => feature.type === "button_hole" && feature.face === "right"));
+
+  const catEar = addProductPlanTurn({
+    planId: productPlan.planId,
+    message: "Add a small buzzer, make it look like a photo frame with cat ears, and move USB-C to the back-left."
+  });
+  assert.equal(catEar.revision.productPlanSnapshot.requirements.buzzer, true);
+  assert.equal(catEar.revision.productPlanSnapshot.geometryPreferences.enclosure.shapeProfile, "cat_ear_photo_frame");
+  assert.equal(catEar.revision.productPlanSnapshot.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
+  assert.ok(catEar.revision.geometrySpec.componentSelections.selectedComponentIds.includes("speaker_20mm"));
+  assert.ok(catEar.revision.geometrySpec.features.some((feature) => feature.type === "decorative_cat_ear"));
+  const usbCutout = catEar.revision.geometrySpec.features.find((feature) => feature.type === "usb_cutout");
+  assert.ok(usbCutout.positionMm[0] < 0);
+  assert.ok(catEar.revision.diff.changes.some((change) => change.type === "placement_changed" && change.target === "usb_c"));
+  assert.ok(catEar.revision.diff.changes.some((change) => change.type === "shape_changed"));
+
+  const generated = addProductPlanTurn({
+    planId: productPlan.planId,
+    message: "Ready, generate model."
+  });
+  assert.equal(generated.revision.generationStatus, "generated");
+  assert.ok(generated.revision.modelArtifacts.artifacts.glb.localPath);
+  const glbJson = await readGlbJson(generated.revision.modelArtifacts.artifacts.glb.localPath);
+  assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.button_1"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "feature.decorative.cat_ear_left"));
+
+  const reverted = revertProductPlanRevision({
+    planId: productPlan.planId,
+    revisionId: clock.revision.revisionId
+  });
+  assert.equal(reverted.productPlan.currentRevisionId, clock.revision.revisionId);
+  assert.equal(reverted.productPlan.workspaceState.productPlan.productType, "desk_clock");
+  assert.equal(reverted.productPlan.workspaceState.productPlan.geometryPreferences.enclosure.shapeProfile, "rounded_rect");
+  assert.equal(reverted.productPlan.revisions.length, 4);
+});
+
+test("unsupported conversational requests become explicit manual expansion drafts", () => {
+  const { productPlan, revision, assistantMessage } = createProductPlan({
+    initialMessage: "I want a drone with a battery charging circuit.",
+    language: "en"
+  });
+
+  assert.equal(productPlan.status, PRODUCT_PLAN_STATUS.MANUAL_EXPANSION_DRAFT);
+  assert.ok(revision.unsupportedReasons.length >= 2);
+  assert.match(assistantMessage.text, /manual expansion validation/);
+  assert.equal(revision.modelArtifacts.status, "pending_confirmation");
+});
+
 test("Chinese and English confirmation turns generate model artifacts", () => {
   const zh = createProductPlan({
     initialMessage: "小型木纹桌面屏，可以显示照片和天气，3.5 英寸，USB-C 供电。"
@@ -346,7 +582,7 @@ test("camera and battery display plans remain standard with review risks", () =>
 
 test("generation jobs expose model, layout, and quote outputs", async () => {
   const draft = createDraft({
-    requestText: "Small woodgrain desktop display with photos and weather, 3.5 inch."
+    requestText: "Small woodgrain desktop display with photos and weather, 3.5 inch, with an ambient light sensor."
   });
   const modelJob = createGenerationJob({
     capability: JOB_CAPABILITY.MODEL_GENERATION,
@@ -361,18 +597,49 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   assert.ok(modelJob.output.geometrySpec.modules.some((module) => module.role === "front_display"));
   assert.ok(modelJob.output.modelArtifacts.artifacts.glb);
   assert.ok(modelJob.output.modelArtifacts.artifacts.stl);
+  assert.ok(modelJob.output.modelArtifacts.artifacts.shellFront);
+  assert.ok(modelJob.output.modelArtifacts.artifacts.shellBack);
   assert.ok(modelJob.output.modelArtifacts.artifacts.step);
+  assert.ok(modelJob.output.modelArtifacts.artifacts.componentDescriptors);
+  assert.ok(modelJob.output.modelArtifacts.artifacts.componentAssetManifest);
   assert.equal((await readFile(modelJob.output.modelArtifacts.artifacts.glb.localPath)).slice(0, 4).toString("utf8"), "glTF");
   const glbJson = await readGlbJson(modelJob.output.modelArtifacts.artifacts.glb.localPath);
   assert.ok(glbJson.nodes.some((node) => node.name === "shell.standard_desktop_display_shell"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "shell.front"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "shell.back"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.screen"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.usb_c"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.ambient_sensor"));
+  assert.ok(glbJson.nodes.some((node) => node.name?.startsWith("feature.standoff.core_board.")));
+  assert.ok(glbJson.nodes.some((node) => node.name === "module.display_3_5_tft"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "module.core_board_esp32_s3"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "module.usb_c_breakout"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "module.ambient_sensor_basic"));
   assert.ok(glbJson.nodes.filter((node) => node.name?.startsWith("module.")).length >= 3);
-  assert.ok(glbJson.nodes.some((node) => node.name?.startsWith("interface.")));
+  assert.ok(glbJson.nodes.some((node) => node.name === "interface.usb_c.port"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "interface.display_3_5_tft.fpc"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "interface.ambient_sensor_basic.signal"));
   assert.ok(glbJson.nodes.some((node) => node.name === "route.coarse_cable_paths"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "route.display_to_core_board"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "route.sensor_to_core_board"));
   assert.equal(glbJson.extras.placedModuleCount >= 3, true);
+  assert.ok(glbJson.extras.componentAssetManifest.components.some((component) => component.componentId === "display_3_5_tft"));
   assert.equal(glbJson.extras.directEditingAllowed, false);
-  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.stl.localPath, "utf8"), /solid forge_standard_shell/);
+  for (const accessor of glbJson.accessors.filter((accessor) => accessor.type === "VEC3")) {
+    assert.ok(Array.isArray(accessor.min), "POSITION accessor should expose min");
+    assert.ok(Array.isArray(accessor.max), "POSITION accessor should expose max");
+  }
+  const frontStl = await readFile(modelJob.output.modelArtifacts.artifacts.shellFront.localPath, "utf8");
+  const backStl = await readFile(modelJob.output.modelArtifacts.artifacts.shellBack.localPath, "utf8");
+  assert.match(frontStl, /solid forge_shell_front/);
+  assert.match(backStl, /solid forge_shell_back/);
+  assert.doesNotMatch(frontStl, /display_3_5_tft|core_board_esp32_s3|ambient_sensor_basic/);
+  assert.doesNotMatch(backStl, /display_3_5_tft|core_board_esp32_s3|ambient_sensor_basic/);
+  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.componentDescriptors.localPath, "utf8"), /component_descriptor_v2/);
+  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.componentAssetManifest.localPath, "utf8"), /procedural_visual_proxy/);
   assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.step.localPath, "utf8"), /ISO-10303-21/);
   assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.step.localPath, "utf8"), /module_placements/);
+  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.designSummary.localPath, "utf8"), /Mechanical Proxy Notice/);
 
   const pendingModelJob = createGenerationJob({
     capability: JOB_CAPABILITY.MODEL_GENERATION,
@@ -419,6 +686,22 @@ test("geometry spec is deterministic and blocks missing module geometry", async 
     riskReport: draft.riskReport
   });
   assert.deepEqual(first, second);
+  assert.ok(first.productPlan);
+  assert.ok(first.componentSelections.selectedComponentIds.includes("display_5_tft"));
+  assert.ok(first.componentDescriptors.some((descriptor) => descriptor.id === "core_board_esp32_s3"));
+  assert.ok(first.componentAssetManifest.components.some((component) => component.componentId === "display_5_tft"));
+  assert.ok(first.componentAssetManifest.components.every((component) => component.validationStatus === "unverified_proxy"));
+  assert.ok(first.placements.length >= 3);
+  assert.ok(first.features.some((feature) => feature.type === "screen_opening"));
+  assert.ok(first.features.some((feature) => feature.type === "usb_cutout"));
+  assert.ok(first.features.every((feature) => feature.source || feature.type === "split_line"));
+  assert.ok(first.features.filter((feature) => feature.type === "standoff").length >= 4);
+  assert.ok(first.routes.some((route) => route.id === "route.display_to_core_board"));
+  assert.ok(first.routes.every((route) => route.from?.componentId && route.from?.connectorId && route.to?.componentId && route.to?.connectorId));
+  assert.equal(first.metadata.placedModuleCount >= 3, true);
+  assert.deepEqual(first.metadata.riskModuleIds, []);
+  assert.equal(first.metadata.directEditingAllowed, false);
+  assert.ok(first.metadata.assetQualitySummary.some((item) => item.assetQuality === "mechanical_proxy"));
 
   const blockedSpec = createGeometrySpec({
     spec: draft.spec,

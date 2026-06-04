@@ -67,6 +67,7 @@ function normalizeProvider(provider, capability) {
 function runJob(job) {
   if (job.capability === JOB_CAPABILITY.MODEL_GENERATION) {
     const geometrySpec = createGeometrySpec({
+      productPlan: job.input.productPlan,
       spec: job.input.spec,
       modules: job.input.modules || [],
       riskReport: job.input.riskReport || {}
