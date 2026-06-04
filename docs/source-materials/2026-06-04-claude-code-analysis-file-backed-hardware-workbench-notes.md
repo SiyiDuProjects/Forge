@@ -97,3 +97,63 @@ Important boundary:
 Open integration question:
 
 - Which subset of Claude Code's file-backed runtime should be adapted to Forge so the product feels like a real hardware workbench without becoming a generic coding agent or CAD platform?
+
+## Ready-To-Send GPT Pro Question
+
+```text
+我在做一个叫 Forge 的项目，想把它做成“硬件版 Codex / Claude Code”：用户用自然语言描述一个硬件原型，系统不是只生成聊天回复，而是真的维护一个项目文件夹，里面有源文件、revision、验证报告和生成物。
+
+我已经把 liuup/claude-code-analysis 这个 Claude Code 源码分析仓库拉到本地，并阅读了 analysis 与 src 的主要结构。它大致是这样的：
+
+- entrypoints/cli.tsx、main.tsx：多入口启动层，负责 CLI fast path、REPL、SDK/headless、MCP、remote/bridge、后台 session 等初始化编排。
+- QueryEngine.ts、query.ts：核心执行循环。负责组装 system/user context、调用模型、处理 tool_use/tool_result、streaming event、compact、retry、消息回流。
+- Tool.ts、tools.ts、services/tools/*：Tool 是协议对象，不是普通函数。每个工具有 schema、description/prompt、validateInput、checkPermissions、readOnly/destructive/concurrency flags、progress、结果映射和 UI rendering metadata。工具调度会把 concurrency-safe 的工具并发执行，把可能改状态的工具串行执行。
+- services/compact/*、memdir/*、utils/sessionStorage.ts：长期任务状态治理。memory 是文件化 Markdown + index，session 是 append-only JSONL transcript，compact 后会把关键文件、plan、工具能力重新注入上下文。
+- constants/prompts.ts、utils/systemPrompt.ts、context.ts：prompt runtime 是分区的，不是一个大字符串；包含默认规则、动态上下文、append/override prompt、专项 prompt、cache boundary。
+- components/*：TUI 中消息流、输入框、权限确认、任务状态、memory、skills、MCP、sandbox 等是控制面。
+- MCP、remote、swarm、sandbox、telemetry 等属于完整平台能力，我们大概率不需要复制。
+
+我们的 Forge 当前结构和边界：
+
+- ProductPlan 是中心对象，表示硬件原型计划：需求、零件清单（BOM）、风险限制、报价区间、设备行为规则、review 状态。
+- ComponentDescriptor v2 是组件机械代理信息的 source of truth。
+- GeometrySpec 是锁定 revision 的唯一 3D 生成输入。
+- 现有 Forge action contract 已经有这些受控动作：getWorkspaceSummary、searchComponentLibrary、proposeDesignChange、stageDesignPatch、commitStagedChange、applyDesignPatch、validateDesign、regenerateRevision、revertRevision、getRevisionArtifacts。
+- 未来 chat/agent 层必须调用这些 action，不能直接改 GeometrySpec、GLB、STL、STEP 或任意文件。
+- 当前生成链路已经接近：ProductPlan revision -> ComponentDescriptor selections -> GeometrySpec -> validation -> confirmed artifacts。它会写 product_plan.json、geometry-spec.json、component_descriptors.json、component_asset_manifest.json、validation_report.json、design_summary.md、generate_model.py，并在明确确认生成后写 GLB/STL/STEP。
+- MVP 边界：标准 3D 打印外壳；camera/battery 是人工审核风险；motion structures 是 manual expansion；3D 视图是可旋转查看的原型预览，不是 CAD 编辑器。
+
+我正在考虑的项目文件夹结构类似：
+
+ForgeProject/
+  ProductPlan.md 或 product_plan.json
+  project_manifest.json
+  events.jsonl
+  revisions/
+    rev-.../
+      product_plan.json
+      geometry-spec.json
+      component_selections.json
+      component_descriptors.json
+      component_asset_manifest.json
+      validation_report.json
+      design_summary.md
+      artifacts/
+        model.glb
+        shell_front.stl
+        shell_back.stl
+        model.step
+  source-materials/
+  review/
+
+请你站在产品架构和工程实现角度，给我具体建议：
+
+1. 从 Claude Code 的源码结构里，Forge 应该借鉴哪 5-8 个“小机制”？比如 tool protocol、append-only transcript、context compact、memory index、permission/concurrency flags、prompt sections 等。哪些机制明确不要借？
+2. Forge 的 on-disk project layout 应该怎么设计？哪些文件是 source of truth，哪些是 derived artifacts，哪些是 append-only event/history？
+3. 现有 Forge action contract 应该怎么扩展成类似 Tool protocol 的安全边界？需要哪些字段：schema、validation、permission、readOnly/destructive、concurrency、sideEffects、rollback？
+4. Chat/runtime 应该如何读取项目文件夹上下文，避免把所有历史和模型文件塞进 prompt？是否需要类似 MEMORY.md、WORK_INDEX.md、manifest、compact/reinject？
+5. Revision、proposal、generation confirmation、artifact regeneration、review submission 应该用什么状态机？如何避免 raw chat 直接写几何或模型文件？
+6. 请给一个最小可落地的 V1 实施顺序：先改哪些模块、文件格式、API 和测试，避免一上来做成完整 Claude Code、CAD 平台或工具市场。
+
+重点给可执行架构建议。不要泛泛讲 AI agent，也不要建议复制 Claude Code 全量功能。我们的目标是只吸收其中一小部分能力，做成文件夹化的硬件原型项目工作台。
+```

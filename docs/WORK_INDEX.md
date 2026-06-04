@@ -26,6 +26,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 - Status: summarized as planning context; no Forge runtime implementation yet.
 - Source note: `docs/source-materials/2026-06-04-claude-code-analysis-file-backed-hardware-workbench-notes.md`
 - Local source clone: `external/claude-code-analysis` at commit `7b7b915` (ignored by git).
+- Deliverable: ready-to-send GPT Pro integration question is preserved in the source note under `Ready-To-Send GPT Pro Question`.
 - Key handles: claude-code-analysis, hardware Codex, hardware Claude Code, file-backed project folder, ProductPlan folder, append-only events.jsonl, Tool protocol, prompt runtime, context compact, GeometrySpec source of truth.
 - Takeaway: adapt a small subset of Claude Code patterns: file-backed project state, typed action/tool protocol, append-only event history, index-first context loading, and generated artifact manifests. Do not copy the full CLI/TUI, MCP, remote/bridge, swarm, telemetry, or shell sandbox platforms into Forge unless product scope changes.
 - Next: decide the first on-disk Forge project layout and map it to the existing Forge action contract before implementing filesystem persistence.
