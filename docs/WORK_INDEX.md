@@ -20,6 +20,16 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-04 - Claude Code Analysis For File-Backed Forge Direction
+
+- Scope: clone and review `liuup/claude-code-analysis` as a reference for a hardware Codex/Claude Code-style Forge direction where project source files live in real folders.
+- Status: summarized as planning context; no Forge runtime implementation yet.
+- Source note: `docs/source-materials/2026-06-04-claude-code-analysis-file-backed-hardware-workbench-notes.md`
+- Local source clone: `external/claude-code-analysis` at commit `7b7b915` (ignored by git).
+- Key handles: claude-code-analysis, hardware Codex, hardware Claude Code, file-backed project folder, ProductPlan folder, append-only events.jsonl, Tool protocol, prompt runtime, context compact, GeometrySpec source of truth.
+- Takeaway: adapt a small subset of Claude Code patterns: file-backed project state, typed action/tool protocol, append-only event history, index-first context loading, and generated artifact manifests. Do not copy the full CLI/TUI, MCP, remote/bridge, swarm, telemetry, or shell sandbox platforms into Forge unless product scope changes.
+- Next: decide the first on-disk Forge project layout and map it to the existing Forge action contract before implementing filesystem persistence.
+
 ### 2026-06-04 - Forge Action Contract
 
 - Scope: implement the stable backend action layer between future chat/tool-calling runtimes and Forge ProductPlan/GeometrySpec/artifact state.

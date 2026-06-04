@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-04
 
+### Claude Code Analysis And File-Backed Hardware Workbench Notes
+
+- File: `docs/source-materials/2026-06-04-claude-code-analysis-file-backed-hardware-workbench-notes.md`
+- Status: summarized external architecture review and pending product-direction note.
+- Related docs: `docs/WORK_INDEX.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`
+- Key handles: claude-code-analysis, hardware Codex, hardware Claude Code, file-backed project folder, ProductPlan folder, events.jsonl, Tool protocol, append-only transcript, GeometrySpec source of truth.
+
 ### Forge Action Contract Goal Notes
 
 - File: `docs/source-materials/2026-06-04-forge-action-contract-goal-notes.md`
