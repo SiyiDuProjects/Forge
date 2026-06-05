@@ -182,11 +182,8 @@ pre {
 }
 
 .gear-icon {
-  border: 1.5px solid #66706b;
-}
-
-.gear-icon {
-  border-radius: 999px;
+  font-size: 17px;
+  line-height: 1;
 }
 
 .project-group {

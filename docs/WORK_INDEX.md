@@ -36,6 +36,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 - Follow-up verification: Browser verification on `http://127.0.0.1:8765` confirms `新项目` blank state hides `#inspectorContent` (`hidden`, `display: none`, zero size) so the empty right-side card is not shown, and switching back to the generated-model project restores the inspector 3D preview.
 - Follow-up UI polish: topbar title now shows only the active project name via `currentTopbarTitle()`; fixed labels such as `Forge` and `ProductPlan 实时方案` are no longer shown in the title area.
 - Follow-up UI polish: sidebar footer status `#apiStatus` is empty by default; transient notices still render there and clear back to blank instead of `内部 MVP`.
+- Follow-up UI polish: `Forge 设置` footer row now uses a visible gear glyph instead of the previous empty circle indicator.
 
 ### 2026-06-05 - Real Conversation And Project Switching Fix
 
