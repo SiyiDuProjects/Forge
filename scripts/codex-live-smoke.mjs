@@ -5,14 +5,30 @@ import { join, resolve } from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 const shouldRun = Boolean(args.run || process.env.FORGE_LIVE_CODEX_SMOKE === "1");
+const externalAck = Boolean(
+  args.ackExternalCodex
+  || process.env.FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK === "send_project_context_to_codex"
+);
 
 if (!shouldRun) {
   writeJson({
     ok: true,
     skipped: true,
-    message: "Live Codex smoke is opt-in. Run `npm run smoke:codex-live` or set FORGE_LIVE_CODEX_SMOKE=1."
+    message: "Live Codex smoke is opt-in and sends the smoke project context through Codex SDK. To run: FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live"
   });
   process.exit(0);
+}
+
+if (!externalAck) {
+  writeJson({
+    ok: false,
+    skipped: true,
+    error: {
+      code: "LIVE_CODEX_EXTERNAL_ACK_REQUIRED",
+      message: "Live Codex smoke sends Forge project context through Codex SDK. Set FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex or pass --ack-external-codex to acknowledge this before running."
+    }
+  });
+  process.exit(2);
 }
 
 const workspaceRoot = resolve(
@@ -165,6 +181,10 @@ function parseArgs(argv) {
     if (token === "--workspace-root") {
       options.workspaceRoot = argv[index + 1] || "";
       index += 1;
+      continue;
+    }
+    if (token === "--ack-external-codex") {
+      options.ackExternalCodex = true;
     }
   }
   return options;

@@ -45,7 +45,7 @@ Current product boundary:
 - Start local server: `npm start`
 - Dev alias: `npm run dev`
 - Syntax check: `npm run check`
-- Optional live Codex SDK smoke: `npm run smoke:codex-live` (requires a working Codex CLI/SDK environment and is not part of default checks)
+- Optional live Codex SDK smoke: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` (sends the isolated smoke project context through Codex SDK; requires a working Codex CLI/SDK environment and is not part of default checks)
 
 Current known local limitation:
 

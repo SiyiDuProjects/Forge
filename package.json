@@ -7,7 +7,7 @@
     "start": "node server.mjs",
     "dev": "node server.mjs",
     "forge-tool": "node scripts/forge-tool.mjs",
-    "smoke:codex-live": "node scripts/codex-live-smoke.mjs --run",
+    "smoke:codex-live": "node scripts/codex-live-smoke.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "node --check server.mjs && node --check app.js && node --test tests/*.test.mjs"
   },

@@ -72,10 +72,10 @@ The browser can set `window.FORGE_RUNTIME_PROVIDER = "codex"` or `localStorage.f
 Optional live Codex smoke:
 
 ```bash
-npm run smoke:codex-live
+FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live
 ```
 
-This script is intentionally not part of `npm run check`. It creates an isolated smoke workspace, uses `runtimeProvider: "codex"`, runs the demo sequence of add buttons/buzzer, generate 3D, move USB-C, and revert, then fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves a pending confirmation, or misses the required state checks.
+This script is intentionally not part of `npm run check`. Running `npm run smoke:codex-live` without the env vars only prints the opt-in instructions. The live form creates an isolated smoke workspace, sends that project context through Codex SDK, uses `runtimeProvider: "codex"`, runs the demo sequence of add buttons/buzzer, generate 3D, move USB-C, and revert, then fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves a pending confirmation, or misses the required state checks.
 
 Codex runtime project workspace files:
 
