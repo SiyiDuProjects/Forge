@@ -320,6 +320,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /data-device-canvas="fullscreen"/);
   assert.match(app, /data-sidebar-project/);
   assert.match(app, /const RUNTIME_PROVIDER_VALUES = \["mock", "forge-query-engine", "codex"\]/);
+  assert.match(app, /const DEMO_RUNTIME_PROVIDER = "mock"/);
   assert.match(app, /function currentRuntimeProvider/);
   assert.match(app, /async function apiPostStream/);
   assert.match(app, /processSseBuffer/);
@@ -330,6 +331,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /id="runtimeStatus"/);
   assert.match(app, /runtimeProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /modelProvider: currentRuntimeProvider\(\)/);
+  assert.match(app, /runtime: DEMO_RUNTIME_PROVIDER/);
   assert.match(app, /refreshRuntimeStatus/);
   assert.match(app, /function refreshRuntimeStatusForProjectBoundary/);
   assert.match(app, /refreshRuntimeStatusForProjectBoundary\(\);/);

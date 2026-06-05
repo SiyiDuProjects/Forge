@@ -4,6 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const SUPPORTED_LANGUAGES = ["zh", "en"];
 const RUNTIME_PROVIDER_VALUES = ["mock", "forge-query-engine", "codex"];
+const DEMO_RUNTIME_PROVIDER = "mock";
 const threePreviewInstances = new Map();
 const INITIAL_RUNTIME_PROVIDER = localChatProvider();
 
@@ -567,9 +568,9 @@ async function createInitialPlan() {
     const response = await apiPost("/api/plans", {
       initialMessage: turns[0],
       language: state.lang,
-      runtime: currentRuntimeProvider(),
-      modelProvider: currentRuntimeProvider(),
-      runtimeProvider: currentRuntimeProvider()
+      runtime: DEMO_RUNTIME_PROVIDER,
+      modelProvider: DEMO_RUNTIME_PROVIDER,
+      runtimeProvider: DEMO_RUNTIME_PROVIDER
     });
     let productPlan = response.productPlan;
     for (const message of turns.slice(1)) {

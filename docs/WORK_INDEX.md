@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Startup Demo Runtime Isolation
+
+- Scope: keep automatic startup sample creation on the deterministic local mock runtime even when the user previously selected `Codex`, so page load does not create a Codex thread before the user sends a real request.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `DEMO_RUNTIME_PROVIDER`, `createInitialPlan`, startup sample runtime, no Codex thread on page load, explicit user turn runtime.
+- Verification: `npm run check` passes with 69 tests. Browser verification on `http://127.0.0.1:8775/?cacheBust=demo-runtime-isolation` confirmed that after selecting `Codex` and reloading, the startup sample remains a normal ProductPlan project with no saved `codexThreadId`; settings show `Codex SDK 已就绪 · 本项目尚未创建 Codex thread，首次 Codex 运行会创建`.
+- Boundary: this only affects automatic sample seeding. Composer sends, project chat turns, and explicit runtime selection still use the selected runtime provider.
+
 ### 2026-06-05 - Project Boundary Runtime Status Refresh
 
 - Scope: refresh the read-only runtime preflight whenever the frontend switches ProductPlan projects or starts a new draft, so the settings status cannot keep showing a previous project's `codexThreadId`.
