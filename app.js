@@ -1143,9 +1143,11 @@ function renderRevisionDiff(revision) {
 function renderInspector() {
   const revision = currentRevision();
   if (!revision) {
+    dom.inspectorContent.hidden = true;
     dom.inspectorContent.innerHTML = "";
     return;
   }
+  dom.inspectorContent.hidden = false;
   const sections = [
     ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]
   ];

@@ -23,7 +23,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 ### 2026-06-05 - Composer Button And 3D Generation Verification
 
 - Scope: fix the visible send button path in the browser, keep empty composer clicks from failing silently, prevent Codex Browser comment overlays from intercepting Forge prototype clicks, and expand the deterministic chat runtime so common finish changes such as graphite/stone-gray create ProductPlan revisions.
-- Status: implemented in the current working tree.
+- Status: implemented and committed; follow-up empty inspector polish implemented in the current working tree.
 - Key code handles:
   - `app.js`
   - `styles.css`
@@ -33,6 +33,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `tests/query_engine.test.mjs`
 - Retrieval handles: `submitComposer`, `dom.runChain.addEventListener("click", submitComposer)`, `emptyComposer`, `codex-browser-sidebar-comments-root`, `parseFinishPreference`, `constraints.finish`, `regenerateRevision`.
 - Verification: `npm run check` passes with 48 tests; Browser verification on `http://127.0.0.1:8766` confirms the comment overlay no longer blocks the send button, sending a graphite finish update creates revision `r6` through `applyDesignPatch`, `新项目` creates and sends a first ProductPlan request, and sending `生成模型` on the new project reaches `regenerateRevision` with `3D 模型已生成` / `真实 3D 预览已加载`.
+- Follow-up verification: Browser verification on `http://127.0.0.1:8765` confirms `新项目` blank state hides `#inspectorContent` (`hidden`, `display: none`, zero size) so the empty right-side card is not shown, and switching back to the generated-model project restores the inspector 3D preview.
 
 ### 2026-06-05 - Real Conversation And Project Switching Fix
 

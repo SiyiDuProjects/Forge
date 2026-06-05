@@ -310,6 +310,9 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /dom\.runChain\.addEventListener\("click", submitComposer\)/);
   assert.match(app, /emptyComposer: "请先输入硬件需求"/);
   assert.match(app, /emptyComposer: "Enter a hardware request first"/);
+  assert.match(app, /dom\.inspectorContent\.hidden = true/);
+  assert.match(app, /dom\.inspectorContent\.hidden = false/);
+  assert.match(styles, /\.inspector-content\[hidden\]\s*{\s*display: none;\s*}/);
   assert.match(app, /projects: \[\]/);
   assert.doesNotMatch(app, /fallbackProductPlan/);
   assert.doesNotMatch(app, /fallback-plan/);
