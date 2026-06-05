@@ -133,7 +133,7 @@ export const API_CONTRACT = [
   {
     method: "GET",
     path: "/api/workspaces/:workspaceId/chat/:sessionId",
-    response: ["ok", "workspaceId", "sessionId", "entries", "messages"]
+    response: ["ok", "workspaceId", "sessionId", "entries", "messages", "pendingConfirmation"]
   },
   {
     method: "POST",

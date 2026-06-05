@@ -564,12 +564,50 @@ async function restorePersistedProjects() {
     if (!restored.length) return false;
     state.projects = restored;
     activateProject(restored[0].projectId);
+    await restoreActiveChatSession({ renderAfter: false });
     state.runtimeError = "";
     return true;
   } catch (error) {
     if (token !== state.workspaceToken) return false;
     state.runtimeError = userFacingError(error);
     setNotice(t("fallbackNotice"));
+    return false;
+  }
+}
+
+async function restoreActiveChatSession({ renderAfter = true } = {}) {
+  const project = activeProject();
+  const planId = project?.productPlan?.planId;
+  if (!project || project.isDraft || !planId) return false;
+  const projectId = project.projectId;
+  const sessionId = project.chatSessionId || createSessionId(projectId);
+  const requestToken = state.workspaceToken;
+  try {
+    const payload = await apiGet(`/api/workspaces/${encodeURIComponent(planId)}/chat/${encodeURIComponent(sessionId)}?limit=80`);
+    if (requestToken !== state.workspaceToken || state.activeProjectId !== projectId) return false;
+    const productPlan = mergeConversationFromSession(project.productPlan, payload.messages || []);
+    const pendingConfirmation = payload.pendingConfirmation || null;
+    Object.assign(project, {
+      productPlan,
+      chatSessionId: payload.sessionId || sessionId,
+      chatSessionLoaded: true,
+      chatSessionEntries: payload.entries || [],
+      chatSessionMessages: payload.messages || [],
+      pendingConfirmation,
+      chatSessionError: ""
+    });
+    if (state.activeProjectId === projectId) {
+      state.productPlan = productPlan;
+      state.chatSessionId = project.chatSessionId;
+      state.pendingConfirmation = pendingConfirmation;
+      state.runtimeError = "";
+    }
+    if (renderAfter) render();
+    return true;
+  } catch (error) {
+    if (requestToken !== state.workspaceToken || state.activeProjectId !== projectId) return false;
+    project.chatSessionError = userFacingError(error);
+    if (renderAfter) render();
     return false;
   }
 }
@@ -648,11 +686,12 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
     project = createProjectRecord({ productPlan, kind: fields.kind || "user" });
     state.projects.unshift(project);
   }
+  const wasDraft = Boolean(project.isDraft);
   project.projectId = productPlan.planId;
   project.isDraft = false;
   project.productPlan = productPlan;
   project.title = projectTitleFromPlan(productPlan);
-  project.chatSessionId = fields.chatSessionId || project.chatSessionId || createSessionId(productPlan.planId);
+  project.chatSessionId = fields.chatSessionId || (wasDraft ? createSessionId(productPlan.planId) : project.chatSessionId) || createSessionId(productPlan.planId);
   project.lastChatTurn = fields.lastChatTurn ?? project.lastChatTurn ?? null;
   project.activeTrace = fields.activeTrace ?? project.activeTrace ?? null;
   project.pendingConfirmation = fields.pendingConfirmation ?? project.pendingConfirmation ?? null;
@@ -670,6 +709,22 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
   state.runtimeProvider = project.runtimeProvider;
   state.contactInfo = { ...project.contactInfo };
   return project;
+}
+
+function mergeConversationFromSession(productPlan, messages = []) {
+  if (!productPlan || !Array.isArray(messages) || !messages.length) return productPlan;
+  const existing = Array.isArray(productPlan.conversation) ? productPlan.conversation : [];
+  if (existing.length >= messages.length) return productPlan;
+  return {
+    ...productPlan,
+    conversation: messages.map((message) => ({
+      turnId: message.messageId || message.metadata?.turnId || "",
+      role: message.role === "assistant" ? "assistant" : "user",
+      text: message.content || "",
+      assetIds: [],
+      createdAt: message.createdAt || ""
+    }))
+  };
 }
 
 function createDraftProject() {
@@ -2914,6 +2969,7 @@ document.querySelector(".thread-list")?.addEventListener("click", (event) => {
   if (!activateProject(projectButton.dataset.sidebarProject)) return;
   setNotice(projectTitle(activeProject()));
   render();
+  restoreActiveChatSession().catch(() => {});
   refreshRuntimeStatusForProjectBoundary();
 });
 

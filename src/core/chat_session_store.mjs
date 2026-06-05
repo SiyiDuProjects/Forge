@@ -85,7 +85,8 @@ export function loadChatSession({
     workspaceId,
     sessionId: safeSessionId(sessionId),
     entries: sliced,
-    messages: sliced.filter((entry) => entry.type === "message")
+    messages: sliced.filter((entry) => entry.type === "message"),
+    pendingConfirmation: latestPendingConfirmationForSession({ workspaceId, sessionId, rootDir })
   };
 }
 
@@ -233,7 +234,24 @@ function pendingConfirmationsPath({ workspaceId, rootDir = defaultProjectWorkspa
 function readPendingConfirmations({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
   const filePath = pendingConfirmationsPath({ workspaceId, rootDir });
   if (!existsSync(filePath)) return {};
-  return JSON.parse(readFileSync(filePath, "utf8"));
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function latestPendingConfirmationForSession({
+  workspaceId,
+  sessionId = "session_default",
+  rootDir = defaultProjectWorkspaceRoot()
+} = {}) {
+  const safeId = safeSessionId(sessionId);
+  const confirmations = Object.values(readPendingConfirmations({ workspaceId, rootDir }))
+    .filter((confirmation) => confirmation?.status === "pending")
+    .filter((confirmation) => !safeId || confirmation.sessionId === safeId)
+    .sort((a, b) => Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
+  return confirmations[0] ? clone(confirmations[0]) : null;
 }
 
 function writePendingConfirmations({

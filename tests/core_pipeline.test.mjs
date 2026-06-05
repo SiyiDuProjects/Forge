@@ -329,8 +329,13 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /\/api\/workspaces\/\$\{state\.productPlan\.planId\}\/chat\/turn\/stream/);
   assert.match(app, /"\/api\/plans\/stream"/);
   assert.match(app, /async function restorePersistedProjects/);
+  assert.match(app, /async function restoreActiveChatSession/);
+  assert.match(app, /mergeConversationFromSession/);
   assert.match(app, /"\/api\/workspaces\?limit=12"/);
+  assert.match(app, /\/api\/workspaces\/\$\{encodeURIComponent\(planId\)\}\/chat\/\$\{encodeURIComponent\(sessionId\)\}\?limit=80/);
   assert.match(app, /if \(!restored\) createDraftProject\(\);/);
+  assert.match(app, /wasDraft \? createSessionId\(productPlan\.planId\)/);
+  assert.match(app, /restoreActiveChatSession\(\)\.catch\(\(\) => \{\}\);/);
   assert.match(app, /\/api\/runtime\/status/);
   assert.match(html, /id="runtimeStatus"/);
   assert.match(app, /runtimeProvider: currentRuntimeProvider\(\)/);

@@ -20,6 +20,20 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Chat Session Restore On Project Activation
+
+- Scope: restore persisted chat-session state when the frontend starts from saved workspaces or switches projects, including pending confirmation controls for ambiguous tool calls.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`
+- Key code handles:
+  - `src/core/chat_session_store.mjs`
+  - `app.js`
+  - `tests/query_engine.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `loadChatSession`, `pendingConfirmation`, `restoreActiveChatSession`, `mergeConversationFromSession`, `chat_sessions/pending_confirmations.json`, stable `session_<planId>` frontend session id, project switch chat restore.
+- Verification: `npm run check` passes with 71 tests. Targeted coverage includes `loadChatSession` returning the latest pending confirmation before approval and clearing it after confirmation resolution; frontend static coverage checks `restoreActiveChatSession`, `mergeConversationFromSession`, stable session ids after draft-to-plan conversion, and project-switch chat restore.
+- Boundary: this restores read-only chat-session state and pending confirmation controls. It does not change Codex runtime decisions, permission policy, Forge tool execution, ProductPlan mutation rules, GeometrySpec, or generated artifacts.
+
 ### 2026-06-05 - Persisted Workspace Startup Restore
 
 - Scope: load recent persisted Forge ProductPlan projects from `data/workspaces` on frontend startup, activate the newest restored project, and fall back to a blank draft only when no readable project exists or the backend is unavailable.

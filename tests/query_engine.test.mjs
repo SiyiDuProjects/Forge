@@ -198,6 +198,9 @@ test("Permission gate turns ambiguous mutations into confirmations and confirm e
   assert.equal(pendingTurn.pendingConfirmation.status, "pending");
   assert.equal(pendingTurn.toolCalls[0].permission.decision, "confirm");
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount);
+  const pendingSession = loadChatSession({ workspaceId: plan.planId, sessionId: "test_confirm" });
+  assert.equal(pendingSession.pendingConfirmation.confirmationId, pendingTurn.pendingConfirmation.confirmationId);
+  assert.equal(pendingSession.pendingConfirmation.status, "pending");
 
   const confirmed = await confirmForgeChatTool({
     workspaceId: plan.planId,
@@ -210,6 +213,8 @@ test("Permission gate turns ambiguous mutations into confirmations and confirm e
   assert.equal(confirmed.pendingConfirmation, null);
   assert.equal(confirmed.revision.revisionId, getProductPlan(plan.planId).currentRevisionId);
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);
+  const resolvedSession = loadChatSession({ workspaceId: plan.planId, sessionId: "test_confirm" });
+  assert.equal(resolvedSession.pendingConfirmation, null);
 });
 
 test("Permission gate denies raw geometry or artifact mutation targets", () => {

@@ -100,10 +100,12 @@ test("ProductPlan creation writes a durable Forge project folder", () => {
 });
 
 test("workspace listing restores persisted ProductPlan projects", () => {
+  const rootDir = mkdtempSync(join(tmpdir(), "forge-workspaces-"));
   const plan = createWorkspacePlan();
-  const listed = listProjectWorkspaces({ limit: 12 });
+  ensureProjectWorkspace({ plan, rootDir });
+  const listed = listProjectWorkspaces({ limit: 12, rootDir });
   const restored = listed.find((workspace) => workspace.workspaceId === plan.planId);
-  const restoredPlan = readProjectWorkspacePlan({ workspaceId: plan.planId });
+  const restoredPlan = readProjectWorkspacePlan({ workspaceId: plan.planId, rootDir });
 
   assert.ok(restored);
   assert.equal(restored.title, plan.workspaceState.title);

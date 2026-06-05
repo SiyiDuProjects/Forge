@@ -288,6 +288,7 @@ Returns assistant message, runtime/model provider, chat messages, tool call trac
 ### `GET /api/workspaces/:workspaceId/chat/:sessionId`
 
 Returns persisted chat session JSONL entries and message entries for a workspace.
+The response also includes the latest unresolved `pendingConfirmation` for that session, if one exists, so the frontend can restore approval controls after reload or project switch.
 
 ### `POST /api/workspaces/:workspaceId/chat/confirm`
 
