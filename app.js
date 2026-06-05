@@ -794,7 +794,7 @@ function renderStaticText() {
   setAttr(".model-fullscreen-dialog", "aria-label", t("modelFullscreenAria"));
   setAttr(".model-fullscreen-exit", "aria-label", t("closeModelFullscreen"));
   if (dom.ideaInput) dom.ideaInput.placeholder = t("composerPlaceholder");
-  if (dom.apiStatus) dom.apiStatus.textContent = state.notice || t("uiPrototype");
+  if (dom.apiStatus) dom.apiStatus.textContent = state.notice || "";
 
   const actionLabels = {
     rename: t("threadRename"),
@@ -1616,7 +1616,7 @@ function setNotice(message) {
   window.clearTimeout(setNotice.timeout);
   setNotice.timeout = window.setTimeout(() => {
     state.notice = "";
-    if (dom.apiStatus) dom.apiStatus.textContent = t("uiPrototype");
+    if (dom.apiStatus) dom.apiStatus.textContent = "";
   }, 2200);
 }
 

@@ -316,7 +316,11 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /function currentTopbarTitle/);
   assert.match(app, /setText\("#topbarTitle", currentTopbarTitle\(\)\)/);
   assert.match(html, /<span id="draftStatus" hidden><\/span>/);
+  assert.match(html, /<span id="apiStatus" class="api-status"><\/span>/);
+  assert.match(app, /dom\.apiStatus\.textContent = state\.notice \|\| ""/);
+  assert.match(app, /dom\.apiStatus\.textContent = ""/);
   assert.doesNotMatch(html, /ProductPlan 实时方案|完整界面流程/);
+  assert.doesNotMatch(html, /界面原型|内部 MVP/);
   assert.match(app, /projects: \[\]/);
   assert.doesNotMatch(app, /fallbackProductPlan/);
   assert.doesNotMatch(app, /fallback-plan/);
