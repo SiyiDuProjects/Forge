@@ -321,11 +321,18 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /data-sidebar-project/);
   assert.match(app, /const RUNTIME_PROVIDER_VALUES = \["mock", "forge-query-engine", "codex"\]/);
   assert.match(app, /function currentRuntimeProvider/);
+  assert.match(app, /async function apiPostStream/);
+  assert.match(app, /processSseBuffer/);
+  assert.match(app, /applyStreamTraceEvent/);
+  assert.match(app, /\/api\/workspaces\/\$\{state\.productPlan\.planId\}\/chat\/turn\/stream/);
+  assert.match(app, /"\/api\/plans\/stream"/);
   assert.match(app, /runtimeProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /modelProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /activeTrace: null/);
+  assert.match(app, /traceEvents: \[\]/);
   assert.match(app, /renderChatRuntimePanel/);
   assert.match(app, /renderTraceTimeline/);
+  assert.match(app, /traceEventRows/);
   assert.match(app, /traceRows/);
   assert.match(app, /执行过程/);
   assert.match(app, /Execution trace/);

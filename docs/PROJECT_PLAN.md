@@ -212,8 +212,8 @@ Implemented:
 - `forge-tool` CLI wrapper for Codex-side tool calls into Forge actions without direct guarded-file mutation.
 - Guarded-file detector for Codex SDK turns so direct edits to ProductPlan, manifests, revision sources, GeometrySpec, or artifacts return `GUARD_VIOLATION`.
 - Optional live Codex smoke script: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite. The acknowledged V1 live smoke passed on 2026-06-05.
-- API routes for `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
-- Frontend runtime selector in `Forge 设置` for `本地 Forge`, `Forge QueryEngine`, and `Codex`, with a center-thread execution trace that renders runtime/model response, Forge tool results, revision/proposal state, pending confirmations, and artifact generation status after each turn.
+- API routes for `/api/plans/stream`, `/api/workspaces/:workspaceId/chat/turn/stream`, `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
+- Frontend runtime selector in `Forge 设置` for `本地 Forge`, `Forge QueryEngine`, and `Codex`, with a center-thread SSE execution trace that renders ProductPlan creation, runtime/model request and response events, Forge tool progress, revision/proposal state, pending confirmations, and artifact generation status.
 
 Implementation boundary:
 

@@ -105,6 +105,12 @@ export const API_CONTRACT = [
   },
   {
     method: "POST",
+    path: "/api/workspaces/:workspaceId/chat/turn/stream",
+    body: ["sessionId", "userMessage", "runtime", "modelProvider", "runtimeProvider", "mode", "confirmation"],
+    response: ["text/event-stream", "trace", "final", "error"]
+  },
+  {
+    method: "POST",
     path: "/api/workspaces/:workspaceId/chat/turn",
     body: ["sessionId", "userMessage", "runtime", "modelProvider", "runtimeProvider", "mode", "confirmation"],
     response: ["ok", "runtimeProvider", "modelProvider", "assistantMessage", "messages", "toolCalls", "toolResults", "proposal", "revision", "pendingConfirmation", "productPlan", "codexThreadId"]
@@ -165,6 +171,12 @@ export const API_CONTRACT = [
     path: "/api/workspaces/:workspaceId/validate",
     body: ["proposalId", "patches", "mode"],
     response: ["ok", "status", "errors", "warnings", "blocked", "geometryValidation"]
+  },
+  {
+    method: "POST",
+    path: "/api/plans/stream",
+    body: ["message", "initialMessage", "assets", "language", "runtime", "modelProvider", "runtimeProvider"],
+    response: ["text/event-stream", "trace", "final", "error"]
   },
   {
     method: "POST",

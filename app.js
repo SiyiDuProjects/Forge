@@ -69,8 +69,14 @@ const copy = {
     traceReceived: "收到请求",
     tracePrepare: "准备项目上下文",
     traceWaiting: "等待运行结果",
+    traceStream: "实时连接",
+    tracePlanCreate: "创建 ProductPlan",
     traceRuntime: "运行模式",
+    traceModelRequest: "请求模型",
     traceModel: "模型响应",
+    traceToolSelected: "选择工具",
+    traceToolRunning: "执行工具",
+    traceToolResult: "工具结果",
     traceToolDenied: "工具被拦截，已回流修正",
     traceProposal: "方案变更",
     traceRevision: "版本更新",
@@ -272,8 +278,14 @@ const copy = {
     traceReceived: "Request received",
     tracePrepare: "Preparing project context",
     traceWaiting: "Waiting for runtime result",
+    traceStream: "Live connection",
+    tracePlanCreate: "Creating ProductPlan",
     traceRuntime: "Runtime",
+    traceModelRequest: "Model request",
     traceModel: "Model response",
+    traceToolSelected: "Tool selected",
+    traceToolRunning: "Running tool",
+    traceToolResult: "Tool result",
     traceToolDenied: "Tool denied and fed back",
     traceProposal: "Plan change",
     traceRevision: "Revision update",
@@ -669,6 +681,7 @@ function createRunningTrace({ message = "", hasRealPlan = false } = {}) {
     toolCalls: [],
     toolResults: [],
     modelResponses: [],
+    traceEvents: [],
     eventsAppended: [],
     startedAt: new Date().toISOString()
   };
@@ -686,6 +699,7 @@ function createFailedTrace({ message = "", error = "" } = {}) {
     toolCalls: [],
     toolResults: [],
     modelResponses: [],
+    traceEvents: [],
     eventsAppended: []
   };
 }
@@ -703,10 +717,42 @@ function planCreationTrace(response = {}, message = "") {
     toolCalls: [],
     toolResults: [],
     modelResponses: response.codexThreadId ? [{ ok: true, toolCallCount: 0, codexThreadId: response.codexThreadId }] : [],
+    traceEvents: response.traceEvents || [],
     eventsAppended: [],
     revision: response.revision || response.productPlan?.revisions?.at?.(-1) || null,
     productPlan: response.productPlan || null
   };
+}
+
+function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
+  if (token !== state.workspaceToken || !state.activeTrace) return;
+  const traceEvent = {
+    ...event,
+    eventId: event.eventId || makeClientId("trace")
+  };
+  state.activeTrace.traceEvents = [
+    ...(state.activeTrace.traceEvents || []),
+    traceEvent
+  ].slice(-36);
+  if (traceEvent.runtimeProvider) state.activeTrace.runtimeProvider = normalizeRuntimeProvider(traceEvent.runtimeProvider);
+  if (traceEvent.modelProvider) state.activeTrace.modelProvider = traceEvent.modelProvider;
+  if (traceEvent.turnId) state.activeTrace.turnId = traceEvent.turnId;
+  if (traceEvent.codexThreadId) state.activeTrace.codexThreadId = traceEvent.codexThreadId;
+  if (traceEvent.type === "model_response") {
+    state.activeTrace.modelResponses = [
+      ...(state.activeTrace.modelResponses || []),
+      {
+        ok: Boolean(traceEvent.ok),
+        toolCallCount: traceEvent.toolCallCount || 0,
+        hasFinalMessage: Boolean(traceEvent.hasFinalMessage),
+        errorCode: traceEvent.error?.code || "",
+        errorMessage: traceEvent.error?.message || "",
+        codexThreadId: traceEvent.codexThreadId || ""
+      }
+    ];
+  }
+  syncActiveProject({ activeTrace: state.activeTrace, runtimeProvider: state.runtimeProvider });
+  render();
 }
 
 async function sendTurn(message) {
@@ -720,23 +766,25 @@ async function sendTurn(message) {
   render();
   try {
     const response = hasRealPlan
-      ? await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/turn`, {
+      ? await apiPostStream(`/api/workspaces/${state.productPlan.planId}/chat/turn/stream`, {
         sessionId: state.chatSessionId,
         userMessage: message,
         runtime: currentRuntimeProvider(),
         modelProvider: currentRuntimeProvider(),
         runtimeProvider: currentRuntimeProvider()
-      })
-      : await apiPost("/api/plans", {
+      }, (event) => applyStreamTraceEvent(event, token))
+      : await apiPostStream("/api/plans/stream", {
         initialMessage: message,
         language: state.lang,
         runtime: currentRuntimeProvider(),
         modelProvider: currentRuntimeProvider(),
         runtimeProvider: currentRuntimeProvider()
-      });
+      }, (event) => applyStreamTraceEvent(event, token));
     if (token !== state.workspaceToken) return;
     if (!response.productPlan) throw new Error("ProductPlan was not returned.");
+    const streamTraceEvents = state.activeTrace?.traceEvents || [];
     const completedTrace = hasRealPlan ? response : planCreationTrace(response, message);
+    completedTrace.traceEvents = streamTraceEvents;
     upsertProjectFromPlan(response.productPlan, {
       lastChatTurn: completedTrace,
       activeTrace: null,
@@ -881,6 +929,79 @@ async function apiPost(path, body) {
     throw new Error(payload?.error?.message || `HTTP ${response.status}`);
   }
   return payload;
+}
+
+async function apiPostStream(path, body, onTraceEvent = () => {}) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      accept: "text/event-stream",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok || !response.body) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalPayload = null;
+  let errorPayload = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done });
+      const processed = processSseBuffer(buffer, (event) => {
+        if (event.eventName === "trace") onTraceEvent(event.data);
+        if (event.eventName === "final") finalPayload = event.data;
+        if (event.eventName === "error") errorPayload = event.data;
+      });
+      buffer = processed.remaining;
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) {
+    processSseBlock(buffer, (event) => {
+      if (event.eventName === "trace") onTraceEvent(event.data);
+      if (event.eventName === "final") finalPayload = event.data;
+      if (event.eventName === "error") errorPayload = event.data;
+    });
+  }
+  if (errorPayload && !finalPayload) {
+    throw new Error(errorPayload?.error?.message || "Stream request failed.");
+  }
+  if (!finalPayload) throw new Error("Stream ended before returning a final payload.");
+  if (finalPayload?.ok === false) {
+    throw new Error(finalPayload?.error?.message || "Stream final payload failed.");
+  }
+  return finalPayload;
+}
+
+function processSseBuffer(buffer, onEvent) {
+  const chunks = buffer.split(/\n\n/);
+  const remaining = chunks.pop() || "";
+  chunks.forEach((chunk) => processSseBlock(chunk, onEvent));
+  return { remaining };
+}
+
+function processSseBlock(block, onEvent) {
+  const lines = String(block || "").split(/\n/);
+  let eventName = "message";
+  const dataLines = [];
+  lines.forEach((line) => {
+    if (line.startsWith("event:")) eventName = line.slice(6).trim();
+    if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+  });
+  if (!dataLines.length) return;
+  try {
+    onEvent({ eventName, data: JSON.parse(dataLines.join("\n")) });
+  } catch {
+    // Ignore malformed stream chunks; the final payload/error still decides the turn.
+  }
 }
 
 function userFacingError(error) {
@@ -1178,7 +1299,14 @@ function renderTraceTimeline(turn = {}, pending = null) {
 }
 
 function traceRows(turn = {}, pending = null) {
+  const eventRows = traceEventRows(turn?.traceEvents || []);
   if (turn?.traceState === "running") {
+    if (eventRows.length) {
+      return [
+        ...eventRows,
+        { status: "pending", label: t("traceWaiting"), value: t("chatTraceRunning"), detail: normalizeRuntimeProvider(turn.runtimeProvider) === "codex" ? "Codex thread / Forge tools" : "Forge QueryEngine" }
+      ];
+    }
     return [
       { status: "done", label: t("traceReceived"), value: t("traceDone"), detail: turn.userMessage || "" },
       { status: "running", label: t("tracePrepare"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
@@ -1193,12 +1321,16 @@ function traceRows(turn = {}, pending = null) {
   }
 
   const rows = [];
-  rows.push({
-    status: "done",
-    label: t("traceRuntime"),
-    value: runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()),
-    detail: traceRuntimeDetail(turn)
-  });
+  if (eventRows.length) {
+    rows.push(...eventRows);
+  } else {
+    rows.push({
+      status: "done",
+      label: t("traceRuntime"),
+      value: runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()),
+      detail: traceRuntimeDetail(turn)
+    });
+  }
   if (turn?.codexThreadId) {
     rows.push({
       status: "done",
@@ -1208,7 +1340,7 @@ function traceRows(turn = {}, pending = null) {
     });
   }
   const modelResponses = turn?.modelResponses || [];
-  if (modelResponses.length) {
+  if (!eventRows.length && modelResponses.length) {
     const failed = modelResponses.find((response) => response.ok === false);
     rows.push({
       status: failed ? "blocked" : "done",
@@ -1271,6 +1403,176 @@ function traceRows(turn = {}, pending = null) {
     });
   }
   return rows;
+}
+
+function traceEventRows(events = []) {
+  return events.map((event) => {
+    switch (event.type) {
+      case "stream_started":
+        return {
+          status: "running",
+          label: t("traceStream"),
+          value: runtimeDisplayName(event.runtimeProvider || currentRuntimeProvider()),
+          detail: event.modelProvider ? `modelProvider: ${event.modelProvider}` : ""
+        };
+      case "plan_create_started":
+        return {
+          status: "running",
+          label: t("tracePlanCreate"),
+          value: runtimeDisplayName(event.runtimeProvider || currentRuntimeProvider()),
+          detail: event.text || ""
+        };
+      case "product_plan_created":
+        return {
+          status: "done",
+          label: t("tracePlanCreate"),
+          value: event.revisionId || event.planId || t("traceDone"),
+          detail: event.modelStatus || ""
+        };
+      case "codex_thread_requested":
+      case "codex_thread_initializing":
+        return {
+          status: "running",
+          label: "Codex thread",
+          value: event.type === "codex_thread_requested" ? t("tracePrepare") : t("chatTraceRunning"),
+          detail: event.workspaceId || ""
+        };
+      case "codex_thread_ready":
+        return {
+          status: "done",
+          label: "Codex thread",
+          value: compactId(event.codexThreadId || ""),
+          detail: event.codexThreadId || ""
+        };
+      case "chat_turn_started":
+        return {
+          status: "running",
+          label: t("traceRuntime"),
+          value: runtimeDisplayName(event.runtimeProvider || currentRuntimeProvider()),
+          detail: event.modelProvider ? `modelProvider: ${event.modelProvider}` : ""
+        };
+      case "user_message":
+        return {
+          status: "done",
+          label: t("traceReceived"),
+          value: t("traceDone"),
+          detail: event.text || ""
+        };
+      case "context_pack_built":
+        return {
+          status: "done",
+          label: t("tracePrepare"),
+          value: `${event.allowedToolCount || 0} tools`,
+          detail: state.lang === "zh"
+            ? `${event.openProposalCount || 0} 个待确认方案 / 当前版本 ${event.currentRevisionId || "-"}`
+            : `${event.openProposalCount || 0} open proposals / current ${event.currentRevisionId || "-"}`
+        };
+      case "model_request":
+        return {
+          status: "running",
+          label: t("traceModelRequest"),
+          value: event.modelProvider || "",
+          detail: state.lang === "zh"
+            ? `${event.toolCount || 0} 个可用工具 / 第 ${Number(event.iteration || 0) + 1} 轮`
+            : `${event.toolCount || 0} tools / iteration ${Number(event.iteration || 0) + 1}`
+        };
+      case "model_response":
+        return {
+          status: event.ok ? "done" : "blocked",
+          label: t("traceModel"),
+          value: event.ok ? `${event.toolCallCount || 0}` : (event.error?.code || t("traceFailed")),
+          detail: event.error?.message || (event.codexThreadId ? `Codex thread: ${event.codexThreadId}` : "")
+        };
+      case "tool_call_selected":
+        return {
+          status: "running",
+          label: t("traceToolSelected"),
+          value: event.toolName || "",
+          detail: formatTraceSummary(event.inputSummary)
+        };
+      case "tool_execution_started":
+        return {
+          status: "running",
+          label: t("traceToolRunning"),
+          value: event.toolName || "",
+          detail: event.toolCallId || ""
+        };
+      case "tool_result":
+      case "tool_failed":
+        return {
+          status: event.ok === false || event.type === "tool_failed" ? "blocked" : "done",
+          label: t("traceToolResult"),
+          value: event.summary?.newRevisionId || event.summary?.proposalId || event.toolName || "",
+          detail: event.error?.message || formatTraceSummary(event.summary)
+        };
+      case "tool_denied":
+        return {
+          status: "blocked",
+          label: t("traceToolDenied"),
+          value: event.error?.code || event.toolName || "",
+          detail: event.error?.message || ""
+        };
+      case "confirmation_required":
+        return {
+          status: "pending",
+          label: t("traceConfirmation"),
+          value: event.toolName || "",
+          detail: event.permission?.reason || ""
+        };
+      case "assistant_message":
+        return {
+          status: "done",
+          label: t("traceDone"),
+          value: event.pendingConfirmationId ? t("chatConfirmationRequired") : t("traceDone"),
+          detail: event.text || ""
+        };
+      case "chat_turn_completed":
+        return {
+          status: event.pendingConfirmationId ? "pending" : "done",
+          label: t("traceDone"),
+          value: event.pendingConfirmationId ? t("chatConfirmationRequired") : t("traceDone"),
+          detail: state.lang === "zh"
+            ? `${event.toolCallCount || 0} 个工具 / ${event.toolResultCount || 0} 个结果`
+            : `${event.toolCallCount || 0} tools / ${event.toolResultCount || 0} results`
+        };
+      case "chat_turn_failed":
+      case "plan_create_failed":
+        return {
+          status: "blocked",
+          label: t("traceFailed"),
+          value: event.error?.code || t("traceFailed"),
+          detail: event.error?.message || ""
+        };
+      default:
+        return {
+          status: "done",
+          label: event.type || t("traceDone"),
+          value: t("traceDone"),
+          detail: ""
+        };
+    }
+  });
+}
+
+function formatTraceSummary(summary = {}) {
+  const entries = Object.entries(summary || {})
+    .filter(([, value]) => value !== "" && value !== null && value !== undefined && value !== false)
+    .slice(0, 6)
+    .map(([key, value]) => formatTraceValue(key, value))
+    .filter(Boolean);
+  return entries.join(" / ");
+}
+
+function formatTraceValue(key, value) {
+  if (Array.isArray(value)) return `${key}: ${value.join(", ")}`;
+  if (value && typeof value === "object") {
+    if (key === "artifactPaths") {
+      const artifactKeys = Object.keys(value).filter((itemKey) => value[itemKey]);
+      return artifactKeys.length ? `${key}: ${artifactKeys.join(", ")}` : "";
+    }
+    return `${key}: ${JSON.stringify(value).slice(0, 96)}`;
+  }
+  return `${key}: ${value}`;
 }
 
 function traceRuntimeDetail(turn = {}) {

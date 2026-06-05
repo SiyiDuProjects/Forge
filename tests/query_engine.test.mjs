@@ -87,6 +87,37 @@ test("QueryEngine runs a direct model tool loop through Forge actions", async ()
   assert.ok(events.some((event) => event.type === "chat_turn_completed"));
 });
 
+test("QueryEngine emits live trace events for model and tool progress", async () => {
+  const plan = createChatPlan();
+  const traceEvents = [];
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_trace_events",
+    userMessage: "Add two buttons on the right side.",
+    modelProvider: "mock",
+    onTraceEvent: (event) => traceEvents.push(event)
+  });
+
+  assert.equal(result.ok, true);
+  const types = traceEvents.map((event) => event.type);
+  assert.ok(types.includes("chat_turn_started"));
+  assert.ok(types.includes("user_message"));
+  assert.ok(types.includes("context_pack_built"));
+  assert.ok(types.includes("model_request"));
+  assert.ok(types.includes("model_response"));
+  assert.ok(types.includes("tool_call_selected"));
+  assert.ok(types.includes("tool_execution_started"));
+  assert.ok(types.includes("tool_result"));
+  assert.ok(types.includes("assistant_message"));
+  assert.ok(types.includes("chat_turn_completed"));
+  assert.equal(
+    traceEvents.find((event) => event.type === "tool_result" && event.summary?.newRevisionId)?.summary?.newRevisionId,
+    result.revision.revisionId
+  );
+  assert.equal(traceEvents.at(-1).type, "chat_turn_completed");
+});
+
 test("QueryEngine turns finish changes into ProductPlan revisions", async () => {
   const plan = createChatPlan();
   const initialRevisionCount = plan.revisions.length;
@@ -286,6 +317,8 @@ test("Tool schema exporter and API contract expose chat runtime surfaces", () =>
   assert.ok(exported.tools.some((tool) => tool.name === "proposeDesignChange" && tool.createsProposal));
 
   const paths = API_CONTRACT.map((route) => route.path);
+  assert.ok(paths.includes("/api/plans/stream"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/turn/stream"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/turn"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/:sessionId"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/confirm"));
@@ -759,6 +792,7 @@ test("Codex runtime plan creation initializes and persists a delayed project thr
       };
     }
   });
+  const traceEvents = [];
 
   const result = await createProductPlanForRuntime({
     initialMessage: "我想做一个带 3.5 寸屏幕的小桌面闹钟。",
@@ -767,7 +801,8 @@ test("Codex runtime plan creation initializes and persists a delayed project thr
       runtimeProvider: "codex",
       modelProvider: "codex"
     },
-    codexFactory
+    codexFactory,
+    onTraceEvent: (event) => traceEvents.push(event)
   });
 
   assert.equal(result.codexThreadId, "created-plan-thread");
@@ -778,6 +813,10 @@ test("Codex runtime plan creation initializes and persists a delayed project thr
   assert.match(prompts[0], /Initialize this Codex thread/);
   assert.match(prompts[0], /Do not call tools/);
   assert.match(prompts[0], /小桌面闹钟/);
+  assert.ok(traceEvents.some((event) => event.type === "plan_create_started"));
+  assert.ok(traceEvents.some((event) => event.type === "product_plan_created"));
+  assert.ok(traceEvents.some((event) => event.type === "codex_thread_requested"));
+  assert.ok(traceEvents.some((event) => event.type === "codex_thread_ready" && event.codexThreadId === "created-plan-thread"));
 });
 
 test("Codex tool intent parser accepts fenced JSON and plain messages", () => {

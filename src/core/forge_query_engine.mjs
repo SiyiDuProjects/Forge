@@ -24,7 +24,8 @@ export async function runForgeChatTurn({
   maxToolCalls = 5,
   rootDir = defaultProjectWorkspaceRoot(),
   codexFactory = null,
-  modelAdapterFactory = createModelAdapter
+  modelAdapterFactory = createModelAdapter,
+  onTraceEvent = null
 } = {}) {
   const text = String(userMessage || "").trim();
   if (!workspaceId) return fail("UNKNOWN_WORKSPACE", "workspaceId is required.");
@@ -51,6 +52,15 @@ export async function runForgeChatTurn({
     }
   });
   eventsAppended.push(startedEvent);
+  emitTraceEvent(onTraceEvent, {
+    type: "chat_turn_started",
+    turnId,
+    sessionId,
+    runtimeProvider: runtime.runtimeProvider,
+    modelProvider: runtime.modelProvider,
+    requestedRuntimeProvider: runtime.requestedRuntimeProvider,
+    mode
+  });
 
   const userChatMessage = appendChatMessage({
     workspaceId,
@@ -73,9 +83,25 @@ export async function runForgeChatTurn({
       text
     }
   }));
+  emitTraceEvent(onTraceEvent, {
+    type: "user_message",
+    turnId,
+    sessionId,
+    messageId: userChatMessage.messageId,
+    text
+  });
 
   const contextPack = buildContextPack({ workspaceId, rootDir });
-  if (!contextPack.ok) return fail(contextPack.error?.code || "CONTEXT_PACK_FAILED", contextPack.error?.message || "Could not build ContextPack.", { eventsAppended });
+  if (!contextPack.ok) {
+    const result = fail(contextPack.error?.code || "CONTEXT_PACK_FAILED", contextPack.error?.message || "Could not build ContextPack.", { eventsAppended });
+    emitTraceEvent(onTraceEvent, {
+      type: "chat_turn_failed",
+      turnId,
+      sessionId,
+      error: result.error
+    });
+    return result;
+  }
   eventsAppended.push(appendWorkspaceEvent({
     workspaceId,
     rootDir,
@@ -89,6 +115,14 @@ export async function runForgeChatTurn({
       allowedToolCount: contextPack.allowedTools?.length || 0
     }
   }));
+  emitTraceEvent(onTraceEvent, {
+    type: "context_pack_built",
+    turnId,
+    sessionId,
+    currentRevisionId: contextPack.projectSummary?.currentRevisionId || "",
+    openProposalCount: contextPack.openProposals?.length || 0,
+    allowedToolCount: contextPack.allowedTools?.length || 0
+  });
 
   const session = loadChatSession({ workspaceId, sessionId, limit: 24, rootDir });
   const exported = exportToolsForModel({
@@ -115,6 +149,16 @@ export async function runForgeChatTurn({
       promptSectionCount: prompt.sections.length
     }
   }));
+  emitTraceEvent(onTraceEvent, {
+    type: "model_request",
+    turnId,
+    sessionId,
+    runtimeProvider: runtime.runtimeProvider,
+    modelProvider: runtime.modelProvider,
+    toolCount: exported.tools.length,
+    promptSectionCount: prompt.sections.length,
+    iteration: 0
+  });
 
   const adapter = modelAdapterFactory({
     provider: runtime.modelProvider,
@@ -129,6 +173,18 @@ export async function runForgeChatTurn({
   let currentContextPack = contextPack;
 
   for (let iteration = 0; iteration <= maxToolCalls; iteration += 1) {
+    if (iteration > 0) {
+      emitTraceEvent(onTraceEvent, {
+        type: "model_request",
+        turnId,
+        sessionId,
+        runtimeProvider: runtime.runtimeProvider,
+        modelProvider: runtime.modelProvider,
+        toolCount: exported.tools.length,
+        promptSectionCount: prompt.sections.length,
+        iteration
+      });
+    }
     const modelResult = await adapter.runTurn({
       prompt: prompt.systemPrompt,
       tools: exported.tools,
@@ -153,6 +209,18 @@ export async function runForgeChatTurn({
         codexThreadId: modelResult?.codexThreadId || ""
       }
     }));
+    emitTraceEvent(onTraceEvent, {
+      type: "model_response",
+      turnId,
+      sessionId,
+      iteration,
+      ok: Boolean(modelResult?.ok),
+      toolCallCount: modelResult?.toolCalls?.length || 0,
+      hasFinalMessage: Boolean(modelResult?.finalMessage),
+      responseId: modelResult?.rawResponseId || "",
+      codexThreadId: modelResult?.codexThreadId || "",
+      error: modelResult?.error || null
+    });
 
     if (!modelResult?.ok) {
       assistantMessage = modelResult?.error?.message || "The model adapter failed.";
@@ -174,6 +242,15 @@ export async function runForgeChatTurn({
           }
         };
         const metadata = getToolMetadata(toolCall.name);
+        emitTraceEvent(onTraceEvent, {
+          type: "tool_call_selected",
+          turnId,
+          sessionId,
+          iteration,
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.name,
+          inputSummary: summarizeToolInputForTrace(toolCall.input)
+        });
         const permission = checkToolPermission({
           toolName: toolCall.name,
           toolInput: toolCall.input,
@@ -193,6 +270,14 @@ export async function runForgeChatTurn({
             error: permission.error
           };
           toolResults.push({ ok: false, toolCall, result, summary: summarizeToolResult(result) });
+          emitTraceEvent(onTraceEvent, {
+            type: "tool_denied",
+            turnId,
+            sessionId,
+            toolCallId: toolCall.toolCallId,
+            toolName: toolCall.name,
+            error: permission.error
+          });
           eventsAppended.push(appendWorkspaceEvent({
             workspaceId,
             rootDir,
@@ -222,9 +307,25 @@ export async function runForgeChatTurn({
           pendingConfirmation = pending.pendingConfirmation;
           eventsAppended.push(pending.event);
           assistantMessage = confirmationMessageFor(toolCall, permission, text);
+          emitTraceEvent(onTraceEvent, {
+            type: "confirmation_required",
+            turnId,
+            sessionId,
+            toolCallId: toolCall.toolCallId,
+            toolName: toolCall.name,
+            permission: clone(permission),
+            pendingConfirmation
+          });
           break;
         }
 
+        emitTraceEvent(onTraceEvent, {
+          type: "tool_execution_started",
+          turnId,
+          sessionId,
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.name
+        });
         const execution = await executeForgeTool({
           workspaceId,
           sessionId,
@@ -235,6 +336,16 @@ export async function runForgeChatTurn({
         });
         toolResults.push(execution);
         eventsAppended.push(...(execution.events || []));
+        emitTraceEvent(onTraceEvent, {
+          type: execution.ok ? "tool_result" : "tool_failed",
+          turnId,
+          sessionId,
+          toolCallId: execution.toolCall?.toolCallId || toolCall.toolCallId,
+          toolName: execution.toolCall?.name || toolCall.name,
+          ok: Boolean(execution.ok),
+          summary: clone(execution.summary || summarizeToolResult(execution.result)),
+          error: execution.result?.error || null
+        });
       }
 
       if (assistantMessage || pendingConfirmation) break;
@@ -279,6 +390,14 @@ export async function runForgeChatTurn({
       pendingConfirmationId: pendingConfirmation?.confirmationId || ""
     }
   }));
+  emitTraceEvent(onTraceEvent, {
+    type: "assistant_message",
+    turnId,
+    sessionId,
+    messageId: assistantChatMessage.messageId,
+    text: assistantMessage,
+    pendingConfirmationId: pendingConfirmation?.confirmationId || ""
+  });
   eventsAppended.push(appendWorkspaceEvent({
     workspaceId,
     rootDir,
@@ -292,6 +411,14 @@ export async function runForgeChatTurn({
       pendingConfirmationId: pendingConfirmation?.confirmationId || ""
     }
   }));
+  emitTraceEvent(onTraceEvent, {
+    type: "chat_turn_completed",
+    turnId,
+    sessionId,
+    toolCallCount: toolCalls.length,
+    toolResultCount: toolResults.length,
+    pendingConfirmationId: pendingConfirmation?.confirmationId || ""
+  });
 
   const finalSession = loadChatSession({ workspaceId, sessionId, limit: 80, rootDir });
   return {
@@ -328,6 +455,18 @@ export async function runForgeChatTurn({
       codexThreadId: response?.codexThreadId || ""
     }))
   };
+}
+
+function emitTraceEvent(onTraceEvent, event = {}) {
+  if (typeof onTraceEvent !== "function") return;
+  try {
+    onTraceEvent({
+      at: new Date().toISOString(),
+      ...event
+    });
+  } catch {
+    // Trace observers must never change Forge state execution.
+  }
 }
 
 export function resolveChatRuntime({
@@ -579,6 +718,19 @@ function validationWarningsFromResults(toolResults = []) {
 
 function artifactPathsFromResults(toolResults = []) {
   return Object.assign({}, ...toolResults.map((item) => item.result?.artifactPaths || {}));
+}
+
+function summarizeToolInputForTrace(input = {}) {
+  const summary = {};
+  if (input.workspaceId) summary.workspaceId = input.workspaceId;
+  if (input.query) summary.query = String(input.query).slice(0, 120);
+  if (input.message) summary.message = String(input.message).slice(0, 120);
+  if (input.proposalId) summary.proposalId = input.proposalId;
+  if (input.revisionId) summary.revisionId = input.revisionId;
+  if (Array.isArray(input.patches)) summary.patchCount = input.patches.length;
+  if (Array.isArray(input.componentTypes)) summary.componentTypes = input.componentTypes.slice(0, 8);
+  if (input.mode) summary.mode = input.mode;
+  return summary;
 }
 
 function confirmationMessageFor(toolCall, permission, userMessage = "") {

@@ -239,6 +239,18 @@ Returns a compact context pack built from the project folder: project summary, P
 
 Returns Tool Protocol metadata for the Forge action set.
 
+### `POST /api/workspaces/:workspaceId/chat/turn/stream`
+
+Streams one QueryEngine chat turn for an existing Forge workspace.
+
+Body is the same as `/api/workspaces/:workspaceId/chat/turn`.
+
+Response content type is `text/event-stream`.
+
+- `trace`: bounded runtime milestone event such as `chat_turn_started`, `context_pack_built`, `model_request`, `model_response`, `tool_call_selected`, `tool_execution_started`, `tool_result`, `confirmation_required`, or `chat_turn_completed`.
+- `final`: the same authoritative payload returned by `/api/workspaces/:workspaceId/chat/turn`.
+- `error`: structured `{ "ok": false, "error": ... }` payload if the stream cannot complete.
+
 ### `POST /api/workspaces/:workspaceId/chat/turn`
 
 Runs one QueryEngine chat turn for an existing Forge workspace.
@@ -324,6 +336,18 @@ Switches the current workspace back to a previous revision without AI involvemen
 ### `POST /api/workspaces/:workspaceId/validate`
 
 Validates the current state, a proposal, or explicit patch set without writing model files.
+
+### `POST /api/plans/stream`
+
+Streams ProductPlan creation from an initial conversation turn.
+
+Body is the same as `/api/plans`.
+
+Response content type is `text/event-stream`.
+
+- `trace`: bounded creation milestone event such as `plan_create_started`, `product_plan_created`, `codex_thread_requested`, `codex_thread_initializing`, or `codex_thread_ready`.
+- `final`: the same authoritative payload returned by `/api/plans`.
+- `error`: structured `{ "ok": false, "error": ... }` payload if the stream cannot complete.
 
 ### `POST /api/plans`
 

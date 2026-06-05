@@ -53,11 +53,13 @@ runForgeChatTurn({
 
 HTTP routes:
 
+- `POST /api/plans/stream`
+- `POST /api/workspaces/:workspaceId/chat/turn/stream`
 - `POST /api/workspaces/:workspaceId/chat/turn`
 - `GET /api/workspaces/:workspaceId/chat/:sessionId`
 - `POST /api/workspaces/:workspaceId/chat/confirm`
 
-The frontend creates the initial `ProductPlan` with `/api/plans`. That route uses the same runtime boundary as chat turns: if `runtimeProvider: "codex"` is selected, it initializes and persists the project-bound Codex thread id before returning. Once a real workspace exists, later composer turns use `/api/workspaces/:workspaceId/chat/turn`.
+The frontend creates the initial `ProductPlan` with `/api/plans/stream`, then uses `/api/workspaces/:workspaceId/chat/turn/stream` for later composer turns. The non-streaming `/api/plans` and `/api/workspaces/:workspaceId/chat/turn` routes remain available for tests, scripts, and fallback integrations. The plan creation route uses the same runtime boundary as chat turns: if `runtimeProvider: "codex"` is selected, it initializes and persists the project-bound Codex thread id before returning the final payload.
 
 The default UI/runtime provider is the local Forge adapter (`modelProvider: "mock"` / `runtimeProvider: "mock"` in code). This avoids external key/relay failures while still exercising real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths.
 
@@ -205,5 +207,5 @@ QueryEngine returns:
 - `runtimeProvider` and `modelProvider`
 - `codexThreadId` when the Codex runtime provider is active
 
-The current UI renders a compact QueryEngine trace and pending confirmation card in the center thread.
-The trace is result-based rather than SSE streaming: during an active turn it shows a running state, and after the API returns it displays runtime/model response counts, Forge tool summaries, proposal or revision state, explicit confirmation requirements, Codex thread id when available, and artifact generation status.
+The current UI renders a compact streaming QueryEngine trace and pending confirmation card in the center thread.
+The streaming trace uses server-sent events over `fetch` and shows ProductPlan creation, ContextPack preparation, model requests/responses, Forge tool selection/execution/results, explicit confirmation requirements, Codex thread id when available, and artifact generation status. It is not a token-level transcript of Codex internals; Forge still emits only bounded product-task milestones and returns the final authoritative ProductPlan payload at the end.

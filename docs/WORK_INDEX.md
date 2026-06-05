@@ -20,6 +20,23 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Streaming Runtime Trace For Plan And Chat Turns
+
+- Scope: upgrade the frontend runtime trace from result-based rendering to bounded SSE milestone streaming for both first ProductPlan creation and existing project chat turns.
+- Status: implemented and verified in the current working tree.
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CONTRACTS.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
+- Key code handles:
+  - `server.mjs`
+  - `app.js`
+  - `src/core/forge_query_engine.mjs`
+  - `src/core/runtime_plan_creation.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: `/api/plans/stream`, `/api/workspaces/:workspaceId/chat/turn/stream`, `text/event-stream`, `onTraceEvent`, `apiPostStream`, `processSseBuffer`, `applyStreamTraceEvent`, `traceEventRows`, `plan_create_started`, `model_request`, `tool_call_selected`, `tool_result`, `chat_turn_completed`.
+- Verification: `npm run check` passes with 66 tests. Browser verification on `http://127.0.0.1:8769` confirms first request shows `实时连接 -> 创建 ProductPlan -> revision` in the trace and existing project updates show `运行模式 -> 收到请求 -> 准备项目上下文 -> 请求模型 -> 模型响应 -> 选择工具 -> 执行工具 -> 工具结果 -> 完成 -> 版本更新`; the right inspector remains `待确认生成` until explicit model generation. Direct `curl -N` verification against `/api/plans/stream` confirms SSE `trace` events arrive before the final ProductPlan payload.
+- Remaining caveat: this is milestone streaming, not token-level Codex transcript streaming. Forge intentionally exposes bounded product-task milestones rather than arbitrary Codex internal logs or shell/file activity.
+
 ### 2026-06-05 - Frontend Runtime Selector And Execution Trace
 
 - Scope: make the Codex/Forge runtime path visible in the browser instead of leaving chat turns as opaque loading. The settings dialog now exposes `本地 Forge`, `Forge QueryEngine`, and `Codex`; the center thread renders a result-based execution trace with runtime/model response, Forge tool summaries, revision/proposal state, pending confirmation, Codex thread id when present, and artifact generation status.
@@ -34,7 +51,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `tests/query_engine.test.mjs`
 - Retrieval handles: runtimeProviderSelect, runtime selector, 本地 Forge, Forge QueryEngine, Codex, activeTrace, renderTraceTimeline, traceRows, execution trace, trace-timeline, explicit 3D generation confirmation, no fake model files.
 - Verification: `npm run check` passes with 65 tests. Browser verification on `http://127.0.0.1:8768` confirms settings exposes the three runtime modes; blank `新项目` hides the right inspector; first hardware request creates a ProductPlan and right inspector with `3D 模型状态 待确认生成`; ordinary graphite/USB-C update creates a revision and says no new model files were written; explicit `生成模型` runs `regenerateRevision`, flips the right inspector to `3D 模型已生成`, and shows generated evidence links.
-- Remaining caveat: the trace is result-based, not SSE/live-step streaming. During long Codex runs it shows an active running state, then renders the returned model/tool trace when the API completes.
+- Follow-up: superseded by the `Streaming Runtime Trace For Plan And Chat Turns` work block above, which adds SSE milestone streaming.
 
 ### 2026-06-05 - Codex SDK Project-Task Runtime And Forge Tool Collection Layer
 
@@ -60,8 +77,8 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 - Retrieval handles: Codex SDK, @openai/codex-sdk, CodexSdkRuntimeAdapter, runtime codex, runtimeProvider codex, FORGE_CHAT_RUNTIME_PROVIDER, forgeRuntimeProvider, codexThreadId, project file cabinet, project secretary, AGENTS.md in project workspace, FORGE_TOOLS.md, skills/, forge-tool, runtime_plan.json, guarded files, GUARD_VIOLATION, no cross-project memory.
 - Verification: `node --check server.mjs`, `node --check app.js`, `node --test tests/query_engine.test.mjs` passes with 20 QueryEngine tests including the forge-tool demo path, denied-tool feedback repair, and Codex-selected ProductPlan creation with a delayed thread id; `node --test tests/project_workspace.test.mjs` passes with project-workspace tests including event-type-specific guarded-file authorization; `npm run smoke:codex-live` skips without live opt-in; `node scripts/codex-live-smoke.mjs --run` refuses without explicit external-context ACK; and full `npm run check` passes with 65 tests. The opt-in live smoke initializes the first ProductPlan through `runtimeProvider: "codex"`, simulates user confirmation for proposals, keeps ordinary commit/apply revisions pending until explicit generation, and passed the real Codex V1 idea/modification/3D-generation/USB-move/revert checks on 2026-06-05.
 - Live smoke note: a normal sandbox run of `npm run smoke:codex-live` is intentionally non-live. A real run requires `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live`; this sends the isolated smoke project context through Codex SDK. The acknowledged live run on 2026-06-05 returned `ok: true` with a real `codexThreadId`, generated GLB/STL/STEP artifacts, a USB-C `back_left` revision, and a revert event.
-- Completion audit: `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md` records the live-verified V1 Codex runtime path and the remaining UI trace-streaming caveat.
-- Next: default UI remains `runtimeProvider: "mock"` until live Codex runtime is deliberately selected; a separate frontend trace pass should expose model/tool progress instead of leaving long Codex runs as an opaque spinner.
+- Completion audit: `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md` records the live-verified V1 Codex runtime path and the current bounded SSE trace behavior.
+- Next: default UI remains `runtimeProvider: "mock"` until live Codex runtime is deliberately selected; future work can refine milestone streaming into richer Codex progress, cancellation, and retry controls without exposing arbitrary shell/file activity.
 
 ### 2026-06-05 - Center Thread Chat-Only Cleanup
 

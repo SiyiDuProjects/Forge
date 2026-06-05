@@ -140,6 +140,22 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  const workspaceChatTurnStreamMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/turn\/stream$/);
+  if (request.method === "POST" && workspaceChatTurnStreamMatch) {
+    const body = await readJsonBody(request);
+    const runtime = runtimeForRequest(body);
+    await sendChatTurnStream(response, {
+      workspaceId: workspaceChatTurnStreamMatch[1],
+      sessionId: body.sessionId || "session_default",
+      userMessage: body.userMessage || body.message || "",
+      modelProvider: runtime.modelProvider,
+      runtimeProvider: runtime.runtimeProvider,
+      mode: body.mode || "normal",
+      confirmation: body.confirmation || null
+    });
+    return;
+  }
+
   const workspaceChatTurnMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/turn$/);
   if (request.method === "POST" && workspaceChatTurnMatch) {
     const body = await readJsonBody(request);
@@ -267,6 +283,19 @@ async function handleApi(request, response, url) {
       patches: Array.isArray(body.patches) ? body.patches : null,
       mode: body.mode || "current_or_proposal"
     }));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/plans/stream") {
+    const body = await readJsonBody(request);
+    const runtime = runtimeForRequest(body);
+    await sendPlanCreateStream(response, {
+      message: body.message,
+      initialMessage: body.initialMessage,
+      assets: body.assets || [],
+      language: body.language,
+      runtime
+    });
     return;
   }
 
@@ -578,6 +607,77 @@ function runtimeForRequest(body = {}) {
     runtimeProvider: explicitRuntime || (explicitModel ? "" : defaultChatRuntimeProvider),
     modelProvider: explicitModel || defaultChatModelProvider
   });
+}
+
+async function sendChatTurnStream(response, options = {}) {
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-store, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no"
+  });
+  writeSse(response, "trace", {
+    type: "stream_started",
+    at: new Date().toISOString(),
+    workspaceId: options.workspaceId || "",
+    sessionId: options.sessionId || "session_default",
+    runtimeProvider: options.runtimeProvider || "",
+    modelProvider: options.modelProvider || ""
+  });
+  try {
+    const result = await runForgeChatTurn({
+      ...options,
+      onTraceEvent: (event) => writeSse(response, "trace", event)
+    });
+    writeSse(response, result?.ok ? "final" : "error", result);
+  } catch (error) {
+    writeSse(response, "error", {
+      ok: false,
+      error: {
+        code: "CHAT_STREAM_FAILED",
+        message: error instanceof Error ? error.message : "Chat stream failed."
+      }
+    });
+  } finally {
+    response.end();
+  }
+}
+
+async function sendPlanCreateStream(response, options = {}) {
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-store, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no"
+  });
+  writeSse(response, "trace", {
+    type: "stream_started",
+    at: new Date().toISOString(),
+    runtimeProvider: options.runtime?.runtimeProvider || "",
+    modelProvider: options.runtime?.modelProvider || ""
+  });
+  try {
+    const result = await createProductPlanForRuntime({
+      ...options,
+      onTraceEvent: (event) => writeSse(response, "trace", event)
+    });
+    writeSse(response, result?.ok === false ? "error" : "final", result);
+  } catch (error) {
+    writeSse(response, "error", {
+      ok: false,
+      error: {
+        code: "PLAN_STREAM_FAILED",
+        message: error instanceof Error ? error.message : "Plan stream failed."
+      }
+    });
+  } finally {
+    response.end();
+  }
+}
+
+function writeSse(response, event, data = {}) {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 function sendJson(response, status, payload) {
