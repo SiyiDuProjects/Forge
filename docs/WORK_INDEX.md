@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Codex Runtime Restored Per Threaded Project
+
+- Scope: when the frontend restores persisted workspaces, projects with a saved `codexThreadId` reopen with `runtimeProvider: "codex"` so continuing that project resumes the Codex-backed thread instead of silently using local Forge.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `runtimeProviderForRestoredWorkspace`, `codexThreadIdForWorkspace`, restored project runtime, saved `codexThreadId`, resume Codex project thread.
+- Verification: `npm run check` passes with 71 tests. Frontend static coverage checks that restored workspaces use `runtimeProviderForRestoredWorkspace`, derive `codexThreadId` from workspace summary/manifest/ProductPlan state, and reopen threaded projects with `runtimeProvider: "codex"`.
+- Boundary: this is frontend runtime selection during project restore only. It does not create a Codex thread on page load, does not mutate ProductPlan state, and does not change default local runtime for projects without saved Codex threads.
+
 ### 2026-06-05 - Chat Session Restore On Project Activation
 
 - Scope: restore persisted chat-session state when the frontend starts from saved workspaces or switches projects, including pending confirmation controls for ambiguous tool calls.

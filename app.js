@@ -555,11 +555,12 @@ async function restorePersistedProjects() {
     const response = await apiGet("/api/workspaces?limit=12");
     if (token !== state.workspaceToken) return false;
     const restored = (response.workspaces || [])
-      .map((workspace) => workspace.productPlan)
-      .filter((plan) => plan?.planId)
-      .map((productPlan) => createProjectRecord({
-        productPlan,
-        kind: "restored"
+      .filter((workspace) => workspace?.productPlan?.planId)
+      .map((workspace) => createProjectRecord({
+        productPlan: workspace.productPlan,
+        kind: "restored",
+        runtimeProvider: runtimeProviderForRestoredWorkspace(workspace),
+        codexThreadId: codexThreadIdForWorkspace(workspace)
       }));
     if (!restored.length) return false;
     state.projects = restored;
@@ -626,7 +627,14 @@ function createSessionId(projectId) {
   return `session_${String(projectId || makeClientId("project")).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
-function createProjectRecord({ productPlan = null, title = "", kind = "user", isDraft = false } = {}) {
+function createProjectRecord({
+  productPlan = null,
+  title = "",
+  kind = "user",
+  isDraft = false,
+  runtimeProvider = "",
+  codexThreadId = ""
+} = {}) {
   const projectId = productPlan?.planId || makeClientId("draft");
   return {
     projectId,
@@ -639,10 +647,19 @@ function createProjectRecord({ productPlan = null, title = "", kind = "user", is
     activeTrace: null,
     pendingConfirmation: null,
     runtimeError: "",
-    runtimeProvider: state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER,
+    runtimeProvider: runtimeProvider || state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER,
+    codexThreadId: codexThreadId || productPlan?.workspaceState?.codexThreadId || "",
     contactInfo: productPlan?.contactInfo || { name: "", email: "" },
     createdAt: new Date().toISOString()
   };
+}
+
+function runtimeProviderForRestoredWorkspace(workspace = {}) {
+  return codexThreadIdForWorkspace(workspace) ? "codex" : (state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER);
+}
+
+function codexThreadIdForWorkspace(workspace = {}) {
+  return workspace.codexThreadId || workspace.manifest?.codexThreadId || workspace.productPlan?.workspaceState?.codexThreadId || "";
 }
 
 function saveActiveProject() {
@@ -654,6 +671,7 @@ function saveActiveProject() {
   project.pendingConfirmation = state.pendingConfirmation;
   project.runtimeError = state.runtimeError;
   project.runtimeProvider = state.runtimeProvider;
+  project.codexThreadId = state.productPlan?.workspaceState?.codexThreadId || project.codexThreadId || "";
   project.contactInfo = { ...state.contactInfo };
   project.title = state.productPlan ? projectTitleFromPlan(state.productPlan) : (project.title || t("newDraftTitle"));
 }
@@ -697,6 +715,7 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
   project.pendingConfirmation = fields.pendingConfirmation ?? project.pendingConfirmation ?? null;
   project.runtimeError = fields.runtimeError || "";
   project.runtimeProvider = fields.runtimeProvider || state.runtimeProvider || project.runtimeProvider || INITIAL_RUNTIME_PROVIDER;
+  project.codexThreadId = fields.codexThreadId || productPlan.workspaceState?.codexThreadId || project.codexThreadId || "";
   project.contactInfo = productPlan.contactInfo || project.contactInfo || { name: "", email: "" };
   project.kind = fields.kind || project.kind || "user";
   state.activeProjectId = project.projectId;

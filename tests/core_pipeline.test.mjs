@@ -331,6 +331,9 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /async function restorePersistedProjects/);
   assert.match(app, /async function restoreActiveChatSession/);
   assert.match(app, /mergeConversationFromSession/);
+  assert.match(app, /runtimeProviderForRestoredWorkspace/);
+  assert.match(app, /codexThreadIdForWorkspace/);
+  assert.match(app, /codexThreadIdForWorkspace\(workspace\) \? "codex"/);
   assert.match(app, /"\/api\/workspaces\?limit=12"/);
   assert.match(app, /\/api\/workspaces\/\$\{encodeURIComponent\(planId\)\}\/chat\/\$\{encodeURIComponent\(sessionId\)\}\?limit=80/);
   assert.match(app, /if \(!restored\) createDraftProject\(\);/);
