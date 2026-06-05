@@ -535,6 +535,38 @@ pre {
   color: #6f756f;
 }
 
+.runtime-status-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.runtime-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #7c827c;
+  font-size: 12px;
+}
+
+.runtime-status-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #303430;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-status-head span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-view {
   gap: 18px;
 }

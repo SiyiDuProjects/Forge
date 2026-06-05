@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Right Inspector Runtime Status
+
+- Scope: move the live Codex/Forge execution trace and pending confirmation controls out of the center chat thread and into the right inspector so the center column stays a conversation surface while the right side carries 3D preview, generation state, tool status, warnings, and artifacts.
+- Status: implemented in the current working tree.
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `renderRuntimeStatusSection`, `runtime-status-panel`, `runtime-status-head`, `执行状态`, `Run status`, `trace-timeline`, `data-chat-confirm`, `inspectorSectionSummary("runtime")`, right inspector runtime status.
+- Verification: `npm run check` passes with 68 tests. Browser read-only verification on `http://127.0.0.1:8772/?cacheBust=right-inspector-runtime-status` confirms the blank/new-project state hides the empty right inspector and the center workspace has no `.trace-timeline` or `.runtime-status-panel`; Browser text entry was blocked by its virtual clipboard limitation, so full UI send was not claimed. Local HTTP smoke against `http://127.0.0.1:8772/api/plans/stream` returned `200`, trace events, final SSE, `productPlan`, and `workspaceId`.
+- Boundary: this is a placement and interaction cleanup only. It does not change the Forge action contract, Codex SDK thread behavior, GeometrySpec generation rules, or explicit 3D generation confirmation policy.
+
 ### 2026-06-05 - Stop Current Runtime Turn
 
 - Scope: add a stop-current-turn path for long-running frontend runtime requests so a Codex/Forge turn is not an uninterruptible spinner.
@@ -75,7 +88,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ### 2026-06-05 - Frontend Runtime Selector And Execution Trace
 
-- Scope: make the Codex/Forge runtime path visible in the browser instead of leaving chat turns as opaque loading. The settings dialog now exposes `本地 Forge`, `Forge QueryEngine`, and `Codex`; the center thread renders a result-based execution trace with runtime/model response, Forge tool summaries, revision/proposal state, pending confirmation, Codex thread id when present, and artifact generation status.
+- Scope: make the Codex/Forge runtime path visible in the browser instead of leaving chat turns as opaque loading. The settings dialog now exposes `本地 Forge`, `Forge QueryEngine`, and `Codex`; this initially rendered a result-based execution trace in the center thread and is now superseded by `Right Inspector Runtime Status`, which keeps trace and confirmation controls on the right side.
 - Status: implemented and browser-verified on a local 8768 service.
 - Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
 - Key code handles:
@@ -87,7 +100,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `tests/query_engine.test.mjs`
 - Retrieval handles: runtimeProviderSelect, runtime selector, 本地 Forge, Forge QueryEngine, Codex, activeTrace, renderTraceTimeline, traceRows, execution trace, trace-timeline, explicit 3D generation confirmation, no fake model files.
 - Verification: `npm run check` passes with 65 tests. Browser verification on `http://127.0.0.1:8768` confirms settings exposes the three runtime modes; blank `新项目` hides the right inspector; first hardware request creates a ProductPlan and right inspector with `3D 模型状态 待确认生成`; ordinary graphite/USB-C update creates a revision and says no new model files were written; explicit `生成模型` runs `regenerateRevision`, flips the right inspector to `3D 模型已生成`, and shows generated evidence links.
-- Follow-up: superseded by the `Streaming Runtime Trace For Plan And Chat Turns` work block above, which adds SSE milestone streaming.
+- Follow-up: superseded by the `Streaming Runtime Trace For Plan And Chat Turns` and `Right Inspector Runtime Status` work blocks above, which add SSE milestone streaming and move the visible trace into the right inspector.
 
 ### 2026-06-05 - Codex SDK Project-Task Runtime And Forge Tool Collection Layer
 

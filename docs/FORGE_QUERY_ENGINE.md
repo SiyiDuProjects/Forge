@@ -207,5 +207,5 @@ QueryEngine returns:
 - `runtimeProvider` and `modelProvider`
 - `codexThreadId` when the Codex runtime provider is active
 
-The current UI renders a compact streaming QueryEngine trace and pending confirmation card in the center thread.
+The current UI renders a compact streaming QueryEngine trace and pending confirmation controls in the right inspector so the center thread stays focused on conversation.
 The streaming trace uses server-sent events over `fetch` and shows ProductPlan creation, ContextPack preparation, model requests/responses, bounded Codex SDK thread/turn/item summaries, Forge tool selection/execution/results, explicit confirmation requirements, Codex thread id when available, and artifact generation status. It is not a token-level transcript of Codex internals; Forge emits safe summaries such as command name, file-change count, MCP tool name, item status, and usage numbers, while avoiding raw command output, file contents, or reasoning text. The final authoritative ProductPlan payload still arrives at the end. The browser can stop the current in-flight turn with `AbortController`; the server forwards that abort signal into OpenAI/Codex SDK calls when those providers support it, keeps the draft input available, and records the UI state as cancelled rather than failed.

@@ -65,7 +65,7 @@ const copy = {
     rerunNotice: "已更新 ProductPlan revision",
     chatRuntimeNotice: "Forge 工具链已更新项目",
     chatConfirmationRequired: "需要确认后执行",
-    chatTraceTitle: "执行过程",
+    chatTraceTitle: "执行状态",
     chatTraceRunning: "正在执行",
     chatTraceEmpty: "本轮没有执行工具",
     traceReceived: "收到请求",
@@ -282,7 +282,7 @@ const copy = {
     rerunNotice: "ProductPlan revision updated",
     chatRuntimeNotice: "Forge tool runtime updated the project",
     chatConfirmationRequired: "Confirmation required",
-    chatTraceTitle: "Execution trace",
+    chatTraceTitle: "Run status",
     chatTraceRunning: "Running",
     chatTraceEmpty: "No tool executed in this turn",
     traceReceived: "Request received",
@@ -1207,7 +1207,6 @@ function renderChatWorkspace() {
         <p>${escapeHtml(t("noPlan"))}</p>
         ${state.runtimeError ? `<p class="error-message">${escapeHtml(state.runtimeError)}</p>` : ""}
       </section>
-      ${state.activeTrace ? renderChatRuntimePanel() : ""}
     `;
     return;
   }
@@ -1217,7 +1216,6 @@ function renderChatWorkspace() {
       ${messages.map((turn) => renderMessage(turn)).join("")}
     </div>
     ${state.runtimeError ? `<section class="inline-panel runtime-error-panel"><p class="error-message">${escapeHtml(state.runtimeError)}</p></section>` : ""}
-    ${renderChatRuntimePanel()}
   `;
 }
 
@@ -1303,7 +1301,7 @@ function renderMessage(turn) {
   `;
 }
 
-function renderChatRuntimePanel() {
+function renderRuntimeStatusSection() {
   const pending = state.pendingConfirmation;
   const turn = state.activeTrace || state.lastChatTurn;
   if (!pending && !turn) return "";
@@ -1311,10 +1309,10 @@ function renderChatRuntimePanel() {
   const results = turn?.toolResults || [];
   const running = turn?.traceState === "running";
   return `
-    <section class="inline-panel chat-runtime-panel" aria-label="${escapeHtml(t("chatTraceTitle"))}">
-      <div class="inline-panel-head">
-        <span class="inline-label">${escapeHtml(runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()))}</span>
+    <div class="runtime-status-panel" aria-label="${escapeHtml(t("chatTraceTitle"))}">
+      <div class="runtime-status-head">
         <strong>${escapeHtml(pending ? t("chatConfirmationRequired") : running ? t("chatTraceRunning") : t("chatTraceTitle"))}</strong>
+        <span>${escapeHtml(runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()))}</span>
       </div>
       ${renderTraceTimeline(turn, pending)}
       ${pending ? `
@@ -1344,7 +1342,7 @@ function renderChatRuntimePanel() {
           `;
         }).join("") : `<p class="section-note">${escapeHtml(running ? t("traceWaiting") : t("chatTraceEmpty"))}</p>`}
       </div>
-    </section>
+    </div>
   `;
 }
 
@@ -1763,15 +1761,20 @@ function toolCallSummary(call, result = {}) {
 
 function renderInspector() {
   const revision = currentRevision();
-  if (!revision) {
+  const runtimeStatus = renderRuntimeStatusSection();
+  if (!revision && !runtimeStatus) {
     dom.inspectorContent.hidden = true;
     dom.inspectorContent.innerHTML = "";
     return;
   }
   dom.inspectorContent.hidden = false;
-  const sections = [
-    ["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]
-  ];
+  const sections = [];
+  if (revision) {
+    sections.push(["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]);
+  }
+  if (runtimeStatus) {
+    sections.push(["runtime", t("chatTraceTitle"), inspectorSectionSummary("runtime", revision), runtimeStatus]);
+  }
   dom.inspectorContent.innerHTML = sections
     .map(([key, title, summary, body]) => {
       const collapsed = state.collapsedSections.has(key);
@@ -1808,6 +1811,15 @@ function renderModelFullscreen() {
 }
 
 function inspectorSectionSummary(key, revision) {
+  if (key === "runtime") {
+    const pending = state.pendingConfirmation;
+    const turn = state.activeTrace || state.lastChatTurn;
+    if (pending) return t("chatConfirmationRequired");
+    if (turn?.traceState === "running") return t("chatTraceRunning");
+    if (turn?.traceState === "cancelled") return t("sendCancelled");
+    if (turn?.ok === false) return t("traceFailed");
+    return turn ? t("traceDone") : "";
+  }
   if (key === "scope") return planTitle(revision);
   if (key === "parts") return `${revision.modules?.length || 0} modules`;
   if (key === "model") return artifactSummary(revision);
@@ -2833,6 +2845,11 @@ dom.workspaceView.addEventListener("click", (event) => {
 
 dom.inspectorContent.addEventListener("click", (event) => {
   if (handlePreviewModeClick(event)) return;
+  const chatConfirm = event.target.closest("[data-chat-confirm]");
+  if (chatConfirm) {
+    resolveChatConfirmation(chatConfirm.dataset.chatConfirm === "approve");
+    return;
+  }
   const fullscreenTrigger = event.target.closest("[data-preview-fullscreen]");
   if (fullscreenTrigger) {
     openFloating("modelFullscreen");

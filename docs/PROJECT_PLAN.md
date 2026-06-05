@@ -104,7 +104,7 @@ Required content:
 
 - User request bubble
 - Bench agent response
-- Minimal runtime feedback only when a send fails or a chat action needs confirmation
+- Minimal runtime feedback only when a send fails; live runtime status and confirmation controls belong in the right inspector
 - Bottom composer for hardware request entry and send/update only
 - Do not show numbered ProductPlan step cards, status packets, or a center 3D preview; generation status and structure preview belong in the right inspector.
 - Do not prefix assistant messages with role labels such as `原型助手` or `Prototype assistant`; the bubble content should stand on its own.
@@ -121,8 +121,9 @@ Purpose: Focused live structure output, not a generic dashboard or review packet
 Current sections:
 
 - `原型结构预览（3D）`
+- `执行状态` when a turn, tool call, or confirmation is active or has just completed
 
-The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, and structure checks visible. The generated/pending 3D state belongs in the section header summary, not as a duplicate fact row. Scope, parts list (BOM), quote, risk limits, and review status should not be duplicated as numbered center-thread cards. When surfaced, keep them in the right inspector, explicit review surfaces, or compact generated evidence rather than a stacked center packet list.
+The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, and structure checks visible. It may also show compact runtime/tool status and pending confirmations for the current turn. The generated/pending 3D state belongs in the section header summary, not as a duplicate fact row. Scope, parts list (BOM), quote, risk limits, and review status should not be duplicated as numbered center-thread cards. When surfaced, keep them in the right inspector, explicit review surfaces, or compact generated evidence rather than a stacked center packet list.
 
 Visual direction:
 
@@ -187,7 +188,7 @@ Implemented:
 - Right inspector changed toward flat section styling
 - No fake complete ProductPlan fallback when API fetch fails; keep the draft/input visible and show a clear error instead.
 - Conversation-first ProductPlan flow with compact left-side project/conversation selection, center chat, revision history view, and live right-side plan packet
-- Chat-only center thread: generated conversations show user/assistant messages plus minimal retry/confirmation feedback, without numbered ProductPlan step cards or a center 3D snapshot.
+- Chat-only center thread: generated conversations show user/assistant messages plus minimal retry feedback, without numbered ProductPlan step cards, execution traces, pending-confirmation controls, or a center 3D snapshot.
 - Right-side `原型结构预览（3D）` section pinned near the top, expanded by default, with `外观层` and `元器件层` transparency states
 - One seeded real backend-generated conversation with confirmed 3D model artifacts; new projects start as blank real ProductPlan drafts.
 - Expanded UI-only flow state data for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet remains available to the plan/review runtime, but it is no longer rendered as numbered center-thread cards.
@@ -213,7 +214,7 @@ Implemented:
 - Guarded-file detector for Codex SDK turns so direct edits to ProductPlan, manifests, revision sources, GeometrySpec, or artifacts return `GUARD_VIOLATION`.
 - Optional live Codex smoke script: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite. The acknowledged V1 live smoke passed on 2026-06-05.
 - API routes for `/api/plans/stream`, `/api/workspaces/:workspaceId/chat/turn/stream`, `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
-- Frontend runtime selector in `Forge 设置` for `本地 Forge`, `Forge QueryEngine`, and `Codex`, with a center-thread SSE execution trace that renders ProductPlan creation, runtime/model request and response events, bounded Codex SDK event summaries, Forge tool progress, revision/proposal state, pending confirmations, artifact generation status, and stop-current-turn behavior for long-running requests.
+- Frontend runtime selector in `Forge 设置` for `本地 Forge`, `Forge QueryEngine`, and `Codex`, with a right-inspector SSE execution status that renders ProductPlan creation, runtime/model request and response events, bounded Codex SDK event summaries, Forge tool progress, revision/proposal state, pending confirmations, artifact generation status, and stop-current-turn behavior for long-running requests.
 
 Implementation boundary:
 

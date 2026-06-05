@@ -330,12 +330,15 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /modelProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /activeTrace: null/);
   assert.match(app, /traceEvents: \[\]/);
-  assert.match(app, /renderChatRuntimePanel/);
+  assert.match(app, /renderRuntimeStatusSection/);
+  assert.match(app, /runtime-status-panel/);
+  assert.match(app, /sections\.push\(\["runtime"/);
+  assert.doesNotMatch(app, /\$\{renderRuntimeStatusSection\(\)\}/);
   assert.match(app, /renderTraceTimeline/);
   assert.match(app, /traceEventRows/);
   assert.match(app, /traceRows/);
-  assert.match(app, /执行过程/);
-  assert.match(app, /Execution trace/);
+  assert.match(app, /执行状态/);
+  assert.match(app, /Run status/);
   assert.match(app, /运行模式/);
   assert.match(app, /Runtime mode/);
   assert.match(app, /Forge QueryEngine/);
@@ -351,6 +354,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /dataset\.running/);
   assert.match(styles, /\.trace-timeline/);
   assert.match(styles, /\.trace-row\.running strong/);
+  assert.match(styles, /\.runtime-status-panel/);
   assert.match(styles, /\.send-button\[data-running="true"\]/);
   assert.match(styles, /\.trace-row\.cancelled strong/);
   assert.match(app, /function submitComposer/);
