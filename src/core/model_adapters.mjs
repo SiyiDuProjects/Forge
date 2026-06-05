@@ -213,7 +213,13 @@ export function deterministicPatchesFor(message = "") {
   const lower = String(message || "").toLowerCase();
   const patches = [];
   const componentAdditions = [];
+  const planSet = {};
   const geometrySet = {};
+  const finish = parseFinishPreference(lower, message);
+
+  if (finish) {
+    planSet["constraints.finish"] = finish;
+  }
 
   if (mentionsButtons(lower, message)) {
     componentAdditions.push({ componentType: "button", componentId: "button_6mm", quantity: 2 });
@@ -227,6 +233,9 @@ export function deterministicPatchesFor(message = "") {
   }
   if (componentAdditions.length > 0) {
     patches.push({ type: "component_patch", add: componentAdditions });
+  }
+  if (Object.keys(planSet).length > 0) {
+    patches.push({ type: "plan_patch", set: planSet });
   }
   if (Object.keys(geometrySet).length > 0) {
     patches.push({ type: "geometry_preference_patch", set: geometrySet });
@@ -297,6 +306,14 @@ function mentionsUsbBackLeft(lower, raw = "") {
 
 function mentionsCatEars(lower, raw = "") {
   return lower.includes("cat ear") || lower.includes("cat-ear") || /猫耳/.test(raw);
+}
+
+function parseFinishPreference(lower, raw = "") {
+  if (lower.includes("graphite") || lower.includes("black") || /石墨|黑|灰/.test(raw)) return "graphite";
+  if (lower.includes("sage") || lower.includes("green") || /鼠尾草|绿色|绿/.test(raw)) return "sage";
+  if (lower.includes("coral") || lower.includes("orange") || lower.includes("red") || /珊瑚|橙|红/.test(raw)) return "coral";
+  if (lower.includes("woodgrain") || lower.includes("wood") || lower.includes("walnut") || /木纹|胡桃|木质/.test(raw)) return "woodgrain";
+  return "";
 }
 
 function mentionsGenerateModel(lower, raw = "") {

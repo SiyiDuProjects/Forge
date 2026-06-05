@@ -49,6 +49,25 @@ test("QueryEngine runs a direct model tool loop through Forge actions", async ()
   assert.ok(events.some((event) => event.type === "chat_turn_completed"));
 });
 
+test("QueryEngine turns finish changes into ProductPlan revisions", async () => {
+  const plan = createChatPlan();
+  const initialRevisionCount = plan.revisions.length;
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_finish_patch",
+    userMessage: "Make the shell finish graphite grey and keep USB-C power.",
+    modelProvider: "mock"
+  });
+
+  const updated = getProductPlan(plan.planId);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.toolCalls.map((call) => call.name), ["applyDesignPatch"]);
+  assert.equal(updated.revisions.length, initialRevisionCount + 1);
+  assert.equal(updated.revisions.at(-1).productPlanSnapshot.constraints.finish, "graphite");
+  assert.equal(updated.currentRevisionId, result.revision.revisionId);
+});
+
 test("QueryEngine keeps exploratory design questions as proposals", async () => {
   const plan = createChatPlan();
   const initialRevisionCount = plan.revisions.length;

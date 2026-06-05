@@ -20,6 +20,20 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Composer Button And 3D Generation Verification
+
+- Scope: fix the visible send button path in the browser, keep empty composer clicks from failing silently, prevent Codex Browser comment overlays from intercepting Forge prototype clicks, and expand the deterministic chat runtime so common finish changes such as graphite/stone-gray create ProductPlan revisions.
+- Status: implemented in the current working tree.
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+  - `index.html`
+  - `src/core/model_adapters.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: `submitComposer`, `dom.runChain.addEventListener("click", submitComposer)`, `emptyComposer`, `codex-browser-sidebar-comments-root`, `parseFinishPreference`, `constraints.finish`, `regenerateRevision`.
+- Verification: `npm run check` passes with 48 tests; Browser verification on `http://127.0.0.1:8766` confirms the comment overlay no longer blocks the send button, sending a graphite finish update creates revision `r6` through `applyDesignPatch`, `新项目` creates and sends a first ProductPlan request, and sending `生成模型` on the new project reaches `regenerateRevision` with `3D 模型已生成` / `真实 3D 预览已加载`.
+
 ### 2026-06-05 - Real Conversation And Project Switching Fix
 
 - Scope: make the frontend keep one seeded real generated-model conversation, start blank real ProductPlan drafts for new conversations, switch left-sidebar rows by project/conversation instead of revision, and keep default chat turns on the local Forge tool runtime even when external OpenAI env vars are present.

@@ -306,6 +306,10 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /data-sidebar-project/);
   assert.match(app, /FORGE_LOCAL_CHAT_PROVIDER/);
   assert.match(app, /modelProvider: FORGE_LOCAL_CHAT_PROVIDER/);
+  assert.match(app, /function submitComposer/);
+  assert.match(app, /dom\.runChain\.addEventListener\("click", submitComposer\)/);
+  assert.match(app, /emptyComposer: "请先输入硬件需求"/);
+  assert.match(app, /emptyComposer: "Enter a hardware request first"/);
   assert.match(app, /projects: \[\]/);
   assert.doesNotMatch(app, /fallbackProductPlan/);
   assert.doesNotMatch(app, /fallback-plan/);

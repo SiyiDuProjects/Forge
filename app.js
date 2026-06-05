@@ -42,6 +42,7 @@ const copy = {
     benchAgent: "原型助手",
     fallbackNotice: "后端暂不可用，无法创建真实 ProductPlan",
     sendFailed: "发送失败，已保留输入内容",
+    emptyComposer: "请先输入硬件需求",
     rerunNotice: "已更新 ProductPlan revision",
     chatRuntimeNotice: "Forge 工具链已更新项目",
     chatConfirmationRequired: "需要确认后执行",
@@ -229,6 +230,7 @@ const copy = {
     benchAgent: "Prototype assistant",
     fallbackNotice: "Backend unavailable; cannot create a real ProductPlan",
     sendFailed: "Send failed; the input was kept",
+    emptyComposer: "Enter a hardware request first",
     rerunNotice: "ProductPlan revision updated",
     chatRuntimeNotice: "Forge tool runtime updated the project",
     chatConfirmationRequired: "Confirmation required",
@@ -418,6 +420,7 @@ const dom = {
   inspectorContent: document.querySelector("#inspectorContent"),
   form: document.querySelector("#promptForm"),
   ideaInput: document.querySelector("#ideaInput"),
+  runChain: document.querySelector("#runChain"),
   composerSummary: document.querySelector("#composerSummary"),
   scopeLevel: document.querySelector("#scopeLevel"),
   draftStatus: document.querySelector("#draftStatus"),
@@ -2248,6 +2251,19 @@ async function triggerModelGeneration() {
   await sendTurn(t("generateModelCommand"));
 }
 
+async function submitComposer(event) {
+  event?.preventDefault();
+  if (state.loading) return;
+  const message = dom.ideaInput?.value.trim() || "";
+  if (!message) {
+    setNotice(t("emptyComposer"));
+    dom.ideaInput?.focus();
+    return;
+  }
+  const sent = await sendTurn(message);
+  if (sent && dom.ideaInput) dom.ideaInput.value = "";
+}
+
 document.addEventListener("pointerdown", (event) => {
   const target = event.target instanceof Element ? event.target : null;
   const canvas = target?.closest("[data-device-canvas]");
@@ -2290,13 +2306,8 @@ document.addEventListener("wheel", (event) => {
   drawPreview();
 }, { passive: false });
 
-dom.form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const message = dom.ideaInput.value.trim();
-  if (!message) return;
-  const sent = await sendTurn(message);
-  if (sent) dom.ideaInput.value = "";
-});
+dom.form.addEventListener("submit", submitComposer);
+dom.runChain.addEventListener("click", submitComposer);
 
 dom.copySpec.addEventListener("click", () => {
   if (!currentRevision()) {
