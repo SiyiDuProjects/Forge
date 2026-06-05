@@ -151,11 +151,12 @@ export function buildCodexProductPrompt({
       toolCalls: [
         {
           name: "applyDesignPatch",
-          input: { workspaceId: "plan-id", message: "user request", patches: [] }
+          inputJson: "{\"workspaceId\":\"plan-id\",\"message\":\"user request\",\"patches\":[]}"
         }
       ]
     }, null, 2),
-    "Use toolCalls only for available Forge tools from the prompt. If you need no tool, return an empty toolCalls array.",
+    "Use toolCalls only for available Forge tools from the prompt. Put the tool input as a JSON string in inputJson.",
+    "If you need no tool, return an empty toolCalls array.",
     "If you used forge-tool yourself, summarize the result and return an empty toolCalls array.",
     "If tool results are present, summarize them and do not repeat a tool call unless another step is needed.",
     "",
@@ -189,10 +190,10 @@ export function codexOutputSchema() {
           type: "object",
           properties: {
             name: { type: "string" },
-            input: { type: "object" }
+            inputJson: { type: "string" }
           },
-          required: ["name", "input"],
-          additionalProperties: true
+          required: ["name", "inputJson"],
+          additionalProperties: false
         }
       }
     },
@@ -221,7 +222,7 @@ export function parseCodexToolIntent(text = "") {
     .map((call) => ({
       toolCallId: call.toolCallId || call.id || "",
       name: call.name || call.toolName || call.action || "",
-      input: call.input || call.arguments || call.args || {}
+      input: parseCodexToolInput(call)
     }))
     .filter((call) => call.name);
   const finalMessage = parsed.assistantMessage
@@ -233,6 +234,21 @@ export function parseCodexToolIntent(text = "") {
     finalMessage: String(finalMessage || ""),
     toolCalls
   };
+}
+
+function parseCodexToolInput(call = {}) {
+  const objectInput = call.input || call.arguments || call.args;
+  if (objectInput && typeof objectInput === "object" && !Array.isArray(objectInput)) {
+    return objectInput;
+  }
+  const raw = call.inputJson || call.argumentsJson || call.argsJson || (typeof objectInput === "string" ? objectInput : "");
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 export function codexResultText(result) {

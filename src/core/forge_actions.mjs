@@ -284,7 +284,7 @@ export function commitStagedChange({ workspaceId, proposalId } = {}) {
     patches: proposal.patches,
     summary: proposal.summary || proposal.assistantSummary || `Commit ${proposal.proposalId}`,
     source: "commit_staged_change",
-    generateArtifacts: true
+    generateArtifacts: false
   });
   if (!result.ok) {
     recordToolFailed(plan, "commitStagedChange", result.error);
@@ -326,7 +326,7 @@ export function applyDesignPatch({ workspaceId, message = "", patches = [] } = {
     patches: validationResult.patches,
     summary: String(message || summaryForPatches(validationResult.patches)),
     source: "apply_design_patch",
-    generateArtifacts: true
+    generateArtifacts: false
   });
   if (!result.ok) {
     recordToolFailed(planResult.plan, "applyDesignPatch", result.error);

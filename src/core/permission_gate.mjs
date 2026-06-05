@@ -91,10 +91,22 @@ const RAW_MUTATION_KEYS = new Set([
   "vertices",
   "filePath",
   "localPath",
+  "targetPath",
+  "relativePath",
+  "outputPath",
+  "artifactPath",
   "artifactBytes",
   "glbBytes",
   "stlBytes",
   "stepBytes"
+]);
+
+const RAW_MUTATION_TEXT_EXEMPT_KEYS = new Set([
+  "message",
+  "summary",
+  "assistantMessage",
+  "reason",
+  "userMessage"
 ]);
 
 const RAW_MUTATION_STRING_PATTERNS = [
@@ -171,22 +183,22 @@ export function hasConfirmationIntent(message = "") {
 }
 
 export function containsRawMutationTarget(value) {
-  const stack = [value];
+  const stack = [{ key: "", value }];
   while (stack.length) {
-    const current = stack.pop();
+    const { key, value: current } = stack.pop();
     if (!current) continue;
     if (typeof current === "string") {
-      if (RAW_MUTATION_STRING_PATTERNS.some((pattern) => pattern.test(current))) return true;
+      if (!RAW_MUTATION_TEXT_EXEMPT_KEYS.has(key) && RAW_MUTATION_STRING_PATTERNS.some((pattern) => pattern.test(current))) return true;
       continue;
     }
     if (Array.isArray(current)) {
-      stack.push(...current);
+      stack.push(...current.map((item) => ({ key, value: item })));
       continue;
     }
     if (typeof current === "object") {
       for (const [key, nested] of Object.entries(current)) {
         if (RAW_MUTATION_KEYS.has(key)) return true;
-        stack.push(nested);
+        stack.push({ key, value: nested });
       }
     }
   }

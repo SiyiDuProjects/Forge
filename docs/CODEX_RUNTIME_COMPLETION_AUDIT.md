@@ -6,7 +6,7 @@ Date: 2026-06-05
 
 The Forge-side MVP chain is not just a static demo anymore. The local tool-backed path can create/update a ProductPlan, select components, validate, generate GLB/STL/STEP artifacts after explicit generation intent, move USB-C placement, and revert by calling Forge actions.
 
-The remaining unproven step is a real live Codex SDK run. That live smoke is intentionally opt-in because it sends the isolated smoke project workspace context through Codex SDK. Until that acknowledged live run passes, call the Codex-backed MVP "implemented and locally simulated", not "fully live-verified".
+The acknowledged live Codex SDK smoke now passes against an isolated Forge smoke workspace. The Codex-backed product-task runtime is implemented and live-verified for the V1 idea -> modification -> explicit 3D generation -> USB-C move -> revert path. The live smoke remains opt-in because it sends isolated project context through Codex SDK.
 
 ## What Is Done
 
@@ -49,6 +49,7 @@ Implemented surfaces:
 - `src/core/guarded_files.mjs`: guarded-file snapshots and violation events.
 - `scripts/forge-tool.mjs`: stable JSON CLI wrapper around Forge actions.
 - `scripts/codex-live-smoke.mjs`: opt-in live Codex smoke script.
+- `src/core/permission_gate.mjs`: raw mutation detection that blocks structured raw targets without treating safety reminder text as a direct file edit.
 
 Test coverage:
 
@@ -64,15 +65,21 @@ Test coverage:
   - generate 3D artifacts
   - move USB-C to back-left
   - revert
+- QueryEngine feeds denied tool calls back to the model so Codex can correct a rejected raw mutation attempt into a legal Forge action.
 - `npm run check` passes with the Codex path covered by deterministic tests.
+- Acknowledged live Codex smoke passed on 2026-06-05 with:
+  - non-empty `codexThreadId`: `019e9753-cedd-7980-a69b-3d2af66d4006`
+  - proposal/commit for buttons and buzzer
+  - explicit validate + GLB/STL/STEP generation
+  - proposal/commit for USB-C `back_left`
+  - revision revert event
+  - no pending confirmation or guarded-file violation
 
 ## What Is Not Done
 
-The real live Codex SDK smoke has not been accepted as verified.
+Execution trace streaming is not yet exposed as a polished frontend feature. Forge records model/tool events in `events.jsonl`, but the current UI still waits for the turn result instead of streaming every Codex internal step live.
 
-Reason: the live smoke sends even an isolated Forge smoke project workspace through Codex SDK. In the managed sandbox, an escalated attempt was rejected for external private-data transfer risk. That is a policy and operator-approval boundary, not a Forge local tool-chain failure.
-
-## How To Run The Final Live Smoke
+## How To Run The Live Smoke
 
 Run only after explicitly approving that the isolated smoke project context may be sent through Codex SDK:
 
@@ -116,8 +123,8 @@ If this fails because Codex cannot start, cannot access its thread store, or can
 
 The current Forge MVP should be described as:
 
-"Forge has a working local product-task chain and a bounded Codex runtime integration path. The Codex live runtime is implemented but pending explicit acknowledged smoke verification."
+"Forge has a working local product-task chain and a bounded, live-verified Codex runtime integration path for V1 Forge product tasks."
 
 Do not describe it as:
 
-"Codex is fully running in production."
+"Codex is fully running in production" or "Forge streams all Codex internal execution details in the UI."

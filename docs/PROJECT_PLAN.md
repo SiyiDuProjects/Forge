@@ -211,7 +211,7 @@ Implemented:
 - Generated project-workspace context for Codex: `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, `skills/*.md`, and `runtime_plan.json`.
 - `forge-tool` CLI wrapper for Codex-side tool calls into Forge actions without direct guarded-file mutation.
 - Guarded-file detector for Codex SDK turns so direct edits to ProductPlan, manifests, revision sources, GeometrySpec, or artifacts return `GUARD_VIOLATION`.
-- Optional live Codex smoke script: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite.
+- Optional live Codex smoke script: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite. The acknowledged V1 live smoke passed on 2026-06-05.
 - API routes for `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
 - Minimal center-thread QueryEngine trace and confirmation card in the UI.
 
@@ -286,7 +286,7 @@ QueryEngine flow for an existing workspace:
 2. QueryEngine appends the user message to chat JSONL and `events.jsonl`.
 3. QueryEngine builds ContextPack and prompt sections.
 4. The model adapter chooses Forge tool calls. In `runtimeProvider: "codex"`, the adapter first creates or resumes the project-bound Codex thread and asks Codex to return Forge tool intent JSON.
-5. Permission gate allows, denies, or creates a pending confirmation.
+5. Permission gate allows, denies, or creates a pending confirmation; denied tool calls are fed back to the model so Codex can retry with a legal Forge action.
 6. Tool executor calls `forge_actions.mjs`; no raw file or GeometrySpec mutation is allowed.
 7. QueryEngine appends tool results and assistant message, then returns updated `productPlan`, trace, proposal/revision summary, warnings, artifact paths, or confirmation state to the UI.
 
@@ -316,7 +316,7 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, QueryEngine / Chat Runtime V1, and Codex SDK project-task runtime mode are implemented. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface. Default tests cover the Codex path with a fake Codex thread that actually calls `forge-tool`; a real Codex SDK live smoke with explicit external-context acknowledgement is still required before calling the Codex-backed MVP fully usable in a live environment.
+Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, QueryEngine / Chat Runtime V1, and Codex SDK project-task runtime mode are implemented. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface. Default tests cover the Codex path with a fake Codex thread that actually calls `forge-tool`; the acknowledged real Codex SDK live smoke passed the V1 idea/modification/3D-generation/USB-move/revert flow on 2026-06-05.
 
 - Keep user turns creating ProductPlan revisions.
 - Keep prototype structure preview (3D), electronics layout, quote, and review submission on unified jobs.
@@ -350,8 +350,8 @@ Implemented Forge action contract:
 - `searchComponentLibrary` exposes finite ComponentDescriptor-backed supported components and camera/battery review risks.
 - `proposeDesignChange` creates proposal records from user messages without creating committed revisions.
 - `stageDesignPatch` stores explicit structured patches as staged proposals without generating committed revisions.
-- `commitStagedChange` commits a proposal through the existing ProductPlan revision and artifact-generation path.
-- `applyDesignPatch` applies explicit patches immediately for clear user commands and creates a generated revision.
+- `commitStagedChange` commits a proposal through the ProductPlan revision path, creating a pending revision without GLB/STL/STEP artifacts.
+- `applyDesignPatch` applies explicit patches immediately for clear user commands and creates a pending revision without GLB/STL/STEP artifacts.
 - `regenerateRevision` creates a fresh revision from the same design intent when generation code or descriptors change.
 - `validateDesign` validates current state, staged proposals, or explicit patches without writing model artifacts.
 - `revertRevision` switches the current workspace back to a known revision without AI involvement.
@@ -438,11 +438,11 @@ The project should not be considered done until:
 - Component asset quality and validation status are visible in the UI and generated evidence. Current proxy components must not be presented as production ready.
 - The 3D preview is visible as an outcome snapshot and allows rotate, zoom, pan, and appearance/component layer switching, but does not introduce modeling-editor behavior.
 - Future chatbot, agent, or LLM tool-calling runtimes can drive Forge by calling a small safe set of backend actions rather than directly mutating files or geometry.
-- Each ProductPlan can be represented as a durable local project folder with `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, persistent proposals, immutable revision folders, markdown indexes, and revision-scoped generated artifacts.
+- Each ProductPlan can be represented as a durable local project folder with `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, persistent proposals, immutable revision folders, markdown indexes, and revision-scoped generated artifacts after explicit generation.
 - Context packs summarize current project state, current ProductPlan, current revision, open proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without embedding raw GLB/STL/STEP bytes.
 - Tool Protocol metadata exists for every Forge action and correctly marks confirmation, read/write behavior, side effects, concurrency safety, and disallowed raw mutation targets.
 - Proposal and discussion flows can create `workspaceState.proposals` without generating committed revisions.
-- Staged/committed action flows preserve revision-specific artifacts and do not overwrite old revision artifacts.
+- Staged/committed action flows create pending revisions without GLB/STL/STEP artifacts; explicit generation creates revision-specific artifacts without overwriting older revision artifacts.
 - Patch application rejects unsafe or unsupported changes with structured errors.
 - Action schemas and API wrappers are documented in `docs/FORGE_ACTION_CONTRACT.md` and `docs/CONTRACTS.md`.
 - A camera/battery request remains reviewable and shows clear human-review risk messaging.

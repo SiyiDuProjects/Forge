@@ -303,7 +303,7 @@ With `message`, the server calls `proposeDesignChange` and stores a `proposed` r
 
 ### `POST /api/workspaces/:workspaceId/proposals/:proposalId/commit`
 
-Commits a proposed or staged change. This creates a new ProductPlan revision and, when validation allows, revision-specific artifacts.
+Commits a proposed or staged change. This creates a new pending ProductPlan revision without writing GLB/STL/STEP artifacts.
 
 ### `POST /api/workspaces/:workspaceId/proposals/:proposalId/reject`
 
@@ -311,7 +311,7 @@ Marks a proposal as `rejected`. Rejected proposals cannot be committed later.
 
 ### `POST /api/workspaces/:workspaceId/patches/apply`
 
-Applies explicit structured patches immediately for clear user commands. Valid patches create a new ProductPlan revision and revision-specific generated artifacts.
+Applies explicit structured patches immediately for clear user commands. Valid patches create a new pending ProductPlan revision without writing GLB/STL/STEP artifacts.
 
 ### `POST /api/workspaces/:workspaceId/revisions/regenerate`
 

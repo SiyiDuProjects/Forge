@@ -70,7 +70,9 @@ test("QueryEngine runs a direct model tool loop through Forge actions", async ()
   assert.equal(result.toolResults.every((item) => item.ok), true);
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);
   assert.equal(getProductPlan(plan.planId).currentRevisionId, result.revision.revisionId);
-  assert.ok(result.artifactPaths.glb || result.artifactPaths.modelGlb);
+  assert.equal(result.artifactPaths.modelGlb, null);
+  const createdRevision = getProductPlan(plan.planId).revisions.find((revision) => revision.revisionId === result.revision.revisionId);
+  assert.equal(createdRevision.modelArtifacts.status, "pending_confirmation");
 
   const session = loadChatSession({ workspaceId: plan.planId, sessionId: "test_direct" });
   assert.equal(session.ok, true);
@@ -190,6 +192,89 @@ test("Permission gate denies raw geometry or artifact mutation targets", () => {
 
   assert.equal(denied.decision, "deny");
   assert.equal(denied.error.code, "RAW_MUTATION_TARGET");
+
+  const allowedSafetyText = checkToolPermission({
+    toolName: "applyDesignPatch",
+    toolMetadata: getToolMetadata("applyDesignPatch"),
+    userMessage: "把 USB-C 移到后面左侧。",
+    toolInput: {
+      workspaceId: "plan-test",
+      message: "把 USB-C 移到后面左侧；不要直接修改 geometry-spec.json。",
+      patches: [
+        {
+          type: "geometry_preference_patch",
+          set: { "placements.usb_c.semanticPosition": "back_left" }
+        }
+      ]
+    }
+  });
+
+  assert.notEqual(allowedSafetyText.error?.code, "RAW_MUTATION_TARGET");
+  assert.equal(allowedSafetyText.decision, "allow");
+});
+
+test("QueryEngine feeds denied tool calls back to the model for correction", async () => {
+  const plan = createChatPlan();
+  let callCount = 0;
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_denied_tool_repair",
+    userMessage: "把 USB-C 移到后面左侧。",
+    modelAdapterFactory: () => ({
+      async runTurn({ toolResults = [] } = {}) {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            ok: true,
+            finalMessage: "",
+            toolCalls: [
+              {
+                name: "applyDesignPatch",
+                input: {
+                  workspaceId: plan.planId,
+                  rawGeometrySpec: { placements: { usb_c: "back_left" } },
+                  patches: []
+                }
+              }
+            ]
+          };
+        }
+        if (callCount === 2) {
+          assert.equal(toolResults.at(-1)?.summary?.code, "RAW_MUTATION_TARGET");
+          return {
+            ok: true,
+            finalMessage: "",
+            toolCalls: [
+              {
+                name: "proposeDesignChange",
+                input: {
+                  workspaceId: plan.planId,
+                  message: "把 USB-C 移到后面左侧。"
+                }
+              }
+            ]
+          };
+        }
+        return {
+          ok: true,
+          finalMessage: "已改用 proposal，不直接写 GeometrySpec。",
+          toolCalls: []
+        };
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(callCount, 3);
+  assert.equal(result.toolResults[0].ok, false);
+  assert.equal(result.toolResults[0].summary.code, "RAW_MUTATION_TARGET");
+  assert.equal(result.toolResults[1].ok, true);
+  assert.equal(result.proposal.status, "proposed");
+  assert.equal(result.proposal.patches.some((patch) => (
+    patch.type === "geometry_preference_patch"
+    && patch.set?.["placements.usb_c.semanticPosition"] === "back_left"
+  )), true);
+  assert.equal(result.assistantMessage, "已改用 proposal，不直接写 GeometrySpec。");
 });
 
 test("Tool schema exporter and API contract expose chat runtime surfaces", () => {
@@ -698,6 +783,28 @@ test("Codex tool intent parser accepts fenced JSON and plain messages", () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.finalMessage, "ok");
   assert.equal(parsed.toolCalls[0].name, "validateDesign");
+
+  const inputJson = parseCodexToolIntent(JSON.stringify({
+    assistantMessage: "apply",
+    toolCalls: [
+      {
+        name: "applyDesignPatch",
+        inputJson: JSON.stringify({
+          message: "Make the shell graphite.",
+          patches: [
+            {
+              type: "plan_patch",
+              set: {
+                "constraints.finish": "graphite"
+              }
+            }
+          ]
+        })
+      }
+    ]
+  }));
+  assert.equal(inputJson.toolCalls[0].input.message, "Make the shell graphite.");
+  assert.equal(inputJson.toolCalls[0].input.patches[0].set["constraints.finish"], "graphite");
 
   const plain = parseCodexToolIntent("Ask one more question before changing the plan.");
   assert.equal(plain.finalMessage, "Ask one more question before changing the plan.");

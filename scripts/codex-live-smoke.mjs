@@ -40,9 +40,10 @@ process.env.FORGE_WORKSPACE_ROOT = workspaceRoot;
 mkdirSync(workspaceRoot, { recursive: true });
 
 try {
+  const { commitStagedChange } = await import("../src/core/forge_actions.mjs");
   const { getProductPlan } = await import("../src/core/product_plan.mjs");
   const { createProductPlanForRuntime } = await import("../src/core/runtime_plan_creation.mjs");
-  const { runForgeChatTurn } = await import("../src/core/forge_query_engine.mjs");
+  const { confirmForgeChatTool, runForgeChatTurn } = await import("../src/core/forge_query_engine.mjs");
   const { projectWorkspacePath, readWorkspaceEvents } = await import("../src/core/project_workspace.mjs");
 
   const initial = await createProductPlanForRuntime({
@@ -61,9 +62,9 @@ try {
   const workspaceId = initial.productPlan.planId;
   const sessionId = "live_codex_smoke";
   const messages = [
-    "加两个按钮，放在右侧，再加一个蜂鸣器。",
-    "生成 3D 模型。",
-    "把 USB-C 移到后面左侧。",
+    "加两个按钮，放在右侧，再加一个蜂鸣器。请用 Forge 工具创建 proposal；如果信息足够可以直接应用为 pending revision，不要生成 3D。",
+    "生成 3D 模型。我明确确认当前 revision 可以生成 GLB/STL/STEP artifacts，请先 validate 再 generate。",
+    "把 USB-C 移到后面左侧。请用 Forge 工具创建 proposal；如果信息足够可以直接应用为 pending revision，不要直接改 geometry-spec.json。",
     "回退到上一个版本。"
   ];
   const turns = [];
@@ -92,11 +93,42 @@ try {
       });
     }
     if (turn.pendingConfirmation) {
-      throw smokeError("PENDING_CONFIRMATION", "Live smoke received a pending confirmation; use more explicit demo wording or inspect the returned confirmation.", {
+      const confirmed = await confirmForgeChatTool({
         workspaceId,
-        turns,
-        pendingConfirmation: turn.pendingConfirmation
+        sessionId,
+        confirmationId: turn.pendingConfirmation.confirmationId,
+        approved: true
       });
+      turns.push({
+        ...compactTurn(`确认：${message}`, confirmed),
+        confirmationId: turn.pendingConfirmation.confirmationId
+      });
+      if (!confirmed.ok) {
+        throw smokeError("CONFIRMATION_FAILED", confirmed.error?.message || "Live smoke confirmation failed.", {
+          workspaceId,
+          turns,
+          pendingConfirmation: turn.pendingConfirmation
+        });
+      }
+    }
+    const proposalId = proposalIdFromTurn(turn);
+    if (proposalId) {
+      const committed = commitStagedChange({
+        workspaceId,
+        proposalId
+      });
+      turns.push(compactForgeAction(
+        `确认并提交 proposal：${proposalId}`,
+        "commitStagedChange",
+        committed,
+        getProductPlan(workspaceId)?.currentRevisionId || ""
+      ));
+      if (!committed.ok) {
+        throw smokeError("PROPOSAL_COMMIT_FAILED", committed.error?.message || `Could not commit proposal ${proposalId}.`, {
+          workspaceId,
+          turns
+        });
+      }
     }
   }
 
@@ -171,6 +203,53 @@ function compactTurn(message, turn) {
       errorCode: response.errorCode || ""
     }))
   };
+}
+
+function compactForgeAction(message, toolName, result, currentRevisionId = "") {
+  return {
+    message,
+    ok: Boolean(result?.ok),
+    runtimeProvider: "forge-confirmation",
+    modelProvider: "",
+    codexThreadId: "",
+    assistantMessage: result?.ok ? `${toolName} ok` : (result?.error?.message || `${toolName} failed`),
+    toolCalls: [toolName],
+    toolResults: [
+      {
+        ok: Boolean(result?.ok),
+        summary: {
+          ok: Boolean(result?.ok),
+          proposalId: result?.proposalId || "",
+          proposalStatus: result?.status || "",
+          newRevisionId: result?.newRevisionId || result?.revisionId || result?.currentRevisionId || "",
+          committed: Boolean(result?.committed),
+          applied: Boolean(result?.applied),
+          regenerated: Boolean(result?.regenerated),
+          reverted: Boolean(result?.reverted),
+          validationStatus: result?.validationReport?.status || "",
+          warningCount: Array.isArray(result?.validationReport?.issues)
+            ? result.validationReport.issues.filter((issue) => issue.level === "warn" || issue.level === "block").length
+            : 0,
+          artifactPaths: result?.artifactPaths || {}
+        }
+      }
+    ],
+    pendingConfirmationId: "",
+    currentRevisionId,
+    modelResponses: []
+  };
+}
+
+function proposalIdFromTurn(turn) {
+  const direct = turn?.proposal?.proposalId || "";
+  if (direct && ["proposed", "staged"].includes(turn?.proposal?.status || "")) return direct;
+  for (const result of turn?.toolResults || []) {
+    const summary = result.summary || {};
+    if (summary.proposalId && ["proposed", "staged"].includes(summary.proposalStatus || "")) {
+      return summary.proposalId;
+    }
+  }
+  return "";
 }
 
 function smokeError(code, message, details = {}) {

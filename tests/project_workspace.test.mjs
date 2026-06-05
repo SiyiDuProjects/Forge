@@ -10,6 +10,7 @@ import {
   applyDesignPatch,
   commitStagedChange,
   getRevisionArtifacts,
+  regenerateRevision,
   stageDesignPatch,
   validateDesign
 } from "../src/core/forge_actions.mjs";
@@ -289,28 +290,34 @@ test("proposals and committed revisions persist without overwriting old revision
     "shell_back.stl",
     "model.step"
   ]) {
-    assert.ok(existsSync(`${workspacePath}/revisions/${committed.newRevisionId}/artifacts/${fileName}`), fileName);
+    assert.equal(existsSync(`${workspacePath}/revisions/${committed.newRevisionId}/artifacts/${fileName}`), false, fileName);
   }
-
-  const artifacts = getRevisionArtifacts({
-    workspaceId: plan.planId,
-    revisionId: committed.newRevisionId
-  });
-  assert.equal(artifacts.ok, true);
-  assert.equal((await readFile(`${workspacePath}/revisions/${committed.newRevisionId}/artifacts/model.glb`)).slice(0, 4).toString("utf8"), "glTF");
-  assert.equal((await readFile(artifacts.artifacts.modelGlb.localPath)).slice(0, 4).toString("utf8"), "glTF");
 
   const events = readWorkspaceEvents({ workspaceId: plan.planId });
   assert.ok(events.some((event) => event.type === "proposal_staged" && event.payload.proposalId === staged.proposalId));
   assert.ok(events.some((event) => event.type === "proposal_committed" && event.payload.proposalId === staged.proposalId));
-  assert.ok(events.some((event) => event.type === "artifacts_generated" && event.payload.revisionId === committed.newRevisionId));
+  assert.equal(events.some((event) => event.type === "artifacts_generated" && event.payload.revisionId === committed.newRevisionId), false);
+
+  const generated = regenerateRevision({
+    workspaceId: plan.planId,
+    revisionId: committed.newRevisionId,
+    reason: "confirmed_model_generation"
+  });
+  assert.equal(generated.ok, true);
+  assert.ok(generated.artifactPaths.modelGlb);
+  const artifacts = getRevisionArtifacts({
+    workspaceId: plan.planId,
+    revisionId: generated.revisionId
+  });
+  assert.equal(artifacts.ok, true);
+  assert.equal((await readFile(artifacts.artifacts.modelGlb.localPath)).slice(0, 4).toString("utf8"), "glTF");
 });
 
 test("ContextPack summarizes project folder state without raw artifact bytes", () => {
   const plan = createWorkspacePlan();
   const applied = applyDesignPatch({
     workspaceId: plan.planId,
-    message: "Move USB-C to the back-left and generate a revision.",
+    message: "Move USB-C to the back-left and create a revision.",
     patches: [
       {
         type: "geometry_preference_patch",
@@ -319,6 +326,12 @@ test("ContextPack summarizes project folder state without raw artifact bytes", (
     ]
   });
   assert.equal(applied.ok, true);
+  const generated = regenerateRevision({
+    workspaceId: plan.planId,
+    revisionId: applied.newRevisionId,
+    reason: "confirmed_model_generation"
+  });
+  assert.equal(generated.ok, true);
 
   const openProposal = stageDesignPatch({
     workspaceId: plan.planId,

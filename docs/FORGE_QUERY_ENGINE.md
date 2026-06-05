@@ -70,13 +70,15 @@ Runtime/provider options:
 
 The browser can set `window.FORGE_RUNTIME_PROVIDER = "codex"` or `localStorage.forgeRuntimeProvider = "codex"` before loading the app. If the Codex SDK is unavailable or cannot start/resume a thread, the API returns a clear structured error and the UI keeps the draft input instead of fabricating a ProductPlan response.
 
+If a model-selected tool call is denied by the permission gate, QueryEngine records the denied result and feeds it back into the next model iteration. This lets Codex recover from a rejected raw GeometrySpec/artifact mutation by choosing a legal Forge tool path such as `proposeDesignChange` or a structured patch.
+
 Optional live Codex smoke:
 
 ```bash
 FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live
 ```
 
-This script is intentionally not part of `npm run check`. Running `npm run smoke:codex-live` without the env vars only prints the opt-in instructions. The live form creates an isolated smoke workspace, initializes the first ProductPlan through `runtimeProvider: "codex"`, sends that project context through Codex SDK, runs the demo sequence of add buttons/buzzer, generate 3D, move USB-C, and revert, then fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves a pending confirmation, or misses the required state checks.
+This script is intentionally not part of `npm run check`. Running `npm run smoke:codex-live` without the env vars only prints the opt-in instructions. The live form creates an isolated smoke workspace, initializes the first ProductPlan through `runtimeProvider: "codex"`, sends that project context through Codex SDK, lets Codex create/apply product changes, simulates user confirmation for proposed changes, runs explicit generation, moves USB-C, and reverts. It fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves an unresolved pending confirmation, misses the required state checks, or the external Codex account hits a usage limit. The acknowledged live smoke passed on 2026-06-05 for the V1 idea -> modification -> 3D generation -> USB-C back-left -> revert path.
 
 Codex runtime project workspace files:
 

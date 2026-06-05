@@ -240,6 +240,17 @@ test("Sparker creates structured component and geometry patches", () => {
   assert.equal(result.productPlan.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
 });
 
+test("Sparker preserves Chinese rear-left USB-C placement wording", () => {
+  const result = processUserTurn({
+    currentProductPlan: createEmptyProductPlan(),
+    userMessage: "把 USB-C 移到后面左侧。"
+  });
+
+  assert.equal(result.unsupportedReasons.length, 0);
+  assert.equal(result.rejectedPatches.length, 0);
+  assert.equal(result.productPlan.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
+});
+
 test("workspace patches apply safely without mutating the previous plan", () => {
   const currentProductPlan = createEmptyProductPlan();
   const result = applyWorkspacePatches(currentProductPlan, [

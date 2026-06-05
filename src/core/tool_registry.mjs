@@ -117,7 +117,7 @@ const TOOL_DEFINITIONS = [
   }),
   tool({
     name: "commitStagedChange",
-    description: "Commit a staged or proposed change into a new ProductPlan revision and generated artifacts.",
+    description: "Commit a staged or proposed change into a new pending ProductPlan revision without writing GLB/STL/STEP artifacts.",
     inputSchema: objectSchema({
       workspaceId: stringSchema(),
       proposalId: stringSchema()
@@ -128,13 +128,12 @@ const TOOL_DEFINITIONS = [
       newRevisionId: stringSchema(),
       artifactPaths: objectSchema()
     }),
-    permission: confirmation("Creates a new revision, updates currentRevisionId, and writes generated artifacts when validation allows."),
-    behavior: revisionWriteBehavior(),
+    permission: confirmation("Creates a new pending revision and updates currentRevisionId. It does not write GLB/STL/STEP artifacts."),
+    behavior: revisionStateWriteBehavior(),
     concurrency: workspaceWriteLock(),
     sideEffects: [
       "append events.jsonl proposal_committed",
       "write revisions/{revisionId}/...",
-      "write revisions/{revisionId}/artifacts/...",
       "update project_manifest.currentRevisionId"
     ],
     rollback: {
@@ -156,13 +155,12 @@ const TOOL_DEFINITIONS = [
       newRevisionId: stringSchema(),
       artifactPaths: objectSchema()
     }),
-    permission: confirmation("Creates a new revision and writes generated artifacts without a separate proposal object."),
-    behavior: revisionWriteBehavior(),
+    permission: confirmation("Creates a new pending revision without a separate proposal object. It does not write GLB/STL/STEP artifacts."),
+    behavior: revisionStateWriteBehavior(),
     concurrency: workspaceWriteLock(),
     sideEffects: [
       "append events.jsonl revision_created",
       "write revisions/{revisionId}/...",
-      "write revisions/{revisionId}/artifacts/...",
       "update project_manifest.currentRevisionId"
     ],
     rollback: {
@@ -382,6 +380,16 @@ function revisionWriteBehavior() {
     destructive: false,
     createsRevision: true,
     writesArtifacts: true,
+    mutatesCurrentState: true
+  };
+}
+
+function revisionStateWriteBehavior() {
+  return {
+    readOnly: false,
+    destructive: false,
+    createsRevision: true,
+    writesArtifacts: false,
     mutatesCurrentState: true
   };
 }

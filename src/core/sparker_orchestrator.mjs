@@ -247,8 +247,8 @@ function shapeProfileFor(lower) {
 
 function semanticPositionFor(lower, targetWords) {
   if (!includesAny(lower, targetWords)) return "";
-  if (includesAny(lower, ["back-left", "back left", "rear-left", "rear left", "后面偏左", "后侧偏左", "背面偏左"])) return "back_left";
-  if (includesAny(lower, ["back-right", "back right", "rear-right", "rear right", "后面偏右", "后侧偏右", "背面偏右"])) return "back_right";
+  if (includesAny(lower, backLeftTerms())) return "back_left";
+  if (includesAny(lower, backRightTerms())) return "back_right";
   if (includesAny(lower, ["front-top", "upper front", "front upper", "正面上方"])) return "front_top";
   if (includesAny(lower, ["front-bottom", "lower front", "front lower", "正面下方"])) return "front_bottom";
   if (includesAny(lower, ["front-left", "upper-left", "upper left", "左上", "正面左"])) return "front_left";
@@ -265,8 +265,8 @@ function semanticPositionFor(lower, targetWords) {
 
 function targetSemanticPositionFor(lower, target) {
   if (target === "usb_c" && includesAny(lower, ["usb-c", "usb c", "usbc", "usb"])) {
-    if (includesAny(lower, ["back-left", "back left", "rear-left", "rear left", "后面偏左", "后侧偏左", "背面偏左"])) return "back_left";
-    if (includesAny(lower, ["back-right", "back right", "rear-right", "rear right", "后面偏右", "后侧偏右", "背面偏右"])) return "back_right";
+    if (includesAny(lower, backLeftTerms())) return "back_left";
+    if (includesAny(lower, backRightTerms())) return "back_right";
     if (includesAny(lower, ["back", "rear", "后面", "后侧", "背面"])) return "back";
   }
   if (target === "buttons" && includesAny(lower, ["button", "buttons", "按钮", "按键"])) {
@@ -280,6 +280,46 @@ function targetSemanticPositionFor(lower, target) {
     if (includesAny(lower, ["upper-left", "upper left", "左上", "正面左"])) return "front_left";
   }
   return "";
+}
+
+function backLeftTerms() {
+  return [
+    "back-left",
+    "back left",
+    "rear-left",
+    "rear left",
+    "后面偏左",
+    "后侧偏左",
+    "背面偏左",
+    "后面左侧",
+    "后侧左侧",
+    "背面左侧",
+    "后面左边",
+    "后侧左边",
+    "背面左边",
+    "后左侧",
+    "后左"
+  ];
+}
+
+function backRightTerms() {
+  return [
+    "back-right",
+    "back right",
+    "rear-right",
+    "rear right",
+    "后面偏右",
+    "后侧偏右",
+    "背面偏右",
+    "后面右侧",
+    "后侧右侧",
+    "背面右侧",
+    "后面右边",
+    "后侧右边",
+    "背面右边",
+    "后右侧",
+    "后右"
+  ];
 }
 
 function unsupportedReasonsFor(lower) {

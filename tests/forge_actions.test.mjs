@@ -51,7 +51,7 @@ test("Forge actions expose compact workspace summary and component search", () =
   assert.ok(battery.results.some((item) => item.risk.requiresManualValidation));
 });
 
-test("proposal flow stages design changes without revisions, then commits artifacts", () => {
+test("proposal flow stages design changes without revisions, then commits pending revisions", () => {
   const plan = createActionPlan();
   const initialRevisionCount = plan.revisions.length;
 
@@ -81,12 +81,39 @@ test("proposal flow stages design changes without revisions, then commits artifa
   assert.equal(committed.ok, true);
   assert.equal(committed.committed, true);
   assert.ok(committed.newRevisionId);
-  assert.ok(committed.artifactPaths.modelGlb);
-  assert.ok(committed.artifactPaths.shellFrontStl);
-  assert.ok(committed.artifactPaths.shellBackStl);
+  assert.equal(committed.artifactPaths.modelGlb, null);
+  assert.equal(committed.artifactPaths.shellFrontStl, null);
+  assert.equal(committed.artifactPaths.shellBackStl, null);
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);
+  const committedRevision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === committed.newRevisionId);
+  assert.equal(committedRevision.modelArtifacts.status, "pending_confirmation");
   assert.equal(getProductPlan(plan.planId).workspaceState.proposals[0].status, "committed");
   assert.equal(getProductPlan(plan.planId).workspaceState.proposals[0].committedRevisionId, committed.newRevisionId);
+});
+
+test("proposed Chinese USB-C rear-left placement commits as a legal geometry preference", () => {
+  const plan = createActionPlan();
+  const proposed = proposeDesignChange({
+    workspaceId: plan.planId,
+    message: "把 USB-C 移到后面左侧。请创建 proposal，不直接修改 geometry-spec.json。"
+  });
+
+  assert.equal(proposed.ok, true);
+  assert.ok(proposed.patches.some((patch) => (
+    patch.type === "geometry_preference_patch"
+    && patch.set?.["placements.usb_c.semanticPosition"] === "back_left"
+  )));
+
+  const committed = commitStagedChange({
+    workspaceId: plan.planId,
+    proposalId: proposed.proposalId
+  });
+
+  assert.equal(committed.ok, true);
+  assert.equal(committed.artifactPaths.modelGlb, null);
+  const revision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === committed.newRevisionId);
+  assert.equal(revision.productPlanSnapshot.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
+  assert.equal(revision.modelArtifacts.status, "pending_confirmation");
 });
 
 test("staged proposals can be rejected and rejected proposals cannot commit", () => {
@@ -167,9 +194,10 @@ test("applyDesignPatch creates revisions while invalid patches fail safely", () 
   assert.equal(valid.ok, true);
   assert.equal(valid.applied, true);
   assert.ok(valid.newRevisionId);
-  assert.ok(valid.artifactPaths.modelGlb);
+  assert.equal(valid.artifactPaths.modelGlb, null);
 
   const revision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === valid.newRevisionId);
+  assert.equal(revision.modelArtifacts.status, "pending_confirmation");
   assert.equal(revision.productPlanSnapshot.requirements.buttons, 2);
   assert.equal(revision.geometrySpec.componentSelections.selectedComponentIds.filter((id) => id === "button_6mm").length, 1);
   assert.equal(revision.productPlanSnapshot.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
@@ -242,7 +270,7 @@ test("regenerate, artifact retrieval, and revert remain controlled actions", asy
     ]
   });
   assert.equal(applied.ok, true);
-  const appliedArtifactPath = applied.artifactPaths.modelGlb;
+  assert.equal(applied.artifactPaths.modelGlb, null);
   const conversationLength = getProductPlan(plan.planId).conversation.length;
 
   const regenerated = regenerateRevision({
@@ -252,7 +280,7 @@ test("regenerate, artifact retrieval, and revert remain controlled actions", asy
   assert.equal(regenerated.ok, true);
   assert.equal(regenerated.regenerated, true);
   assert.notEqual(regenerated.revisionId, applied.newRevisionId);
-  assert.notEqual(regenerated.artifactPaths.modelGlb, appliedArtifactPath);
+  assert.ok(regenerated.artifactPaths.modelGlb);
 
   const artifacts = getRevisionArtifacts({
     workspaceId: plan.planId,

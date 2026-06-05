@@ -206,8 +206,7 @@ export async function runForgeChatTurn({
               error: permission.error
             }
           }));
-          assistantMessage = permission.reason;
-          break;
+          continue;
         }
 
         if (permission.decision === "confirm") {

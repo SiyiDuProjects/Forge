@@ -228,7 +228,7 @@ Common errors: `INVALID_PATCH_TYPE`, `INVALID_PATCH_PATH`, `UNKNOWN_COMPONENT`, 
 
 ### `commitStagedChange(input)`
 
-Purpose: commit a proposed or staged change into a new generated revision.
+Purpose: commit a proposed or staged change into a new pending ProductPlan revision without writing GLB/STL/STEP artifacts.
 
 Input:
 
@@ -245,11 +245,11 @@ Output includes:
 - `newRevisionId`
 - `diff`
 - `validationReport`
-- `artifactPaths.modelGlb`
-- `artifactPaths.shellFrontStl`
-- `artifactPaths.shellBackStl`
+- `artifactPaths.modelGlb: null`
+- `artifactPaths.shellFrontStl: null`
+- `artifactPaths.shellBackStl: null`
 
-Side effects: applies proposal patches, creates a ProductPlan revision, runs component selection/layout/GeometrySpec/validation, writes revision-specific artifacts when validation allows, marks the proposal `committed`, writes the proposal and revision under the project folder, and appends `tool_called`, `revision_created`, `artifacts_generated` when applicable, and `proposal_committed` events.
+Side effects: applies proposal patches, creates a ProductPlan revision, runs component selection/layout/GeometrySpec/validation, marks the proposal `committed`, writes the proposal and revision under the project folder, and appends `tool_called`, `revision_created`, and `proposal_committed` events. It does not write GLB/STL/STEP artifacts; call `regenerateRevision` after explicit generation confirmation.
 
 Creates revision: yes.
 
@@ -284,9 +284,11 @@ Output includes:
 - `newRevisionId`
 - `diff`
 - `validationReport`
-- `artifactPaths`
+- `artifactPaths.modelGlb: null`
+- `artifactPaths.shellFrontStl: null`
+- `artifactPaths.shellBackStl: null`
 
-Side effects: creates a new ProductPlan revision, writes revision files and revision-specific generated artifacts when validation allows, updates `project_manifest.json`, and appends `tool_called`, `revision_created`, and `artifacts_generated` when applicable.
+Side effects: creates a new pending ProductPlan revision, writes revision files, updates `project_manifest.json`, and appends `tool_called` and `revision_created`. It does not write GLB/STL/STEP artifacts; call `regenerateRevision` after explicit generation confirmation.
 
 Creates revision: yes.
 
