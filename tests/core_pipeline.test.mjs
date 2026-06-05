@@ -401,7 +401,14 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /composerCodexReady: "Next turn will run through Codex and Forge tools"/);
   assert.match(app, /function composerSummaryText/);
   assert.match(app, /function composerMetaText/);
+  assert.match(html, /<button id="scopeLevel" class="goal-meta" type="button">/);
+  assert.match(app, /runtimeQuickAria/);
+  assert.match(app, /function openRuntimeSettings/);
+  assert.match(app, /function focusRuntimeProviderSelect/);
+  assert.match(app, /dom\.scopeLevel\?\.addEventListener\("click", openRuntimeSettings\)/);
+  assert.match(app, /dom\.runtimeProviderSelect\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(app, /dom\.scopeLevel\?\.classList\.toggle\("active"/);
+  assert.match(styles, /\.goal-meta:hover/);
   assert.match(app, /dom\.inspectorContent\.hidden = true/);
   assert.match(app, /dom\.inspectorContent\.hidden = false/);
   assert.match(styles, /\.inspector-content\[hidden\]\s*{\s*display: none;\s*}/);

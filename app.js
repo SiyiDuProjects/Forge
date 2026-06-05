@@ -110,6 +110,7 @@ const copy = {
     runtimeStatusCodexThread: (threadId) => `项目 thread：${threadId}`,
     runtimeStatusCodexNoThread: "本项目尚未创建 Codex thread，首次 Codex 运行会创建",
     runtimeStatusNoWorkspace: "新项目将在首条需求后创建项目 thread",
+    runtimeQuickAria: "打开运行模式设置",
     approveChange: "确认执行",
     rejectChange: "取消",
     submitNeedContact: "请先填写姓名和邮箱",
@@ -330,6 +331,7 @@ const copy = {
     runtimeStatusCodexThread: (threadId) => `Project thread: ${threadId}`,
     runtimeStatusCodexNoThread: "This project has not created a Codex thread yet; the first Codex run will create one",
     runtimeStatusNoWorkspace: "A new project thread will be created after the first request",
+    runtimeQuickAria: "Open runtime mode settings",
     approveChange: "Confirm",
     rejectChange: "Cancel",
     submitNeedContact: "Enter name and email first",
@@ -1307,6 +1309,8 @@ function renderStaticText() {
   setText("#composerSummary", composerSummaryText());
   setText("#scopeLevel", composerMetaText());
   dom.scopeLevel?.classList.toggle("active", currentRuntimeProvider() === "codex" || state.loading);
+  setAttr("#scopeLevel", "aria-label", t("runtimeQuickAria"));
+  setAttr("#scopeLevel", "title", t("runtimeQuickAria"));
   setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
   setAttr(".thread-list", "aria-label", t("projectListAria"));
   setAttr(".inspector", "aria-label", t("inspectorAria"));
@@ -2474,6 +2478,19 @@ function setFloatingTrigger(activeName) {
   });
 }
 
+function openRuntimeSettings() {
+  openFloating("settings");
+  showSettingsPanel("studio");
+  focusRuntimeProviderSelect();
+  refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
+  window.requestAnimationFrame(focusRuntimeProviderSelect);
+  window.setTimeout(focusRuntimeProviderSelect, 0);
+}
+
+function focusRuntimeProviderSelect() {
+  dom.runtimeProviderSelect?.focus({ preventScroll: true });
+}
+
 function showSettingsPanel(panelName) {
   document.querySelectorAll("[data-settings-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.settingsTab === panelName);
@@ -3217,10 +3234,8 @@ dom.submitReview.addEventListener("click", () => openFloating("reviewContact"));
 window.yWorkbenchSubmitForReview = submitForReview;
 dom.newProject.addEventListener("click", startNewProject);
 dom.openThreadMenu.addEventListener("click", () => openFloating("thread"));
-dom.openSettings.addEventListener("click", () => {
-  openFloating("settings");
-  refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
-});
+dom.openSettings.addEventListener("click", openRuntimeSettings);
+dom.scopeLevel?.addEventListener("click", openRuntimeSettings);
 
 dom.languageSelect.addEventListener("change", async () => {
   state.lang = dom.languageSelect.value === "en" ? "en" : "zh";

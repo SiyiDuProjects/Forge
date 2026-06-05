@@ -914,12 +914,28 @@ pre {
 }
 
 .goal-meta {
+  border: 0;
+  background: transparent;
   color: var(--muted-2);
+  cursor: pointer;
+  font: inherit;
+  justify-self: end;
+  padding: 2px 0;
   white-space: nowrap;
 }
 
 .goal-meta.active {
   color: var(--green);
+}
+
+.goal-meta:hover,
+.goal-meta:focus-visible {
+  color: var(--text);
+}
+
+.goal-meta:focus-visible {
+  outline: 2px solid rgba(31, 111, 88, 0.26);
+  outline-offset: 3px;
 }
 
 .composer textarea {

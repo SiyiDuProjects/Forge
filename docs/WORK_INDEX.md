@@ -20,6 +20,20 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Composer Runtime Mode Entry
+
+- Scope: make the existing composer runtime meta a compact entry into runtime settings, so users can discover and switch to Codex without hunting through the sidebar settings button.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `index.html`
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `scopeLevel`, `goal-meta`, `runtimeQuickAria`, `openRuntimeSettings`, `runtimeProviderSelect.focus`, composer runtime mode entry.
+- Verification: `npm run check` passes with 71 tests. Browser verification on `http://127.0.0.1:8778/?cacheBust=runtime-entry-focus` confirmed `#scopeLevel` is a button with `打开运行模式设置`, clicking it opens `Forge 设置`, shows the `studio` settings panel, keeps the runtime value on the current provider, refreshes runtime status, and focuses `#runtimeProviderSelect`.
+- Boundary: this does not change default runtime selection, Codex thread creation, Forge tool policy, ProductPlan writes, GeometrySpec, or artifact generation. It only makes the existing runtime mode selector reachable from the composer meta.
+
 ### 2026-06-05 - Workspace Restore Noise Control
 
 - Scope: stop automated tests from writing default `data/workspaces`, and make frontend startup restoration collapse duplicate visible project names to the latest project so the sidebar stays usable when historical smoke/test workspaces already exist.
