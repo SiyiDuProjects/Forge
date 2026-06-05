@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Project Boundary Runtime Status Refresh
+
+- Scope: refresh the read-only runtime preflight whenever the frontend switches ProductPlan projects or starts a new draft, so the settings status cannot keep showing a previous project's `codexThreadId`.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `refreshRuntimeStatusForProjectBoundary`, `startNewProject`, `data-sidebar-project`, `runtimeStatus`, `codexThreadId`, `threadState`, project switch runtime preflight.
+- Verification: `npm run check` passes with 69 tests. Browser verification on `http://127.0.0.1:8774/?cacheBust=project-boundary-runtime-status` confirmed selecting `Codex` shows the active project's thread-state line, `新项目` refreshes it to `新项目将在首条需求后创建项目 thread`, and switching back to the existing project refreshes it to the project-scoped line.
+- Boundary: this is a frontend preflight/state refresh only. It does not create Codex threads, mutate ProductPlan files, change Forge action behavior, or generate artifacts.
+
 ### 2026-06-05 - Runtime Preflight Status
 
 - Scope: add a read-only runtime status preflight so `Forge 设置` can show whether local Forge, Forge QueryEngine, and Codex SDK are available, plus the current project's saved `codexThreadId` when one exists.

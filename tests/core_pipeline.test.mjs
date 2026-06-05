@@ -331,6 +331,8 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /runtimeProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /modelProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /refreshRuntimeStatus/);
+  assert.match(app, /function refreshRuntimeStatusForProjectBoundary/);
+  assert.match(app, /refreshRuntimeStatusForProjectBoundary\(\);/);
   assert.match(app, /runtimeStatusCodexReady/);
   assert.match(app, /runtimeStatusCodexMissing/);
   assert.match(app, /activeTrace: null/);

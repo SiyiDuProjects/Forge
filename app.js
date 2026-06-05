@@ -1052,6 +1052,12 @@ async function refreshRuntimeStatus({ renderAfter = true } = {}) {
   }
 }
 
+function refreshRuntimeStatusForProjectBoundary() {
+  state.runtimeStatus = null;
+  state.runtimeStatusError = "";
+  refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
+}
+
 function runtimeStatusPath() {
   const params = new URLSearchParams({
     runtimeProvider: currentRuntimeProvider(),
@@ -2370,6 +2376,7 @@ function startNewProject() {
   if (dom.ideaInput) dom.ideaInput.value = "";
   render();
   setNotice(t("newProjectReady"));
+  refreshRuntimeStatusForProjectBoundary();
   dom.ideaInput?.focus();
 }
 
@@ -2895,9 +2902,10 @@ document.querySelector(".thread-list")?.addEventListener("click", (event) => {
   }
   const projectButton = event.target.closest("[data-sidebar-project]");
   if (!projectButton) return;
-  activateProject(projectButton.dataset.sidebarProject);
+  if (!activateProject(projectButton.dataset.sidebarProject)) return;
   setNotice(projectTitle(activeProject()));
   render();
+  refreshRuntimeStatusForProjectBoundary();
 });
 
 dom.workspaceView.addEventListener("click", (event) => {
