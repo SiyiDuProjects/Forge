@@ -227,6 +227,14 @@ Returns the stocked/review/deferred module catalog.
 
 Returns a read-only runtime preflight for the current UI selection: default runtime/model providers, local Forge and QueryEngine readiness, Codex SDK availability, and the current project's saved `codexThreadId` when a `workspaceId` query parameter is provided. This route never creates a Codex thread and never mutates ProductPlan state.
 
+### `GET /api/workspaces`
+
+Returns recent persisted Forge project workspaces for frontend startup restoration. The response includes compact manifest fields plus the selected projects' `runtime_plan.json` ProductPlan payloads. The server sorts by updated time before loading full ProductPlans, so the default 12-item startup restore does not scan every full workspace file.
+
+### `GET /api/workspaces/:workspaceId/plan`
+
+Returns the persisted `runtime_plan.json` ProductPlan for one workspace, or `WORKSPACE_NOT_FOUND` when the workspace has no readable ProductPlan. This route is read-only and does not create a project, Codex thread, revision, proposal, or artifact.
+
 ### `GET /api/workspaces/:workspaceId/summary`
 
 Returns compact workspace summary for chat/UI context. It does not include large GLB/STL content.

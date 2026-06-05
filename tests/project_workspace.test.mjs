@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
@@ -22,7 +24,10 @@ import {
 } from "../src/core/guarded_files.mjs";
 import {
   appendWorkspaceEvent,
+  ensureProjectWorkspace,
+  listProjectWorkspaces,
   projectWorkspacePath,
+  readProjectWorkspacePlan,
   readRuntimePlan,
   readWorkspaceEvents
 } from "../src/core/project_workspace.mjs";
@@ -92,6 +97,45 @@ test("ProductPlan creation writes a durable Forge project folder", () => {
   assert.ok(events.some((event) => event.type === "workspace_created"));
   assert.ok(events.some((event) => event.type === "revision_created"));
   assert.ok(events.some((event) => event.type === "user_message"));
+});
+
+test("workspace listing restores persisted ProductPlan projects", () => {
+  const plan = createWorkspacePlan();
+  const listed = listProjectWorkspaces({ limit: 12 });
+  const restored = listed.find((workspace) => workspace.workspaceId === plan.planId);
+  const restoredPlan = readProjectWorkspacePlan({ workspaceId: plan.planId });
+
+  assert.ok(restored);
+  assert.equal(restored.title, plan.workspaceState.title);
+  assert.equal(restored.currentRevisionId, plan.currentRevisionId);
+  assert.equal(restored.productPlan.planId, plan.planId);
+  assert.equal(restoredPlan.planId, plan.planId);
+});
+
+test("workspace listing skips unreadable ProductPlan files", () => {
+  const rootDir = mkdtempSync(join(tmpdir(), "forge-workspaces-"));
+  const plan = createWorkspacePlan();
+  ensureProjectWorkspace({ plan, rootDir });
+  const brokenWorkspaceId = "plan-broken-runtime-json";
+  const brokenWorkspacePath = projectWorkspacePath(brokenWorkspaceId, { rootDir });
+  mkdirSync(brokenWorkspacePath, { recursive: true });
+  writeFileSync(`${brokenWorkspacePath}/project_manifest.json`, JSON.stringify({
+    version: "forge_project_workspace_v1",
+    projectId: brokenWorkspaceId,
+    workspaceId: brokenWorkspaceId,
+    title: "Broken workspace",
+    runtimePlanPath: "runtime_plan.json",
+    createdAt: "2999-01-01T00:00:00.000Z",
+    updatedAt: "2999-01-01T00:00:00.000Z"
+  }, null, 2));
+  writeFileSync(`${brokenWorkspacePath}/runtime_plan.json`, "{\"planId\":");
+
+  const listed = listProjectWorkspaces({ limit: 1, rootDir });
+
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].workspaceId, plan.planId);
+  assert.equal(listed[0].productPlan.planId, plan.planId);
+  assert.equal(readProjectWorkspacePlan({ workspaceId: brokenWorkspaceId, rootDir }), null);
 });
 
 test("forge-tool restores a project workspace in a separate process", () => {

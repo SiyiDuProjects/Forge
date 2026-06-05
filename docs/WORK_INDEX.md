@@ -20,6 +20,22 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Persisted Workspace Startup Restore
+
+- Scope: load recent persisted Forge ProductPlan projects from `data/workspaces` on frontend startup, activate the newest restored project, and fall back to a blank draft only when no readable project exists or the backend is unavailable.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`
+- Key code handles:
+  - `src/core/project_workspace.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `app.js`
+  - `tests/project_workspace.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `listProjectWorkspaces`, `readProjectWorkspacePlan`, `/api/workspaces`, `/api/workspaces/:workspaceId/plan`, `restorePersistedProjects`, startup restore, blank draft fallback, no startup demo ProductPlan.
+- Verification: `npm run check` passes with 71 tests, including a malformed-workspace regression that skips unreadable `runtime_plan.json` files during startup restore. Local API smoke on `http://127.0.0.1:8778` confirmed `GET /api/workspaces?limit=3` returns persisted projects with ProductPlans and `GET /api/workspaces/:workspaceId/plan` returns the selected ProductPlan. Browser verification on `http://127.0.0.1:8778/?cacheBust=workspace-restore` confirmed startup shows persisted project rows rather than an untitled fallback draft; switching from `木纹 3.5 英寸桌面屏` to `木纹 3.5 英寸桌面闹钟` updates the active row/topbar and keeps the right inspector on `原型结构预览（3D）` with pending generation state. A latest-code server is running on `http://127.0.0.1:8779/`, but Browser policy refused navigation to that port, so the final visual pass remains the 8778 UI pass plus the latest 71-test code check.
+- Boundary: this is startup and read-only workspace restoration. It does not change Codex thread creation policy, chat runtime decisions, confirmation policy, GeometrySpec, generated model artifacts, or guarded-file mutation rules.
+
 ### 2026-06-05 - Runtime Status Leads During Active Turns
 
 - Scope: put the right-inspector execution status before the 3D preview whenever a turn is running, failed, cancelled, or waiting for confirmation, so users see progress and confirmation controls immediately after sending.

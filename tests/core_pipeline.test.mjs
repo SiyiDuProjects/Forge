@@ -145,6 +145,8 @@ test("catalog and API contract expose stable integration handles", () => {
   assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/model/generate"));
   assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/geometry/generate"));
   assert.ok(API_CONTRACT.some((route) => route.method === "POST" && route.path === "/api/plans/:planId/revert"));
+  assert.ok(API_CONTRACT.some((route) => route.method === "GET" && route.path === "/api/workspaces"));
+  assert.ok(API_CONTRACT.some((route) => route.method === "GET" && route.path === "/api/workspaces/:workspaceId/plan"));
 });
 
 test("ComponentDescriptor v2 assets validate and resolve to proxy assets", async () => {
@@ -320,18 +322,20 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /data-device-canvas="fullscreen"/);
   assert.match(app, /data-sidebar-project/);
   assert.match(app, /const RUNTIME_PROVIDER_VALUES = \["mock", "forge-query-engine", "codex"\]/);
-  assert.match(app, /const DEMO_RUNTIME_PROVIDER = "mock"/);
   assert.match(app, /function currentRuntimeProvider/);
   assert.match(app, /async function apiPostStream/);
   assert.match(app, /processSseBuffer/);
   assert.match(app, /applyStreamTraceEvent/);
   assert.match(app, /\/api\/workspaces\/\$\{state\.productPlan\.planId\}\/chat\/turn\/stream/);
   assert.match(app, /"\/api\/plans\/stream"/);
+  assert.match(app, /async function restorePersistedProjects/);
+  assert.match(app, /"\/api\/workspaces\?limit=12"/);
+  assert.match(app, /if \(!restored\) createDraftProject\(\);/);
   assert.match(app, /\/api\/runtime\/status/);
   assert.match(html, /id="runtimeStatus"/);
   assert.match(app, /runtimeProvider: currentRuntimeProvider\(\)/);
   assert.match(app, /modelProvider: currentRuntimeProvider\(\)/);
-  assert.match(app, /runtime: DEMO_RUNTIME_PROVIDER/);
+  assert.doesNotMatch(app, /DEMO_RUNTIME_PROVIDER|createInitialPlan|demoConversationTurns/);
   assert.match(app, /refreshRuntimeStatus/);
   assert.match(app, /function refreshRuntimeStatusForProjectBoundary/);
   assert.match(app, /refreshRuntimeStatusForProjectBoundary\(\);/);
@@ -402,8 +406,6 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /workspaceToken/);
   assert.match(html, /提交审核下单/);
   assert.match(html, /ProductPlan/);
-  assert.match(app, /木纹桌面屏/);
-  assert.match(app, /Woodgrain desk display/);
   assert.match(app, /标准 3D 打印外壳/);
   assert.match(app, /Standard 3D printed shell/);
   assert.match(app, /Parts list \(BOM\)/);
@@ -431,9 +433,6 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /applyPreviewModeToInstances/);
   assert.match(app, /the components layer makes the shell transparent/);
   assert.match(app, /生成模型/);
-  assert.match(app, /demoConversationTurns/);
-  assert.match(app, /可以了，生成模型。/);
-  assert.match(app, /Ready, generate model\./);
   assert.match(app, /waiting for generation/);
   assert.match(app, /placed parts/);
   assert.match(app, /只读 3D 预览/);

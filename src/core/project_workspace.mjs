@@ -3,6 +3,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   statSync,
   writeFileSync
@@ -35,6 +36,29 @@ export function readRuntimePlan({ workspaceId, rootDir = defaultProjectWorkspace
   if (!workspaceId) return null;
   const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
   return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), manifest.runtimePlanPath || "runtime_plan.json"));
+}
+
+export function readProjectWorkspacePlan({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  return readRuntimePlanIfReadable({ workspaceId, rootDir });
+}
+
+export function listProjectWorkspaces({ limit = 12, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  if (!existsSync(rootDir)) return [];
+  const numericLimit = Number(limit);
+  const resultLimit = Number.isFinite(numericLimit) ? numericLimit : 12;
+  const entries = readdirSync(rootDir, { withFileTypes: true });
+  const sorted = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => workspaceSummaryFromDir(entry.name, { rootDir, includeProductPlan: false }))
+    .filter(Boolean)
+    .sort((a, b) => timestampForSort(b) - timestampForSort(a));
+  const workspaces = [];
+  for (const workspace of sorted) {
+    const fullWorkspace = workspaceSummaryFromDir(workspace.workspaceId, { rootDir, includeProductPlan: true });
+    if (fullWorkspace?.productPlan?.planId) workspaces.push(fullWorkspace);
+    if (resultLimit > 0 && workspaces.length >= resultLimit) break;
+  }
+  return workspaces;
 }
 
 export function updateProjectManifest({ workspaceId, patch = {}, rootDir = defaultProjectWorkspaceRoot() } = {}) {
@@ -378,6 +402,51 @@ function projectManifestFor(plan, previous = {}) {
     createdAt: previous.createdAt || plan.createdAt || now,
     updatedAt: plan.updatedAt || now
   };
+}
+
+function workspaceSummaryFromDir(workspaceId, { rootDir = defaultProjectWorkspaceRoot(), includeProductPlan = true } = {}) {
+  const workspacePath = projectWorkspacePath(workspaceId, { rootDir });
+  const manifest = readJsonIfExists(join(workspacePath, "project_manifest.json"));
+  if (!manifest?.workspaceId && !manifest?.projectId) return null;
+  const resolvedWorkspaceId = manifest.workspaceId || manifest.projectId || workspaceId;
+  const productPlan = includeProductPlan ? readRuntimePlanIfReadable({ workspaceId: resolvedWorkspaceId, rootDir }) : null;
+  const updatedAt = manifest.updatedAt
+    || productPlan?.updatedAt
+    || statMtimeIso(join(workspacePath, "project_manifest.json"))
+    || "";
+  return {
+    workspaceId: resolvedWorkspaceId,
+    projectId: manifest.projectId || resolvedWorkspaceId,
+    title: manifest.title || productPlan?.workspaceState?.title || "Forge hardware prototype",
+    status: manifest.status || productPlan?.status || "",
+    currentRevisionId: manifest.currentRevisionId || productPlan?.currentRevisionId || "",
+    codexThreadId: manifest.codexThreadId || productPlan?.workspaceState?.codexThreadId || "",
+    createdAt: manifest.createdAt || productPlan?.createdAt || "",
+    updatedAt,
+    manifest,
+    productPlan
+  };
+}
+
+function timestampForSort(workspace) {
+  const parsed = Date.parse(workspace?.updatedAt || workspace?.createdAt || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readRuntimePlanIfReadable({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  try {
+    return readRuntimePlan({ workspaceId, rootDir });
+  } catch {
+    return null;
+  }
+}
+
+function statMtimeIso(path) {
+  try {
+    return statSync(path).mtime.toISOString();
+  } catch {
+    return "";
+  }
 }
 
 function copyRevisionArtifacts({ revision, revisionPath }) {

@@ -90,6 +90,16 @@ export const API_CONTRACT = [
   },
   {
     method: "GET",
+    path: "/api/workspaces",
+    response: ["ok", "workspaces"]
+  },
+  {
+    method: "GET",
+    path: "/api/workspaces/:workspaceId/plan",
+    response: ["ok", "workspaceId", "productPlan"]
+  },
+  {
+    method: "GET",
     path: "/api/workspaces/:workspaceId/summary",
     response: ["ok", "workspaceId", "currentRevisionId", "requirements", "artifactStatus", "directEditingAllowed"]
   },

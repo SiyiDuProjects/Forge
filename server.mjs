@@ -24,6 +24,7 @@ import { confirmForgeChatTool, resolveChatRuntime, runForgeChatTurn } from "./sr
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
+import { listProjectWorkspaces, readProjectWorkspacePlan } from "./src/core/project_workspace.mjs";
 import { createProductPlanForRuntime } from "./src/core/runtime_plan_creation.mjs";
 import { getRuntimeStatus } from "./src/core/runtime_status.mjs";
 import { listToolMetadata } from "./src/core/tool_registry.mjs";
@@ -118,6 +119,36 @@ async function handleApi(request, response, url) {
       defaultRuntimeProvider: defaultChatRuntimeProvider,
       defaultModelProvider: defaultChatModelProvider
     }));
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/workspaces") {
+    const limit = Number(url.searchParams.get("limit") || 12);
+    sendJson(response, 200, {
+      ok: true,
+      workspaces: listProjectWorkspaces({ limit })
+    });
+    return;
+  }
+
+  const workspacePlanMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/plan$/);
+  if (request.method === "GET" && workspacePlanMatch) {
+    const productPlan = readProjectWorkspacePlan({ workspaceId: workspacePlanMatch[1] });
+    if (!productPlan) {
+      sendJson(response, 404, {
+        ok: false,
+        error: {
+          code: "WORKSPACE_NOT_FOUND",
+          message: "Workspace ProductPlan was not found."
+        }
+      });
+      return;
+    }
+    sendJson(response, 200, {
+      ok: true,
+      workspaceId: workspacePlanMatch[1],
+      productPlan
+    });
     return;
   }
 

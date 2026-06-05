@@ -4,7 +4,6 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const SUPPORTED_LANGUAGES = ["zh", "en"];
 const RUNTIME_PROVIDER_VALUES = ["mock", "forge-query-engine", "codex"];
-const DEMO_RUNTIME_PROVIDER = "mock";
 const threePreviewInstances = new Map();
 const INITIAL_RUNTIME_PROVIDER = localChatProvider();
 
@@ -236,7 +235,6 @@ const copy = {
     noManufacturing: "不付款、不生产、不联系供应商",
     noPlan: "输入第一条硬件想法后生成方案。",
     standardShell: "标准 3D 打印外壳",
-    woodgrainDemo: "木纹桌面屏",
     settingsRows: [
       ["内部原型模式", "提交只生成本地人工审核资料，不付款、不生产、不接供应商。"],
       ["对话优先", "用户持续聊天，右侧 ProductPlan 实时更新。"],
@@ -245,15 +243,6 @@ const copy = {
       ["运行模式", "默认使用本地 Forge 工具链；需要真实 Codex 时手动切换。"],
       ["界面语言", "保留中文和 English 两套文案。"],
       ["文案维护规则", "新增按钮、状态、弹窗、文档都要同步更新中英文。"]
-    ],
-    demoRequest:
-      "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电。",
-    demoConversationTurns: [
-      "我想做一个小型木纹桌面屏，可以显示家庭照片、天气和明天日程，3.5 英寸，USB-C 供电。",
-      "把它改成桌面闹钟，加两个按钮放在右侧。",
-      "加一个小蜂鸣器，再做成相框风格。",
-      "顶部加猫耳，USB-C 移到后面偏左。",
-      "可以了，生成模型。"
     ]
   },
   en: {
@@ -466,7 +455,6 @@ const copy = {
     noManufacturing: "No payment, production, or supplier contact",
     noPlan: "Send the first hardware idea to generate a plan.",
     standardShell: "Standard 3D printed shell",
-    woodgrainDemo: "Woodgrain desk display",
     settingsRows: [
       ["Internal prototype mode", "Submission writes local human review material; no payment, production, or supplier order starts."],
       ["Conversation first", "The user keeps chatting while the right-side ProductPlan updates."],
@@ -475,15 +463,6 @@ const copy = {
       ["Runtime mode", "Use the local Forge tool runtime by default; switch manually when a real Codex run is needed."],
       ["Interface language", "Keep both Chinese and English copy."],
       ["Copy maintenance", "Buttons, statuses, popovers, and docs must stay bilingual."]
-    ],
-    demoRequest:
-      "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered.",
-    demoConversationTurns: [
-      "I want a small woodgrain desktop display that shows family photos, weather, and tomorrow's calendar, 3.5 in, USB-C powered.",
-      "Turn it into a desktop clock and add two buttons on the right side.",
-      "Add a small buzzer and make it look like a photo frame.",
-      "Add cat ears to the top corners and move USB-C to the back-left.",
-      "Ready, generate model."
     ]
   }
 };
@@ -564,44 +543,35 @@ function t(key, ...args) {
 
 async function bootstrap() {
   renderStaticText();
+  const restored = await restorePersistedProjects();
+  if (!restored) createDraftProject();
   render();
-  await createInitialPlan();
   refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
 }
 
-async function createInitialPlan() {
+async function restorePersistedProjects() {
   const token = state.workspaceToken;
   try {
-    const turns = demoConversationTurns();
-    const response = await apiPost("/api/plans", {
-      initialMessage: turns[0],
-      language: state.lang,
-      runtime: DEMO_RUNTIME_PROVIDER,
-      modelProvider: DEMO_RUNTIME_PROVIDER,
-      runtimeProvider: DEMO_RUNTIME_PROVIDER
-    });
-    let productPlan = response.productPlan;
-    for (const message of turns.slice(1)) {
-      const turnResponse = await apiPost(`/api/plans/${productPlan.planId}/turns`, { message });
-      productPlan = turnResponse.productPlan;
-    }
-    if (token !== state.workspaceToken) return;
-    upsertProjectFromPlan(productPlan, { kind: "sample" });
-    state.contactInfo = productPlan.contactInfo || state.contactInfo;
+    const response = await apiGet("/api/workspaces?limit=12");
+    if (token !== state.workspaceToken) return false;
+    const restored = (response.workspaces || [])
+      .map((workspace) => workspace.productPlan)
+      .filter((plan) => plan?.planId)
+      .map((productPlan) => createProjectRecord({
+        productPlan,
+        kind: "restored"
+      }));
+    if (!restored.length) return false;
+    state.projects = restored;
+    activateProject(restored[0].projectId);
     state.runtimeError = "";
+    return true;
   } catch (error) {
-    if (token !== state.workspaceToken) return;
+    if (token !== state.workspaceToken) return false;
     state.runtimeError = userFacingError(error);
     setNotice(t("fallbackNotice"));
+    return false;
   }
-  if (token !== state.workspaceToken) return;
-  render();
-}
-
-function demoConversationTurns() {
-  const turns = t("demoConversationTurns");
-  if (Array.isArray(turns) && turns.length > 0) return turns;
-  return [t("demoRequest")];
 }
 
 function activeProject() {
