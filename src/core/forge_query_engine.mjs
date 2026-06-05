@@ -191,7 +191,14 @@ export async function runForgeChatTurn({
       userMessage: text,
       contextPack: currentContextPack,
       toolResults: loopToolResults,
-      messages: session.messages || []
+      messages: session.messages || [],
+      onCodexEvent: (event) => emitTraceEvent(onTraceEvent, {
+        turnId,
+        sessionId,
+        runtimeProvider: runtime.runtimeProvider,
+        modelProvider: runtime.modelProvider,
+        ...event
+      })
     });
     modelResponses.push(modelResult);
     eventsAppended.push(appendWorkspaceEvent({

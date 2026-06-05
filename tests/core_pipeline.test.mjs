@@ -339,6 +339,11 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /运行模式/);
   assert.match(app, /Runtime mode/);
   assert.match(app, /Forge QueryEngine/);
+  assert.match(app, /traceCodexTurn/);
+  assert.match(app, /traceRowForCodexItem/);
+  assert.match(app, /codex_item_started/);
+  assert.match(app, /codex_item_completed/);
+  assert.match(app, /formatCodexUsage/);
   assert.match(styles, /\.trace-timeline/);
   assert.match(styles, /\.trace-row\.running strong/);
   assert.match(app, /function submitComposer/);

@@ -223,7 +223,8 @@ export class CodexSdkRuntimeAdapter {
   async runTurn({
     prompt = "",
     userMessage = "",
-    toolResults = []
+    toolResults = [],
+    onCodexEvent = null
   } = {}) {
     const thread = await ensureCodexProjectThread({
       workspaceId: this.workspaceId,
@@ -241,7 +242,8 @@ export class CodexSdkRuntimeAdapter {
         forgePrompt: prompt,
         toolResults,
         userMessage
-      })
+      }),
+      onCodexEvent
     });
     if (!run.ok) return run;
     hydrateProductPlanFromWorkspace({

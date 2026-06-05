@@ -84,21 +84,24 @@ export async function runCodexProductTurn({
   prompt = "",
   workspaceId = "",
   rootDir = defaultProjectWorkspaceRoot(),
-  outputSchema = codexOutputSchema()
+  outputSchema = codexOutputSchema(),
+  onCodexEvent = null
 } = {}) {
-  if (!thread || typeof thread.run !== "function") {
+  if (!thread || (typeof thread.run !== "function" && typeof thread.runStreamed !== "function")) {
     return {
       ok: false,
       error: {
         code: "CODEX_THREAD_RUN_UNAVAILABLE",
-        message: "Codex thread does not expose run()."
+        message: "Codex thread does not expose run() or runStreamed()."
       }
     };
   }
   try {
     const before = workspaceId ? snapshotGuardedFiles({ workspaceId, rootDir }) : null;
     const beforeEventCount = workspaceId ? guardedEventCount({ workspaceId, rootDir }) : 0;
-    const result = await thread.run(prompt, outputSchema ? { outputSchema } : {});
+    const result = typeof thread.runStreamed === "function"
+      ? await runCodexThreadStreamed({ thread, prompt, outputSchema, onCodexEvent })
+      : await runCodexThreadBuffered({ thread, prompt, outputSchema, onCodexEvent });
     const guardViolations = workspaceId
       ? detectGuardViolations({ workspaceId, rootDir, before, beforeEventCount })
       : [];
@@ -131,6 +134,210 @@ export async function runCodexProductTurn({
       }
     };
   }
+}
+
+async function runCodexThreadBuffered({
+  thread,
+  prompt = "",
+  outputSchema = null,
+  onCodexEvent = null
+} = {}) {
+  emitCodexEvent(onCodexEvent, {
+    type: "codex_turn_started",
+    sdkEventType: "buffered.run"
+  });
+  const result = await thread.run(prompt, outputSchema ? { outputSchema } : {});
+  emitCodexEvent(onCodexEvent, {
+    type: "codex_turn_completed",
+    sdkEventType: "buffered.run",
+    codexThreadId: codexThreadIdFrom(thread) || codexThreadIdFrom(result),
+    itemCount: Array.isArray(result?.items) ? result.items.length : 0,
+    usage: summarizeCodexUsage(result?.usage)
+  });
+  return result;
+}
+
+async function runCodexThreadStreamed({
+  thread,
+  prompt = "",
+  outputSchema = null,
+  onCodexEvent = null
+} = {}) {
+  const streamed = await thread.runStreamed(prompt, outputSchema ? { outputSchema } : {});
+  const turn = {
+    items: [],
+    finalResponse: "",
+    usage: null
+  };
+  let turnFailure = null;
+  for await (const event of streamed.events || []) {
+    emitCodexEvent(onCodexEvent, codexTraceEventFromSdk(event));
+    if (event?.type === "item.completed") {
+      if (event.item?.type === "agent_message") {
+        turn.finalResponse = event.item.text || "";
+      }
+      if (event.item) turn.items.push(event.item);
+    } else if (event?.type === "turn.completed") {
+      turn.usage = event.usage || null;
+    } else if (event?.type === "turn.failed") {
+      turnFailure = event.error || { message: "Codex turn failed." };
+      break;
+    } else if (event?.type === "error") {
+      turnFailure = { message: event.message || "Codex stream failed." };
+      break;
+    }
+  }
+  if (turnFailure) {
+    throw new Error(turnFailure.message || "Codex turn failed.");
+  }
+  return turn;
+}
+
+function emitCodexEvent(onCodexEvent, event = {}) {
+  if (typeof onCodexEvent !== "function" || !event?.type) return;
+  try {
+    onCodexEvent(event);
+  } catch {
+    // Trace observers must never change Codex execution.
+  }
+}
+
+function codexTraceEventFromSdk(event = {}) {
+  const sdkEventType = event?.type || "";
+  if (sdkEventType === "thread.started") {
+    return {
+      type: "codex_thread_started",
+      sdkEventType,
+      codexThreadId: event.thread_id || ""
+    };
+  }
+  if (sdkEventType === "turn.started") {
+    return {
+      type: "codex_turn_started",
+      sdkEventType
+    };
+  }
+  if (sdkEventType === "turn.completed") {
+    return {
+      type: "codex_turn_completed",
+      sdkEventType,
+      usage: summarizeCodexUsage(event.usage)
+    };
+  }
+  if (sdkEventType === "turn.failed") {
+    return {
+      type: "codex_turn_failed",
+      sdkEventType,
+      error: event.error || null
+    };
+  }
+  if (sdkEventType === "error") {
+    return {
+      type: "codex_turn_failed",
+      sdkEventType,
+      error: {
+        message: event.message || "Codex stream failed."
+      }
+    };
+  }
+  if (["item.started", "item.updated", "item.completed"].includes(sdkEventType)) {
+    const item = event.item || {};
+    return {
+      type: `codex_${sdkEventType.replace(".", "_")}`,
+      sdkEventType,
+      itemId: item.id || "",
+      itemType: item.type || "",
+      itemStatus: codexItemStatus(item, sdkEventType),
+      summary: summarizeCodexItem(item)
+    };
+  }
+  return {
+    type: "codex_sdk_event",
+    sdkEventType
+  };
+}
+
+function codexItemStatus(item = {}, sdkEventType = "") {
+  if (item.status) return item.status;
+  if (sdkEventType.endsWith(".started")) return "in_progress";
+  if (sdkEventType.endsWith(".completed")) return "completed";
+  return "";
+}
+
+function summarizeCodexItem(item = {}) {
+  if (!item || typeof item !== "object") return {};
+  if (item.type === "command_execution") {
+    return {
+      command: compactTraceText(item.command || "", 160),
+      status: item.status || "",
+      exitCode: item.exit_code
+    };
+  }
+  if (item.type === "file_change") {
+    return {
+      status: item.status || "",
+      changeCount: Array.isArray(item.changes) ? item.changes.length : 0,
+      paths: (item.changes || []).map((change) => `${change.kind || "update"}:${change.path || ""}`).slice(0, 4)
+    };
+  }
+  if (item.type === "mcp_tool_call") {
+    return {
+      server: item.server || "",
+      tool: item.tool || "",
+      status: item.status || ""
+    };
+  }
+  if (item.type === "agent_message") {
+    return {
+      textLength: String(item.text || "").length
+    };
+  }
+  if (item.type === "reasoning") {
+    return {
+      textLength: String(item.text || "").length
+    };
+  }
+  if (item.type === "web_search") {
+    return {
+      query: compactTraceText(item.query || "", 160)
+    };
+  }
+  if (item.type === "todo_list") {
+    const items = Array.isArray(item.items) ? item.items : [];
+    return {
+      itemCount: items.length,
+      completedCount: items.filter((todo) => todo.completed).length
+    };
+  }
+  if (item.type === "error") {
+    return {
+      message: compactTraceText(item.message || "", 220)
+    };
+  }
+  return {};
+}
+
+function summarizeCodexUsage(usage = null) {
+  if (!usage || typeof usage !== "object") return null;
+  return {
+    inputTokens: usage.input_tokens,
+    cachedInputTokens: usage.cached_input_tokens,
+    outputTokens: usage.output_tokens,
+    reasoningOutputTokens: usage.reasoning_output_tokens
+  };
+}
+
+function compactTraceText(value = "", limit = 160) {
+  const text = redactTraceText(String(value || "").replace(/\s+/g, " ").trim());
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3))}...`;
+}
+
+function redactTraceText(value = "") {
+  return String(value || "")
+    .replace(/\b(api[_-]?key|token|secret|password)=\S+/gi, "$1=<redacted>")
+    .replace(/\b(api[_-]?key|token|secret|password):\S+/gi, "$1:<redacted>")
+    .replace(/(--(?:api-key|token|secret|password)\s+)\S+/gi, "$1<redacted>");
 }
 
 export function buildCodexProductPrompt({

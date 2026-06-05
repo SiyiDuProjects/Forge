@@ -20,6 +20,23 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Codex SDK Streamed Event Summaries
+
+- Scope: switch the Codex SDK runtime adapter from buffered `thread.run()` only to `runStreamed()` when available, and forward safe SDK thread/turn/item summaries into the existing frontend SSE trace.
+- Status: implemented and verified in the current working tree.
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
+- Key code handles:
+  - `src/core/codex_runtime.mjs`
+  - `src/core/model_adapters.mjs`
+  - `src/core/forge_query_engine.mjs`
+  - `src/core/runtime_plan_creation.mjs`
+  - `app.js`
+  - `tests/query_engine.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `runStreamed`, `codex_thread_started`, `codex_turn_started`, `codex_turn_completed`, `codex_item_started`, `codex_item_completed`, `traceCodexTurn`, `traceRowForCodexItem`, `formatCodexUsage`.
+- Verification: `npm run check` passes with 67 tests, including fake Codex SDK streamed events and non-exposure of `aggregated_output`. Browser verification on `http://127.0.0.1:8770/?cacheBust=codex-sdk-streamed-events` confirms ordinary frontend chat still streams trace rows, creates a new revision, and leaves the right inspector at `待确认生成` until explicit model generation.
+- Boundary: the UI shows command names, file-change counts, MCP tool names, item statuses, and usage summaries. It intentionally does not stream raw command output, file contents, or reasoning text.
+
 ### 2026-06-05 - Streaming Runtime Trace For Plan And Chat Turns
 
 - Scope: upgrade the frontend runtime trace from result-based rendering to bounded SSE milestone streaming for both first ProductPlan creation and existing project chat turns.

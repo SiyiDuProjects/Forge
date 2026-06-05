@@ -72,6 +72,12 @@ const copy = {
     traceStream: "实时连接",
     tracePlanCreate: "创建 ProductPlan",
     traceRuntime: "运行模式",
+    traceCodexTurn: "Codex 运行",
+    traceCodexItem: "Codex 步骤",
+    traceCodexCommand: "Codex 命令",
+    traceCodexFileChange: "Codex 文件变更",
+    traceCodexMcp: "Codex 工具",
+    traceCodexUsage: "Token 用量",
     traceModelRequest: "请求模型",
     traceModel: "模型响应",
     traceToolSelected: "选择工具",
@@ -281,6 +287,12 @@ const copy = {
     traceStream: "Live connection",
     tracePlanCreate: "Creating ProductPlan",
     traceRuntime: "Runtime",
+    traceCodexTurn: "Codex run",
+    traceCodexItem: "Codex step",
+    traceCodexCommand: "Codex command",
+    traceCodexFileChange: "Codex file change",
+    traceCodexMcp: "Codex tool",
+    traceCodexUsage: "Token usage",
     traceModelRequest: "Model request",
     traceModel: "Model response",
     traceToolSelected: "Tool selected",
@@ -1444,6 +1456,45 @@ function traceEventRows(events = []) {
           value: compactId(event.codexThreadId || ""),
           detail: event.codexThreadId || ""
         };
+      case "codex_thread_started":
+        return {
+          status: "done",
+          label: "Codex thread",
+          value: compactId(event.codexThreadId || ""),
+          detail: event.codexThreadId || ""
+        };
+      case "codex_turn_started":
+        return {
+          status: "running",
+          label: t("traceCodexTurn"),
+          value: t("chatTraceRunning"),
+          detail: event.sdkEventType || ""
+        };
+      case "codex_turn_completed":
+        return {
+          status: "done",
+          label: t("traceCodexTurn"),
+          value: t("traceDone"),
+          detail: formatCodexUsage(event.usage) || (event.itemCount ? `${event.itemCount} items` : "")
+        };
+      case "codex_turn_failed":
+        return {
+          status: "blocked",
+          label: t("traceCodexTurn"),
+          value: event.error?.code || t("traceFailed"),
+          detail: event.error?.message || ""
+        };
+      case "codex_item_started":
+      case "codex_item_updated":
+      case "codex_item_completed":
+        return traceRowForCodexItem(event);
+      case "codex_sdk_event":
+        return {
+          status: "done",
+          label: t("traceCodexItem"),
+          value: event.sdkEventType || t("traceDone"),
+          detail: ""
+        };
       case "chat_turn_started":
         return {
           status: "running",
@@ -1552,6 +1603,51 @@ function traceEventRows(events = []) {
         };
     }
   });
+}
+
+function traceRowForCodexItem(event = {}) {
+  const summary = event.summary || {};
+  const failed = event.itemStatus === "failed" || summary.status === "failed";
+  const completed = event.type === "codex_item_completed" || event.itemStatus === "completed" || summary.status === "completed";
+  return {
+    status: failed ? "blocked" : completed ? "done" : "running",
+    label: codexItemLabel(event.itemType),
+    value: codexItemValue(event.itemType, summary, event.itemStatus),
+    detail: formatTraceSummary(summary)
+  };
+}
+
+function codexItemLabel(itemType = "") {
+  if (itemType === "command_execution") return t("traceCodexCommand");
+  if (itemType === "file_change") return t("traceCodexFileChange");
+  if (itemType === "mcp_tool_call") return t("traceCodexMcp");
+  return t("traceCodexItem");
+}
+
+function codexItemValue(itemType = "", summary = {}, status = "") {
+  if (itemType === "command_execution") return summary.command || status || t("chatTraceRunning");
+  if (itemType === "file_change") return summary.changeCount ? `${summary.changeCount}` : (summary.status || status || t("traceDone"));
+  if (itemType === "mcp_tool_call") return [summary.server, summary.tool].filter(Boolean).join("/") || status || t("traceDone");
+  if (itemType === "agent_message") return state.lang === "zh" ? "输出消息" : "assistant message";
+  if (itemType === "reasoning") return state.lang === "zh" ? "推理摘要" : "reasoning summary";
+  if (itemType === "todo_list") {
+    const itemCount = Number(summary.itemCount || 0);
+    const completedCount = Number(summary.completedCount || 0);
+    return itemCount ? `${completedCount}/${itemCount}` : status || t("traceDone");
+  }
+  if (itemType === "web_search") return summary.query || status || t("traceDone");
+  if (itemType === "error") return summary.message || t("traceFailed");
+  return status || t("traceDone");
+}
+
+function formatCodexUsage(usage = null) {
+  if (!usage) return "";
+  const parts = [];
+  if (usage.inputTokens !== undefined) parts.push(`in ${usage.inputTokens}`);
+  if (usage.cachedInputTokens !== undefined) parts.push(`cached ${usage.cachedInputTokens}`);
+  if (usage.outputTokens !== undefined) parts.push(`out ${usage.outputTokens}`);
+  if (usage.reasoningOutputTokens !== undefined) parts.push(`reasoning ${usage.reasoningOutputTokens}`);
+  return parts.length ? `${t("traceCodexUsage")}: ${parts.join(" / ")}` : "";
 }
 
 function formatTraceSummary(summary = {}) {

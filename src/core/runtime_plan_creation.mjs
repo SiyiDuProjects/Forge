@@ -70,7 +70,8 @@ export async function createProductPlanForRuntime({
       prompt: codexInitializationPrompt({
         result,
         userMessage: text
-      })
+      }),
+      onCodexEvent: (event) => emitPlanTraceEvent(onTraceEvent, event)
     });
     if (!initialized.ok) {
       emitPlanTraceEvent(onTraceEvent, {

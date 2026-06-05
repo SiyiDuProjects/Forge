@@ -471,6 +471,93 @@ test("Codex runtime creates and reuses one thread for a Forge project", async ()
   assert.ok(result.modelResponses.every((response) => response.codexThreadId === "codex-thread-1"));
 });
 
+test("Codex runtime streams SDK progress into Forge trace events", async () => {
+  const plan = createChatPlan();
+  const traceEvents = [];
+  const codexFactory = async () => ({
+    startThread() {
+      return fakeStreamedCodexThread("stream-thread");
+    },
+    resumeThread(threadId) {
+      return fakeStreamedCodexThread(threadId);
+    }
+  });
+
+  function fakeStreamedCodexThread(id) {
+    return {
+      id,
+      async runStreamed() {
+        return {
+          events: (async function* events() {
+            yield { type: "thread.started", thread_id: id };
+            yield { type: "turn.started" };
+            yield {
+              type: "item.started",
+              item: {
+                id: "cmd_1",
+                type: "command_execution",
+                command: "node scripts/forge-tool.mjs apply --message streamed",
+                aggregated_output: "this full command output should not be exposed",
+                status: "in_progress"
+              }
+            };
+            yield {
+              type: "item.completed",
+              item: {
+                id: "cmd_1",
+                type: "command_execution",
+                command: "node scripts/forge-tool.mjs apply --message streamed",
+                aggregated_output: "this full command output should not be exposed",
+                exit_code: 0,
+                status: "completed"
+              }
+            };
+            yield {
+              type: "item.completed",
+              item: {
+                id: "msg_1",
+                type: "agent_message",
+                text: JSON.stringify({
+                  assistantMessage: "Streamed Codex turn completed.",
+                  toolCalls: []
+                })
+              }
+            };
+            yield {
+              type: "turn.completed",
+              usage: {
+                input_tokens: 100,
+                cached_input_tokens: 10,
+                output_tokens: 20,
+                reasoning_output_tokens: 5
+              }
+            };
+          })()
+        };
+      }
+    };
+  }
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_stream_trace",
+    userMessage: "Just inspect the current project.",
+    runtimeProvider: "codex",
+    codexFactory,
+    onTraceEvent: (event) => traceEvents.push(event)
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.codexThreadId, "stream-thread");
+  assert.match(result.assistantMessage, /Streamed Codex/);
+  assert.ok(traceEvents.some((event) => event.type === "codex_thread_started" && event.codexThreadId === "stream-thread"));
+  assert.ok(traceEvents.some((event) => event.type === "codex_turn_started"));
+  assert.ok(traceEvents.some((event) => event.type === "codex_turn_completed" && event.usage?.inputTokens === 100));
+  const commandTrace = traceEvents.find((event) => event.type === "codex_item_completed" && event.itemType === "command_execution");
+  assert.equal(commandTrace.summary.command, "node scripts/forge-tool.mjs apply --message streamed");
+  assert.equal(commandTrace.summary.aggregated_output, undefined);
+});
+
 test("Codex runtime reports guarded direct file writes instead of accepting them", async () => {
   const plan = createChatPlan();
   const workspacePath = projectWorkspacePath(plan.planId);
