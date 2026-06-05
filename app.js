@@ -554,14 +554,14 @@ async function restorePersistedProjects() {
   try {
     const response = await apiGet("/api/workspaces?limit=12");
     if (token !== state.workspaceToken) return false;
-    const restored = (response.workspaces || [])
+    const restored = compactRestoredProjectList((response.workspaces || [])
       .filter((workspace) => workspace?.productPlan?.planId)
       .map((workspace) => createProjectRecord({
         productPlan: workspace.productPlan,
         kind: "restored",
         runtimeProvider: runtimeProviderForRestoredWorkspace(workspace),
         codexThreadId: codexThreadIdForWorkspace(workspace)
-      }));
+      })));
     if (!restored.length) return false;
     state.projects = restored;
     activateProject(restored[0].projectId);
@@ -664,6 +664,21 @@ function runtimeProviderForRestoredWorkspace(workspace = {}) {
 
 function codexThreadIdForWorkspace(workspace = {}) {
   return workspace.codexThreadId || workspace.manifest?.codexThreadId || workspace.productPlan?.workspaceState?.codexThreadId || "";
+}
+
+function compactRestoredProjectList(projects = []) {
+  const seenTitles = new Set();
+  return projects.filter((project) => {
+    const title = normalizeProjectTitle(projectTitle(project));
+    const key = title || project.projectId;
+    if (!key || seenTitles.has(key)) return false;
+    seenTitles.add(key);
+    return true;
+  });
+}
+
+function normalizeProjectTitle(title = "") {
+  return String(title || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function saveActiveProject() {

@@ -290,6 +290,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
 
   assert.match(packageJson, /"three"/);
+  assert.match(packageJson, /--import \.\/tests\/setup_test_environment\.mjs --test tests\/\*\.test\.mjs/);
   assert.match(html, /type="importmap"/);
   assert.match(html, /"three": "\/vendor\/three\/three\.module\.js"/);
   assert.match(html, /type="module" src="app\.js/);
@@ -329,6 +330,9 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /\/api\/workspaces\/\$\{state\.productPlan\.planId\}\/chat\/turn\/stream/);
   assert.match(app, /"\/api\/plans\/stream"/);
   assert.match(app, /async function restorePersistedProjects/);
+  assert.match(app, /compactRestoredProjectList\(\(response\.workspaces \|\| \[\]\)/);
+  assert.match(app, /function compactRestoredProjectList/);
+  assert.match(app, /function normalizeProjectTitle/);
   assert.match(app, /async function restoreActiveChatSession/);
   assert.match(app, /mergeConversationFromSession/);
   assert.match(app, /restoredTurnFromChatSession/);

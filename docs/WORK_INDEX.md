@@ -20,6 +20,20 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Workspace Restore Noise Control
+
+- Scope: stop automated tests from writing default `data/workspaces`, and make frontend startup restoration collapse duplicate visible project names to the latest project so the sidebar stays usable when historical smoke/test workspaces already exist.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `tests/setup_test_environment.mjs`
+  - `package.json`
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `FORGE_WORKSPACE_ROOT`, `setup_test_environment.mjs`, `compactRestoredProjectList`, `normalizeProjectTitle`, startup restore duplicate names, workspace restore noise.
+- Verification: `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes. `npm run check` passes with 71 tests and now runs through `--import ./tests/setup_test_environment.mjs`. Default `data/workspaces` manifest count stayed at 3432 before and after both targeted and full test runs, proving tests no longer add workspaces to the frontend restoration source.
+- Boundary: this does not delete or archive existing local workspace folders. It only prevents new test pollution and compacts duplicate visible sidebar rows during frontend restore.
+
 ### 2026-06-05 - Runtime Trace Restore And Send Button State
 
 - Scope: restore recent runtime trace rows after reload/project switch by returning bounded session-scoped `events.jsonl` entries from the chat-session API, and make the composer send button visually distinguish idle send state from running stop state.
