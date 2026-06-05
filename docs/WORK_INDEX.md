@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Codex-First Frontend Runtime Default
+
+- Scope: make Codex the normal frontend product-task runtime instead of leaving new/restored non-threaded projects on the old local Forge default. The browser now defaults to `runtimeProvider: "codex"`, shows `Codex` as the selected runtime option, and labels `mock` as `本地 Forge（降级）`.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
+- Key code handles:
+  - `app.js`
+  - `index.html`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `DEFAULT_RUNTIME_PROVIDER`, `forgeRuntimeProviderExplicit`, `LEGACY_RUNTIME_PROVIDER_KEY`, legacy mock migration, Codex default runtime, 本地 Forge（降级）, runtimeProviderSelect.
+- Verification: `npm run check` passes with 71 tests. Browser verification on `http://127.0.0.1:8778/?cacheBust=codex-first-default` confirmed the runtime selector defaults to `Codex`, the fallback option is labeled `本地 Forge（降级）`, the composer meta shows `标准桌面屏 · Codex`, and the restored `石墨黑 3.5 英寸桌面屏` project renders the generated model with `data-preview-engine="three"` plus `3D 模型已生成` / `真实 3D 预览已加载`.
+- Boundary: Codex becomes the default conversation/task-routing runtime in the frontend. Forge still owns guarded persistence and product tools; direct API calls without an explicit runtime may continue to use deterministic local defaults for tests/scripts.
+
 ### 2026-06-05 - Composer Runtime Mode Entry
 
 - Scope: make the existing composer runtime meta a compact entry into runtime settings, so users can discover and switch to Codex without hunting through the sidebar settings button.
@@ -280,7 +293,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 - Verification: `node --check server.mjs`, `node --check app.js`, `node --test tests/query_engine.test.mjs` passes with 20 QueryEngine tests including the forge-tool demo path, denied-tool feedback repair, and Codex-selected ProductPlan creation with a delayed thread id; `node --test tests/project_workspace.test.mjs` passes with project-workspace tests including event-type-specific guarded-file authorization; `npm run smoke:codex-live` skips without live opt-in; `node scripts/codex-live-smoke.mjs --run` refuses without explicit external-context ACK; and full `npm run check` passes with 65 tests. The opt-in live smoke initializes the first ProductPlan through `runtimeProvider: "codex"`, simulates user confirmation for proposals, keeps ordinary commit/apply revisions pending until explicit generation, and passed the real Codex V1 idea/modification/3D-generation/USB-move/revert checks on 2026-06-05.
 - Live smoke note: a normal sandbox run of `npm run smoke:codex-live` is intentionally non-live. A real run requires `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live`; this sends the isolated smoke project context through Codex SDK. The acknowledged live run on 2026-06-05 returned `ok: true` with a real `codexThreadId`, generated GLB/STL/STEP artifacts, a USB-C `back_left` revision, and a revert event.
 - Completion audit: `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md` records the live-verified V1 Codex runtime path and the current bounded SSE trace behavior.
-- Next: default UI remains `runtimeProvider: "mock"` until live Codex runtime is deliberately selected; future work can refine milestone streaming into richer Codex progress, cancellation, and retry controls without exposing arbitrary shell/file activity.
+- Superseded next step: the later `Codex-First Frontend Runtime Default` work makes Codex the normal frontend runtime. Future work can still refine milestone streaming into richer Codex progress, cancellation, and retry controls without exposing arbitrary shell/file activity.
 
 ### 2026-06-05 - Center Thread Chat-Only Cleanup
 

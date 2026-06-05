@@ -298,6 +298,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /id="runtimeProviderSelect"/);
   assert.match(html, /value="zh"/);
   assert.match(html, /value="en"/);
+  assert.match(html, /<option value="codex" selected>Codex<\/option>/);
   assert.match(html, /value="mock"/);
   assert.match(html, /value="forge-query-engine"/);
   assert.match(html, /value="codex"/);
@@ -323,6 +324,12 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /data-device-canvas="fullscreen"/);
   assert.match(app, /data-sidebar-project/);
   assert.match(app, /const RUNTIME_PROVIDER_VALUES = \["mock", "forge-query-engine", "codex"\]/);
+  assert.match(app, /const DEFAULT_RUNTIME_PROVIDER = "codex"/);
+  assert.match(app, /const LEGACY_RUNTIME_PROVIDER_KEY = "forgeRuntimeProvider"/);
+  assert.match(app, /const EXPLICIT_RUNTIME_PROVIDER_KEY = "forgeRuntimeProviderExplicit"/);
+  assert.match(app, /legacyChoice && legacyChoice !== "mock"/);
+  assert.match(app, /window\.localStorage\.setItem\(EXPLICIT_RUNTIME_PROVIDER_KEY, value\)/);
+  assert.match(app, /本地 Forge（降级）/);
   assert.match(app, /function currentRuntimeProvider/);
   assert.match(app, /async function apiPostStream/);
   assert.match(app, /processSseBuffer/);

@@ -4,20 +4,28 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const SUPPORTED_LANGUAGES = ["zh", "en"];
 const RUNTIME_PROVIDER_VALUES = ["mock", "forge-query-engine", "codex"];
+const DEFAULT_RUNTIME_PROVIDER = "codex";
+const LEGACY_RUNTIME_PROVIDER_KEY = "forgeRuntimeProvider";
+const EXPLICIT_RUNTIME_PROVIDER_KEY = "forgeRuntimeProviderExplicit";
 const threePreviewInstances = new Map();
 const INITIAL_RUNTIME_PROVIDER = localChatProvider();
 
 function localChatProvider() {
   try {
-    return normalizeRuntimeProvider(window.FORGE_RUNTIME_PROVIDER || window.localStorage.getItem("forgeRuntimeProvider"));
+    if (window.FORGE_RUNTIME_PROVIDER) return normalizeRuntimeProvider(window.FORGE_RUNTIME_PROVIDER);
+    const explicitChoice = window.localStorage.getItem(EXPLICIT_RUNTIME_PROVIDER_KEY);
+    if (explicitChoice) return normalizeRuntimeProvider(explicitChoice);
+    const legacyChoice = window.localStorage.getItem(LEGACY_RUNTIME_PROVIDER_KEY);
+    if (legacyChoice && legacyChoice !== "mock") return normalizeRuntimeProvider(legacyChoice);
+    return DEFAULT_RUNTIME_PROVIDER;
   } catch {
-    return "mock";
+    return DEFAULT_RUNTIME_PROVIDER;
   }
 }
 
 function normalizeRuntimeProvider(value = "") {
-  const normalized = String(value || "mock");
-  return RUNTIME_PROVIDER_VALUES.includes(normalized) ? normalized : "mock";
+  const normalized = String(value || DEFAULT_RUNTIME_PROVIDER);
+  return RUNTIME_PROVIDER_VALUES.includes(normalized) ? normalized : DEFAULT_RUNTIME_PROVIDER;
 }
 
 function currentRuntimeProvider() {
@@ -97,13 +105,13 @@ const copy = {
     traceFailed: "执行失败",
     traceDone: "完成",
     runtimeMode: "运行模式",
-    runtimeLocal: "本地 Forge",
+    runtimeLocal: "本地 Forge（降级）",
     runtimeQueryEngine: "Forge QueryEngine",
     runtimeCodex: "Codex",
     runtimeChanged: "运行模式已更新",
     runtimeStatusChecking: "正在检查运行时",
     runtimeStatusCheckFailed: (message) => `无法检查运行时：${message}`,
-    runtimeStatusLocalReady: "本地 Forge 工具链已就绪",
+    runtimeStatusLocalReady: "本地 Forge 降级模式已就绪",
     runtimeStatusQueryReady: "Forge QueryEngine 已就绪",
     runtimeStatusCodexReady: "Codex SDK 已就绪",
     runtimeStatusCodexMissing: "Codex SDK 不可用，发送会失败",
@@ -241,7 +249,7 @@ const copy = {
       ["对话优先", "用户持续聊天，右侧 ProductPlan 实时更新。"],
       ["标准 3D 打印外壳", "木纹、鼠尾草绿、石墨黑都只是标准外壳的表面效果。"],
       ["结果预览优先", "3D 视图用于理解原型结果，不提供建模编辑工具。"],
-      ["运行模式", "默认使用本地 Forge 工具链；需要真实 Codex 时手动切换。"],
+      ["运行模式", "默认由 Codex 接管项目对话和任务调度；本地 Forge 只作降级/测试。"],
       ["界面语言", "保留中文和 English 两套文案。"],
       ["文案维护规则", "新增按钮、状态、弹窗、文档都要同步更新中英文。"]
     ]
@@ -318,13 +326,13 @@ const copy = {
     traceFailed: "Execution failed",
     traceDone: "Done",
     runtimeMode: "Runtime mode",
-    runtimeLocal: "Local Forge",
+    runtimeLocal: "Local Forge (fallback)",
     runtimeQueryEngine: "Forge QueryEngine",
     runtimeCodex: "Codex",
     runtimeChanged: "Runtime mode updated",
     runtimeStatusChecking: "Checking runtime",
     runtimeStatusCheckFailed: (message) => `Runtime check failed: ${message}`,
-    runtimeStatusLocalReady: "Local Forge tools are ready",
+    runtimeStatusLocalReady: "Local Forge fallback is ready",
     runtimeStatusQueryReady: "Forge QueryEngine is ready",
     runtimeStatusCodexReady: "Codex SDK is ready",
     runtimeStatusCodexMissing: "Codex SDK is unavailable; sending will fail",
@@ -462,7 +470,7 @@ const copy = {
       ["Conversation first", "The user keeps chatting while the right-side ProductPlan updates."],
       ["Standard 3D printed shell", "Woodgrain, sage, and graphite are finish treatments on the same shell path."],
       ["Result preview first", "The 3D view helps users understand the prototype result; it does not expose modeling tools."],
-      ["Runtime mode", "Use the local Forge tool runtime by default; switch manually when a real Codex run is needed."],
+      ["Runtime mode", "Codex handles project conversation and task routing by default; Local Forge is only a fallback/test mode."],
       ["Interface language", "Keep both Chinese and English copy."],
       ["Copy maintenance", "Buttons, statuses, popovers, and docs must stay bilingual."]
     ]
@@ -1954,7 +1962,7 @@ function traceRuntimeDetail(turn = {}) {
 }
 
 function runtimeDisplayName(value = "") {
-  const normalized = String(value || "mock");
+  const normalized = normalizeRuntimeProvider(value || DEFAULT_RUNTIME_PROVIDER);
   if (normalized === "codex") return t("runtimeCodex");
   if (normalized === "forge-query-engine") return "Forge QueryEngine";
   return t("runtimeLocal");
@@ -3249,7 +3257,8 @@ dom.runtimeProviderSelect?.addEventListener("change", () => {
   const value = normalizeRuntimeProvider(dom.runtimeProviderSelect.value);
   state.runtimeProvider = value;
   try {
-    window.localStorage.setItem("forgeRuntimeProvider", value);
+    window.localStorage.setItem(LEGACY_RUNTIME_PROVIDER_KEY, value);
+    window.localStorage.setItem(EXPLICIT_RUNTIME_PROVIDER_KEY, value);
   } catch {}
   syncActiveProject({ runtimeProvider: value });
   render();

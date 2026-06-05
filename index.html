@@ -115,12 +115,12 @@
               <label class="settings-row">
                 <span>
                   <strong>运行模式</strong>
-                  <small>默认使用本地 Forge 工具链；需要真实 Codex 时手动切换。</small>
+                  <small>默认由 Codex 接管项目对话和任务调度；本地 Forge 只作降级/测试。</small>
                 </span>
                 <select id="runtimeProviderSelect" aria-label="运行模式">
-                  <option value="mock" selected>本地 Forge</option>
+                  <option value="codex" selected>Codex</option>
                   <option value="forge-query-engine">Forge QueryEngine</option>
-                  <option value="codex">Codex</option>
+                  <option value="mock">本地 Forge（降级）</option>
                 </select>
               </label>
               <div id="runtimeStatus" class="runtime-status-note" aria-live="polite">正在检查运行时</div>

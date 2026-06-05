@@ -11,9 +11,10 @@ The acknowledged live Codex SDK smoke now passes against an isolated Forge smoke
 ## What Is Done
 
 - Runtime selection exists:
-  - `runtimeProvider: "mock"` remains the default local UI/test runtime.
+  - `runtimeProvider: "codex"` is the default frontend product-task runtime.
   - `runtimeProvider: "forge-query-engine"` keeps Forge as the model/tool orchestrator.
-  - `runtimeProvider: "codex"` routes a project turn through `CodexSdkRuntimeAdapter`.
+  - `runtimeProvider: "mock"` keeps the deterministic local Forge adapter available as an explicit fallback/test mode.
+  - Codex routes a project turn through `CodexSdkRuntimeAdapter`.
 - Each Forge project can carry one project-bound Codex thread id in `project_manifest.json`.
 - The generated project workspace gives Codex a compact file cabinet:
   - `AGENTS.md`
@@ -117,7 +118,7 @@ The live smoke should return `ok: true` and show:
 - no pending confirmation
 - no guarded-file violation
 
-If this fails because Codex cannot start, cannot access its thread store, or cannot run from the project workspace, keep the default UI on `runtimeProvider: "mock"` and treat Codex as not deployed.
+If this fails because Codex cannot start, cannot access its thread store, or cannot run from the project workspace, show the clear Codex runtime error in the UI, preserve the draft input, and use `runtimeProvider: "mock"` only as an explicit fallback/test selection.
 
 ## Product Position
 
