@@ -76,13 +76,13 @@ Enclosure boundary:
 
 ### Left Sidebar
 
-Purpose: Start a new ProductPlan and select an existing project/revision without making history or review feel like separate primary products.
+Purpose: Start a new ProductPlan and select an existing project/conversation without making history or review feel like separate primary products.
 
 Current direction:
 
 - One primary `新项目` button at the top.
 - `新项目` should stay visually neutral by default with no filled background; use a subtle background only on hover/focus interaction.
-- A compact project/revision list below it. ProductPlan revisions such as `r4`, `r3`, and `r2` are selected from this list instead of a separate `项目历史` tab.
+- A compact project list below it. ProductPlan revisions are selected from the project history view instead of being mixed into the primary project list.
 - Project/revision rows show only the project name in the visible UI; do not add subtitle explanations such as status, model state, or quote text under each row.
 - The `方案菜单` / project actions `...` button belongs on the right side of the left-sidebar `项目` header, not in the center thread topbar.
 - `Forge 设置` stays in the lower-left footer.
@@ -178,22 +178,22 @@ Implemented:
 - Geometry validation for missing module geometry, camera/battery review warnings, standard shell fit, interface directions, cable route placeholders, and blocked motion structures
 - Prototype structure preview presented as a result snapshot; normal conversation keeps it pending until the user confirms generation
 - UI-only electronics layout preview with positions, interface directions, cable notes, and conflict checks
-- Conversation-first UI that calls the backend ProductPlan pipeline and falls back locally if needed
+- Conversation-first UI that calls the backend ProductPlan pipeline and shows an explicit retryable error if the backend is unavailable
 - Codex-like shell layout
 - Floating layer and popovers
 - Bench settings dialog
 - Hardware-specific button labels
 - Right inspector changed toward flat section styling
-- Local fallback when API fetch fails, so the UI can still render a complete bench draft
-- Conversation-first ProductPlan flow with compact left-side project/revision selection, center chat, and live right-side plan packet
+- No fake complete ProductPlan fallback when API fetch fails; keep the draft/input visible and show a clear error instead.
+- Conversation-first ProductPlan flow with compact left-side project/conversation selection, center chat, revision history view, and live right-side plan packet
 - Center `原型快照` result card that gives the 3D preview stronger product presence without turning the app into a modeling tool
 - Right-side `原型结构预览（3D）` section pinned near the top, expanded by default, with `外观层` and `元器件层` transparency states
-- Three complete mock scenarios: Woodgrain desk display, Motion companion, and Booth counter unit
+- One seeded real backend-generated conversation with confirmed 3D model artifacts; new projects start as blank real ProductPlan drafts.
 - Expanded UI-only flow states for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet
 - Popovers/dialogs for manufacturing check (DFM), thread actions, review contact submission, and bench settings
 - Composer placeholder shortcuts removed; scope, parts list (BOM), and risk limits remain visible through the ProductPlan thread output, while the right inspector focuses on 3D state instead of composer chips.
 - Right inspector simplified to a 3D-focused panel: preview canvas, layer controls, shell dimensions, structure checks, and model state only.
-- Bilingual UI copy across the shell, mock scenarios, popovers, inspector, and settings
+- Bilingual UI copy across the shell, seeded scenario, popovers, inspector, and settings
 - Language settings panel with `简体中文` and `English` options
 - Git repository initialized
 - README, architecture, contract, and observability docs
@@ -205,7 +205,7 @@ Implemented:
 - Proposal storage on `workspaceState.proposals` with proposed/staged/committed/rejected lifecycle states
 - Forge QueryEngine / Chat Runtime V1: `ContextPack -> prompt sections -> model adapter -> tool schema export -> permission gate -> tool executor -> Forge actions -> assistant/UI payload`.
 - Chat session JSONL and pending confirmation storage under `data/workspaces/<planId>/chat_sessions/`.
-- Deterministic `MockModelAdapter` for local tests and optional OpenAI Responses adapter behind `OPENAI_API_KEY`.
+- Deterministic local Forge chat adapter (`modelProvider: "mock"` in code) for default UI/tool turns and tests, plus optional OpenAI Responses adapter behind explicit OpenAI configuration.
 - API routes for `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
 - Minimal center-thread QueryEngine trace and confirmation card in the UI.
 

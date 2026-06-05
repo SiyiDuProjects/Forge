@@ -10,7 +10,7 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 - `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, project context packs, tool metadata, QueryEngine chat routes, and review submission.
 - `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, Forge actions, project folder persistence, context pack building, tool metadata, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
 - `src/core/forge_query_engine.mjs`: Forge-native chat runtime loop. It persists user messages before model work, builds ContextPack and prompt sections, exports tool schemas, calls a model adapter, runs the permission gate, executes Forge actions, records tool events, persists assistant messages, and returns UI-ready payloads.
-- `src/core/model_adapters.mjs`: deterministic mock adapter for local QueryEngine tests plus optional OpenAI Responses adapter behind `OPENAI_API_KEY`.
+- `src/core/model_adapters.mjs`: deterministic local Forge adapter for default QueryEngine/UI turns and tests plus optional OpenAI Responses adapter behind explicit OpenAI configuration.
 - `src/core/tool_schema_exporter.mjs`, `src/core/tool_executor.mjs`, `src/core/permission_gate.mjs`, `src/core/chat_session_store.mjs`, and `src/core/prompt_sections.mjs`: the narrow Claude Code-inspired runtime support layer for tool schemas, action dispatch, confirmation/denial, append-only chat sessions, and prompt assembly.
 - `src/core/forge_actions.mjs`: stable action contract for future chat/tool-calling layers. It exposes summaries, component search, proposal staging, committed patch application, regeneration, validation, revert, and artifact retrieval while keeping ProductPlan and GeometrySpec under Forge control.
 - `src/core/project_workspace.mjs`: file-backed Forge project runtime. It writes `data/workspaces/<planId>/project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, proposal JSON files, immutable revision folders, revision-scoped artifacts, local review files, and markdown indexes.
@@ -73,11 +73,11 @@ The local project folder is a durable workspace record, not a user-facing CAD ex
 
 ## UI Boundary
 
-The current frontend prefers the backend ProductPlan API for user input, but keeps a local fallback ProductPlan so visual checks do not collapse into a blank state if the sandbox blocks the server.
+The current frontend uses the backend ProductPlan API for real plans. If the API is unavailable, it keeps the draft visible and shows a clear error instead of synthesizing a fake complete ProductPlan.
 
 The primary UI is conversation-first:
 
-- Left: a single new-project action plus a compact ProductPlan project/revision list.
+- Left: a single new-project action plus a compact ProductPlan project/conversation list; revisions stay in the history view for the selected project.
 - Center: continuous conversation.
 - Right: live ProductPlan packet with scope, parts, prototype structure preview, electronics layout, quote assumptions, risks, and review submission.
 

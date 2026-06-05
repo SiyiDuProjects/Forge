@@ -4,6 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const SUPPORTED_LANGUAGES = ["zh", "en"];
 const threePreviewInstances = new Map();
+const FORGE_LOCAL_CHAT_PROVIDER = "mock";
 
 const copy = {
   zh: {
@@ -39,9 +40,10 @@ const copy = {
     newDraftDetail: "输入第一条需求后生成 ProductPlan",
     newProjectReady: "已准备新项目",
     benchAgent: "原型助手",
-    fallbackNotice: "后端暂不可用，正在显示本地 ProductPlan 示例",
+    fallbackNotice: "后端暂不可用，无法创建真实 ProductPlan",
+    sendFailed: "发送失败，已保留输入内容",
     rerunNotice: "已更新 ProductPlan revision",
-    chatRuntimeNotice: "QueryEngine 已通过 Forge 工具更新项目",
+    chatRuntimeNotice: "Forge 工具链已更新项目",
     chatConfirmationRequired: "需要确认后执行",
     chatTraceTitle: "工具调用",
     chatTraceEmpty: "本轮没有执行工具",
@@ -225,9 +227,10 @@ const copy = {
     newDraftDetail: "Send the first request to create a ProductPlan",
     newProjectReady: "New project ready",
     benchAgent: "Prototype assistant",
-    fallbackNotice: "Backend unavailable; showing a local ProductPlan example",
+    fallbackNotice: "Backend unavailable; cannot create a real ProductPlan",
+    sendFailed: "Send failed; the input was kept",
     rerunNotice: "ProductPlan revision updated",
-    chatRuntimeNotice: "QueryEngine updated the project through Forge tools",
+    chatRuntimeNotice: "Forge tool runtime updated the project",
     chatConfirmationRequired: "Confirmation required",
     chatTraceTitle: "Tool calls",
     chatTraceEmpty: "No tool executed in this turn",
@@ -382,6 +385,8 @@ const copy = {
 
 const state = {
   lang: initialLanguage(),
+  projects: [],
+  activeProjectId: "",
   productPlan: null,
   activeSidebar: "chat",
   previewMode: "appearance",
@@ -403,6 +408,7 @@ const state = {
   chatSessionId: "session_default",
   lastChatTurn: null,
   pendingConfirmation: null,
+  runtimeError: "",
   workspaceToken: 0,
   contactInfo: { name: "", email: "" }
 };
@@ -461,11 +467,12 @@ async function createInitialPlan() {
       productPlan = turnResponse.productPlan;
     }
     if (token !== state.workspaceToken) return;
-    state.productPlan = productPlan;
+    upsertProjectFromPlan(productPlan, { kind: "sample" });
     state.contactInfo = productPlan.contactInfo || state.contactInfo;
-  } catch {
+    state.runtimeError = "";
+  } catch (error) {
     if (token !== state.workspaceToken) return;
-    state.productPlan = fallbackProductPlan(t("demoRequest"), { useDemoConversation: true });
+    state.runtimeError = userFacingError(error);
     setNotice(t("fallbackNotice"));
   }
   if (token !== state.workspaceToken) return;
@@ -478,9 +485,117 @@ function demoConversationTurns() {
   return [t("demoRequest")];
 }
 
+function activeProject() {
+  return state.projects.find((project) => project.projectId === state.activeProjectId) || null;
+}
+
+function makeClientId(prefix) {
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${stamp}-${suffix}`;
+}
+
+function createSessionId(projectId) {
+  return `session_${String(projectId || makeClientId("project")).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function createProjectRecord({ productPlan = null, title = "", kind = "user", isDraft = false } = {}) {
+  const projectId = productPlan?.planId || makeClientId("draft");
+  return {
+    projectId,
+    kind,
+    isDraft,
+    title: title || projectTitleFromPlan(productPlan) || t("newDraftTitle"),
+    productPlan,
+    chatSessionId: createSessionId(projectId),
+    lastChatTurn: null,
+    pendingConfirmation: null,
+    runtimeError: "",
+    contactInfo: productPlan?.contactInfo || { name: "", email: "" },
+    createdAt: new Date().toISOString()
+  };
+}
+
+function saveActiveProject() {
+  const project = activeProject();
+  if (!project) return;
+  project.productPlan = state.productPlan;
+  project.lastChatTurn = state.lastChatTurn;
+  project.pendingConfirmation = state.pendingConfirmation;
+  project.runtimeError = state.runtimeError;
+  project.contactInfo = { ...state.contactInfo };
+  project.title = state.productPlan ? projectTitleFromPlan(state.productPlan) : (project.title || t("newDraftTitle"));
+}
+
+function activateProject(projectId) {
+  saveActiveProject();
+  const project = state.projects.find((item) => item.projectId === projectId);
+  if (!project) return false;
+  state.activeProjectId = project.projectId;
+  state.productPlan = project.productPlan || null;
+  state.chatSessionId = project.chatSessionId || createSessionId(project.projectId);
+  state.lastChatTurn = project.lastChatTurn || null;
+  state.pendingConfirmation = project.pendingConfirmation || null;
+  state.runtimeError = project.runtimeError || "";
+  state.contactInfo = { ...(project.contactInfo || state.productPlan?.contactInfo || { name: "", email: "" }) };
+  state.activeSidebar = "chat";
+  return true;
+}
+
+function upsertProjectFromPlan(productPlan, fields = {}) {
+  if (!productPlan?.planId) return null;
+  let project = state.projects.find((item) => item.projectId === productPlan.planId || item.productPlan?.planId === productPlan.planId);
+  if (!project && state.activeProjectId) {
+    const active = activeProject();
+    if (active?.isDraft) project = active;
+  }
+  if (!project) {
+    project = createProjectRecord({ productPlan, kind: fields.kind || "user" });
+    state.projects.unshift(project);
+  }
+  project.projectId = productPlan.planId;
+  project.isDraft = false;
+  project.productPlan = productPlan;
+  project.title = projectTitleFromPlan(productPlan);
+  project.chatSessionId = fields.chatSessionId || project.chatSessionId || createSessionId(productPlan.planId);
+  project.lastChatTurn = fields.lastChatTurn ?? project.lastChatTurn ?? null;
+  project.pendingConfirmation = fields.pendingConfirmation ?? project.pendingConfirmation ?? null;
+  project.runtimeError = fields.runtimeError || "";
+  project.contactInfo = productPlan.contactInfo || project.contactInfo || { name: "", email: "" };
+  project.kind = fields.kind || project.kind || "user";
+  state.activeProjectId = project.projectId;
+  state.productPlan = productPlan;
+  state.chatSessionId = project.chatSessionId;
+  state.lastChatTurn = project.lastChatTurn;
+  state.pendingConfirmation = project.pendingConfirmation;
+  state.runtimeError = project.runtimeError;
+  state.contactInfo = { ...project.contactInfo };
+  return project;
+}
+
+function createDraftProject() {
+  const project = createProjectRecord({
+    title: t("newDraftTitle"),
+    kind: "draft",
+    isDraft: true
+  });
+  state.projects.unshift(project);
+  activateProject(project.projectId);
+  return project;
+}
+
+function syncActiveProject(fields = {}) {
+  const project = activeProject();
+  if (!project) return;
+  Object.assign(project, fields);
+  saveActiveProject();
+}
+
 async function sendTurn(message) {
   const token = ++state.workspaceToken;
   state.loading = true;
+  state.runtimeError = "";
+  syncActiveProject({ runtimeError: "" });
   render();
   try {
     const hasRealPlan = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback");
@@ -488,22 +603,29 @@ async function sendTurn(message) {
       ? await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/turn`, {
         sessionId: state.chatSessionId,
         userMessage: message,
-        modelProvider: "mock"
+        modelProvider: FORGE_LOCAL_CHAT_PROVIDER
       })
       : await apiPost("/api/plans", { initialMessage: message, language: state.lang });
     if (token !== state.workspaceToken) return;
-    state.productPlan = response.productPlan;
+    if (!response.productPlan) throw new Error("ProductPlan was not returned.");
+    upsertProjectFromPlan(response.productPlan, {
+      lastChatTurn: hasRealPlan ? response : null,
+      pendingConfirmation: response.pendingConfirmation || null,
+      runtimeError: ""
+    });
     state.lastChatTurn = hasRealPlan ? response : null;
     state.pendingConfirmation = response.pendingConfirmation || null;
     state.activeSidebar = "chat";
     setNotice(response.pendingConfirmation ? t("chatConfirmationRequired") : (hasRealPlan ? t("chatRuntimeNotice") : t("rerunNotice")));
-  } catch {
+    return true;
+  } catch (error) {
     if (token !== state.workspaceToken) return;
-    state.productPlan = fallbackProductPlan(message);
-    state.lastChatTurn = null;
+    state.runtimeError = userFacingError(error);
+    syncActiveProject({ runtimeError: state.runtimeError });
     state.pendingConfirmation = null;
     state.activeSidebar = "chat";
-    setNotice(t("fallbackNotice"));
+    setNotice(t("sendFailed"));
+    return false;
   } finally {
     if (token !== state.workspaceToken) return;
     state.loading = false;
@@ -526,10 +648,19 @@ async function resolveChatConfirmation(approved) {
     state.productPlan = response.productPlan || state.productPlan;
     state.lastChatTurn = response;
     state.pendingConfirmation = null;
+    state.runtimeError = "";
+    syncActiveProject({
+      productPlan: state.productPlan,
+      lastChatTurn: state.lastChatTurn,
+      pendingConfirmation: null,
+      runtimeError: ""
+    });
     setNotice(approved ? t("chatRuntimeNotice") : t("actionNotice") + t("rejectChange"));
-  } catch {
+  } catch (error) {
     if (token !== state.workspaceToken) return;
-    setNotice(t("fallbackNotice"));
+    state.runtimeError = userFacingError(error);
+    syncActiveProject({ runtimeError: state.runtimeError });
+    setNotice(t("sendFailed"));
   } finally {
     if (token !== state.workspaceToken) return;
     state.loading = false;
@@ -557,10 +688,13 @@ async function submitForReview() {
     });
     state.productPlan = response.productPlan || state.productPlan;
     state.productPlan.reviewSubmission = response.submission || state.productPlan.reviewSubmission;
+    syncActiveProject({ productPlan: state.productPlan });
     setNotice(t("submittedNotice"));
     closeFloating();
-  } catch {
-    setNotice(t("fallbackNotice"));
+  } catch (error) {
+    state.runtimeError = userFacingError(error);
+    syncActiveProject({ runtimeError: state.runtimeError });
+    setNotice(t("sendFailed"));
   } finally {
     state.loading = false;
     state.submittingReview = false;
@@ -570,22 +704,19 @@ async function submitForReview() {
 
 async function revertToRevision(revisionId) {
   if (!state.productPlan || !revisionId) return;
-  if (state.productPlan.planId?.startsWith("fallback")) {
-    state.productPlan.currentRevisionId = revisionId;
-    state.activeSidebar = "chat";
-    setNotice(t("revisionReverted"));
-    render();
-    return;
-  }
   state.loading = true;
   render();
   try {
     const response = await apiPost(`/api/plans/${state.productPlan.planId}/revert`, { revisionId });
     state.productPlan = response.productPlan || state.productPlan;
+    state.runtimeError = "";
+    syncActiveProject({ productPlan: state.productPlan, runtimeError: "" });
     state.activeSidebar = "chat";
     setNotice(t("revisionReverted"));
-  } catch {
-    setNotice(t("fallbackNotice"));
+  } catch (error) {
+    state.runtimeError = userFacingError(error);
+    syncActiveProject({ runtimeError: state.runtimeError });
+    setNotice(t("sendFailed"));
   } finally {
     state.loading = false;
     render();
@@ -605,10 +736,23 @@ async function apiPost(path, body) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+  const text = await response.text();
+  let payload = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = { error: { message: text.slice(0, 240) } };
+    }
   }
-  return response.json();
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function userFacingError(error) {
+  return error instanceof Error ? error.message : String(error || t("fallbackNotice"));
 }
 
 function render() {
@@ -691,8 +835,8 @@ function renderActiveStates() {
 function renderProjectList() {
   const list = document.querySelector(".thread-list");
   if (!list) return;
-  const revisions = state.productPlan?.revisions || [];
-  if (!revisions.length) {
+  const projects = state.projects;
+  if (!projects.length) {
     list.innerHTML = `
       <button class="thread-row active" type="button" data-new-project-row>
         <span class="project-dot"></span>
@@ -702,15 +846,13 @@ function renderProjectList() {
     return;
   }
 
-  const rows = revisions
-    .map((revision, index) => ({ revision, index }))
-    .reverse();
+  const rows = projects;
   list.innerHTML = rows
     .map(
-      ({ revision, index }) => `
-        <button class="thread-row ${revision.revisionId === state.productPlan.currentRevisionId ? "active" : ""}" type="button" data-sidebar-revision="${escapeHtml(revision.revisionId)}" aria-label="${escapeHtml(`${planTitle(revision)} r${index + 1}`)}">
+      (project) => `
+        <button class="thread-row ${project.projectId === state.activeProjectId ? "active" : ""}" type="button" data-sidebar-project="${escapeHtml(project.projectId)}" aria-label="${escapeHtml(projectTitle(project))}">
           <span class="project-dot"></span>
-          <strong>${escapeHtml(planTitle(revision))}</strong>
+          <strong>${escapeHtml(projectTitle(project))}</strong>
         </button>
       `
     )
@@ -731,7 +873,12 @@ function renderConversation() {
 
 function renderChatWorkspace() {
   if (!state.productPlan) {
-    dom.workspaceView.innerHTML = `<section class="workspace-card"><p>${escapeHtml(t("noPlan"))}</p></section>`;
+    dom.workspaceView.innerHTML = `
+      <section class="workspace-card">
+        <p>${escapeHtml(t("noPlan"))}</p>
+        ${state.runtimeError ? `<p class="error-message">${escapeHtml(state.runtimeError)}</p>` : ""}
+      </section>
+    `;
     return;
   }
   const revision = currentRevision();
@@ -740,6 +887,7 @@ function renderChatWorkspace() {
     <div class="message-stack">
       ${messages.map((turn) => renderMessage(turn)).join("")}
     </div>
+    ${state.runtimeError ? `<section class="inline-panel runtime-error-panel"><p class="error-message">${escapeHtml(state.runtimeError)}</p></section>` : ""}
     ${renderChatRuntimePanel()}
     ${renderPrototypeSnapshot(revision)}
     <section class="inline-panel flow-panel" aria-label="ProductPlan">
@@ -1325,8 +1473,26 @@ function revisionBadge(revision) {
   return t("revisionBadge", revisionIndex(revision));
 }
 
+function projectTitle(project) {
+  if (!project) return t("newDraftTitle");
+  if (project.productPlan) return projectTitleFromPlan(project.productPlan);
+  return project.title || t("newDraftTitle");
+}
+
+function projectTitleFromPlan(plan) {
+  if (!plan) return "";
+  const revision = plan.revisions?.find((item) => item.revisionId === plan.currentRevisionId)
+    || plan.revisions?.at(-1)
+    || null;
+  return revision ? revisionTitle(revision) : (plan.workspaceState?.title || t("newDraftTitle"));
+}
+
 function planTitle(revision) {
   if (!revision) return t("noPlan");
+  return revisionTitle(revision);
+}
+
+function revisionTitle(revision) {
   const size = revision.spec?.enclosure?.screen_size_in || 5;
   const finish = revision.spec?.enclosure?.finish || "woodgrain";
   const productType = revision.productPlanSnapshot?.productType || revision.spec?.product_archetype || "desktop_display";
@@ -1390,129 +1556,6 @@ function planStatusText() {
   return t("planReady");
 }
 
-function fallbackProductPlan(message = t("demoRequest"), options = {}) {
-  const now = new Date().toISOString();
-  const useDemoConversation = Boolean(options.useDemoConversation);
-  const userTurns = useDemoConversation ? demoConversationTurns() : [message];
-  const generatedArtifacts = {
-    glb: { assetId: "fallback-model-glb", type: "glb", source: "local_fallback", caption: "Local 3D model preview" },
-    stl: { assetId: "fallback-model-stl", type: "stl", source: "local_fallback", caption: "Local shell file placeholder" },
-    step: { assetId: "fallback-model-step", type: "step", source: "local_fallback", caption: "Local internal engineering file placeholder" }
-  };
-  const fallbackModules = [
-    { id: "core.y_core_lite", category: "Core", name: "Y-Core Lite", unitCost: 58, status: "approved" },
-    { id: "display.tft_3_5", category: "Display", name: "3.5 inch TFT", unitCost: 28, status: "approved" },
-    { id: "power.usb_c_low_voltage", category: "Power", name: "USB-C low voltage", unitCost: 18, status: "approved" },
-    { id: "sensor.ambient_light", category: "Sensor", name: "Ambient light", unitCost: 8, status: "approved" },
-    { id: "enclosure.woodgrain", category: "Shell", name: "Woodgrain 3D printed shell", unitCost: 24, status: "approved" }
-  ];
-  const fallbackGeometrySpec = {
-    enclosure: { dimensionsMm: { width: 132, height: 84, depth: 36 }, finish: "woodgrain" },
-    componentAssetManifest: {
-      version: "component_asset_manifest_v1",
-      source: "local_fallback_visual",
-      proxyWarning: "Local fallback visual example uses proxy component shapes.",
-      components: [
-        { componentId: "display_3_5_tft", displayName: "3.5 inch TFT Display Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } },
-        { componentId: "core_board_esp32_s3", displayName: "ESP32-S3 Development Board Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } },
-        { componentId: "usb_c_breakout", displayName: "USB-C Breakout Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } },
-        { componentId: "ambient_sensor_basic", displayName: "Ambient Light Sensor Proxy", assetQuality: "mechanical_proxy", validationStatus: "unverified_proxy", preview: { resolvedType: "procedural_visual_proxy" } }
-      ],
-      directEditingAllowed: false
-    },
-    modules: [
-      { moduleId: "core.y_core_lite", category: "Core", name: "Y-Core Lite", status: "approved", role: "core_board", geometryStatus: "ready", dimensionsMm: { width: 48, height: 38, depth: 7 }, placement: { positionMm: { x: 0, y: 0, z: -6 }, orientation: "internal" } },
-      { moduleId: "display.tft_3_5", category: "Display", name: "3.5 inch TFT", status: "approved", role: "front_display", geometryStatus: "ready", dimensionsMm: { width: 76, height: 50, depth: 5 }, placement: { positionMm: { x: 0, y: 0, z: 15.5 }, orientation: "front" } },
-      { moduleId: "power.usb_c_low_voltage", category: "Power", name: "USB-C low voltage", status: "approved", role: "rear_connector", geometryStatus: "ready", dimensionsMm: { width: 12, height: 8, depth: 5 }, placement: { positionMm: { x: 0, y: -28, z: -16 }, orientation: "back" } },
-      { moduleId: "sensor.ambient_light", category: "Sensor", name: "Ambient light", status: "approved", role: "front_sensor", geometryStatus: "ready", dimensionsMm: { width: 9, height: 6, depth: 3 }, placement: { positionMm: { x: 42, y: 24, z: 16 }, orientation: "front" } }
-    ],
-    cableRoutes: [
-      { id: "fallback_power_route", from: "power.usb_c_low_voltage", to: "core.y_core_lite", pointsMm: [{ x: 0, y: -28, z: -16 }, { x: 0, y: 0, z: -6 }] }
-    ]
-  };
-  const buildRevision = (turnText, index) => {
-    const isFinal = useDemoConversation && index === userTurns.length - 1;
-    const status = isFinal ? "generated" : "pending_confirmation";
-    return {
-      revisionId: `fallback-rev-${index + 1}`,
-      sourceTurnId: `fallback-user-${index + 1}`,
-      productCategory: "standard_desktop_display",
-      requestText: userTurns.slice(0, index + 1).join("\nUpdate: "),
-      spec: {
-        product_type: "ai_desktop_display",
-        user_request: turnText,
-        module_stack: fallbackModules.map((module) => module.name),
-        enclosure: {
-          standardization: "3d_print_only",
-          finish: "woodgrain",
-          screen_size_in: 3.5
-        },
-        power: "usb_c_low_voltage"
-      },
-      modules: fallbackModules,
-      riskReport: { blocked: false, items: [{ level: "ok", text: "Local fallback preview keeps the standard desktop display boundary." }] },
-      quote: { range: "$268-$338" },
-      quoteEstimate: { range: "$268-$338", assumptions: ["Local fallback visual estimate."] },
-      geometrySpec: fallbackGeometrySpec,
-      modelArtifacts: {
-        status,
-        artifacts: isFinal ? { ...generatedArtifacts } : { glb: null, stl: null, step: null },
-        validation: { canGenerateArtifacts: true }
-      },
-      geometryValidation: { canGenerateArtifacts: true },
-      generationStatus: status,
-      generationConfirmed: isFinal,
-      modelPreview: {
-        viewerType: isFinal ? "interactive_glb_preview" : "pending_generation_preview",
-        generationMode: "local_fallback_visual",
-        modelParameters: { dimensionsMm: { width: 132, height: 84, depth: 36 }, finish: "woodgrain", manufacturingPath: "standardized_3d_print" },
-        notes: ["Local read-only 3D prototype preview."]
-      },
-      electronicsLayout: { placements: fallbackGeometrySpec.modules, conflicts: [{ level: "ok", note: "Local fallback layout preview." }] },
-      assumptions: ["Local fallback"],
-      createdAt: now
-    };
-  };
-  const revisions = userTurns.map(buildRevision);
-  const revision = revisions.at(-1);
-  const conversation = userTurns.flatMap((turnText, index) => [
-    { turnId: `fallback-user-${index + 1}`, role: "user", text: turnText, assetIds: [], createdAt: now },
-    { turnId: `fallback-ai-${index + 1}`, role: "assistant", text: fallbackAssistantText(index, userTurns.length, useDemoConversation), assetIds: [], createdAt: now }
-  ]);
-  return {
-    planId: "fallback-plan",
-    status: "standard_supported",
-    currentRevisionId: revision.revisionId,
-    requiredInputs: {
-      purpose: { confirmed: true },
-      screenSize: { confirmed: true, value: 3.5 },
-      finish: { confirmed: true, value: "woodgrain" },
-      missing: []
-    },
-    conversation,
-    revisions,
-    assets: useDemoConversation ? Object.values(generatedArtifacts) : [],
-    jobs: [],
-    contactInfo: { name: "", email: "" },
-    reviewSubmission: null,
-    createdAt: now,
-    updatedAt: now
-  };
-}
-
-function fallbackAssistantText(index, total, useDemoConversation) {
-  if (!useDemoConversation) return t("fallbackNotice");
-  const isFinal = index === total - 1;
-  if (state.lang === "zh") {
-    return isFinal
-      ? "本地示例已根据模拟对话生成带零件布局的 3D 原型预览。"
-      : "本地示例已更新 ProductPlan 草案，继续按模拟对话补充结构信息。";
-  }
-  return isFinal
-    ? "The local example generated a 3D prototype preview with placed parts from the simulated conversation."
-    : "The local example updated the ProductPlan draft and continues collecting structure details from the simulated conversation.";
-}
-
 function openFloating(name) {
   dom.floatingLayer.hidden = false;
   dom.floatingLayer.querySelectorAll("[data-dialog]").forEach((dialog) => {
@@ -1562,14 +1605,20 @@ function setNotice(message) {
 }
 
 function startNewProject() {
+  saveActiveProject();
   state.workspaceToken += 1;
-  state.productPlan = null;
+  createDraftProject();
   state.activeSidebar = "chat";
-  state.contactInfo = { name: "", email: "" };
   state.loading = false;
   state.submittingReview = false;
   state.lastChatTurn = null;
   state.pendingConfirmation = null;
+  state.runtimeError = "";
+  syncActiveProject({
+    lastChatTurn: null,
+    pendingConfirmation: null,
+    runtimeError: ""
+  });
   if (dom.ideaInput) dom.ideaInput.value = "";
   render();
   setNotice(t("newProjectReady"));
@@ -2096,11 +2145,10 @@ document.querySelector(".thread-list")?.addEventListener("click", (event) => {
     startNewProject();
     return;
   }
-  const revisionButton = event.target.closest("[data-sidebar-revision]");
-  if (!revisionButton || !state.productPlan) return;
-  state.productPlan.currentRevisionId = revisionButton.dataset.sidebarRevision;
-  state.activeSidebar = "chat";
-  setNotice(`${t("currentRevision")}: ${revisionButton.querySelector("em")?.textContent || revisionButton.dataset.sidebarRevision}`);
+  const projectButton = event.target.closest("[data-sidebar-project]");
+  if (!projectButton) return;
+  activateProject(projectButton.dataset.sidebarProject);
+  setNotice(projectTitle(activeProject()));
   render();
 });
 
@@ -2114,6 +2162,7 @@ dom.workspaceView.addEventListener("click", (event) => {
   const historyRevision = event.target.closest("[data-history-revision]");
   if (historyRevision) {
     state.productPlan.currentRevisionId = historyRevision.dataset.historyRevision;
+    syncActiveProject({ productPlan: state.productPlan });
     state.activeSidebar = "chat";
     setNotice(`${t("currentRevision")}: ${historyRevision.dataset.historyRevision}`);
     render();
@@ -2245,8 +2294,8 @@ dom.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = dom.ideaInput.value.trim();
   if (!message) return;
-  dom.ideaInput.value = "";
-  await sendTurn(message);
+  const sent = await sendTurn(message);
+  if (sent) dom.ideaInput.value = "";
 });
 
 dom.copySpec.addEventListener("click", () => {

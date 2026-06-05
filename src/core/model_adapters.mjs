@@ -121,10 +121,12 @@ export class MockModelAdapter {
 export class OpenAIResponsesAdapter {
   constructor({
     apiKey = process.env.OPENAI_API_KEY || "",
-    model = process.env.FORGE_MODEL_NAME || "gpt-5-mini"
+    model = process.env.FORGE_MODEL_NAME || process.env.OPENAI_MODEL || "gpt-5-mini",
+    baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com"
   } = {}) {
     this.apiKey = apiKey;
     this.model = model;
+    this.responsesUrl = openAIResponsesUrl(baseUrl);
   }
 
   async runTurn({ prompt, tools = [], userMessage = "" } = {}) {
@@ -137,33 +139,45 @@ export class OpenAIResponsesAdapter {
         }
       };
     }
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${this.apiKey}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        model: this.model,
-        input: [
-          {
-            role: "system",
-            content: prompt || ""
-          },
-          {
-            role: "user",
-            content: userMessage || ""
-          }
-        ],
-        tools
-      })
-    });
-    if (!response.ok) {
+    let response;
+    try {
+      response = await fetch(this.responsesUrl, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${this.apiKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: this.model,
+          input: [
+            {
+              role: "system",
+              content: prompt || ""
+            },
+            {
+              role: "user",
+              content: userMessage || ""
+            }
+          ],
+          tools
+        })
+      });
+    } catch (error) {
       return {
         ok: false,
         error: {
           code: "OPENAI_RESPONSE_FAILED",
-          message: `OpenAI Responses API returned HTTP ${response.status}.`
+          message: `OpenAI Responses API request failed: ${error instanceof Error ? error.message : "unknown network error"}.`
+        }
+      };
+    }
+    if (!response.ok) {
+      const message = await openAIErrorMessage(response);
+      return {
+        ok: false,
+        error: {
+          code: "OPENAI_RESPONSE_FAILED",
+          message
         }
       };
     }
@@ -174,6 +188,24 @@ export class OpenAIResponsesAdapter {
       toolCalls: extractOpenAIToolCalls(json),
       rawResponseId: json.id || ""
     };
+  }
+}
+
+export function openAIResponsesUrl(baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com") {
+  const normalized = String(baseUrl || "https://api.openai.com").replace(/\/+$/, "");
+  return normalized.endsWith("/v1") ? `${normalized}/responses` : `${normalized}/v1/responses`;
+}
+
+async function openAIErrorMessage(response) {
+  const fallback = `OpenAI Responses API returned HTTP ${response.status}.`;
+  const text = await response.text().catch(() => "");
+  if (!text) return fallback;
+  try {
+    const json = JSON.parse(text);
+    const detail = json.error?.message || json.message || json.code || "";
+    return detail ? `${fallback} ${detail}` : fallback;
+  } catch {
+    return `${fallback} ${text.slice(0, 200)}`;
   }
 }
 

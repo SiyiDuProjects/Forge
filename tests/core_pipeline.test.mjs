@@ -303,7 +303,12 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(html, /data-dialog="reviewContact"/);
   assert.match(html, /data-dialog="modelFullscreen"/);
   assert.match(html, /data-device-canvas="fullscreen"/);
-  assert.match(app, /data-sidebar-revision/);
+  assert.match(app, /data-sidebar-project/);
+  assert.match(app, /FORGE_LOCAL_CHAT_PROVIDER/);
+  assert.match(app, /modelProvider: FORGE_LOCAL_CHAT_PROVIDER/);
+  assert.match(app, /projects: \[\]/);
+  assert.doesNotMatch(app, /fallbackProductPlan/);
+  assert.doesNotMatch(app, /fallback-plan/);
   assert.doesNotMatch(app, /projectRevisionDetail/);
   assert.doesNotMatch(app, /<small>\$\{escapeHtml\(projectRevisionDetail/);
   assert.doesNotMatch(styles, /\.thread-row small|\.thread-row em/);

@@ -30,6 +30,7 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const threeDir = fileURLToPath(new URL("./node_modules/three/", import.meta.url));
 const port = Number(process.env.PORT || 8765);
 const host = process.env.HOST || "127.0.0.1";
+const defaultChatModelProvider = process.env.FORGE_CHAT_MODEL_PROVIDER || "mock";
 const logger = createLogger({ service: "forge-hardware-workbench" });
 
 const mimeTypes = {
@@ -144,7 +145,7 @@ async function handleApi(request, response, url) {
       workspaceId: workspaceChatTurnMatch[1],
       sessionId: body.sessionId || "session_default",
       userMessage: body.userMessage || body.message || "",
-      modelProvider: body.modelProvider || process.env.FORGE_MODEL_PROVIDER || "mock",
+      modelProvider: body.modelProvider || defaultChatModelProvider,
       mode: body.mode || "normal",
       confirmation: body.confirmation || null
     }));

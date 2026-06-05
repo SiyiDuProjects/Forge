@@ -65,7 +65,7 @@ Current known local limitation:
 - `src/core/context_pack_builder.mjs`: compact project-folder context builder for future chat/runtime layers; summarizes current state, revisions, proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without loading raw GLB/STL/STEP bytes.
 - `src/core/tool_registry.mjs`: Tool Protocol metadata for existing Forge actions, including schemas, confirmation policy, read/write behavior, side effects, concurrency locks, rollback strategy, and disallowed raw mutation targets.
 - `src/core/forge_query_engine.mjs`: Forge-native Claude Code-style query loop for one chat turn; persists user/assistant messages, builds ContextPack/prompt/tool schemas, calls a model adapter, permission-checks tool calls, executes Forge actions, records events, and returns UI-ready payloads.
-- `src/core/model_adapters.mjs`: deterministic `MockModelAdapter` for local tests plus optional OpenAI Responses adapter behind `OPENAI_API_KEY` and `FORGE_MODEL_PROVIDER=openai`.
+- `src/core/model_adapters.mjs`: deterministic local Forge `MockModelAdapter` for default UI/tool turns and tests plus optional OpenAI Responses adapter behind `OPENAI_API_KEY` and explicit `modelProvider: "openai"` / `FORGE_CHAT_MODEL_PROVIDER=openai`.
 - `src/core/tool_schema_exporter.mjs`: exports Tool Protocol metadata into model-callable tool schemas.
 - `src/core/tool_executor.mjs`: validates and dispatches model tool calls to `forge_actions.mjs`; never executes shell or arbitrary file edits.
 - `src/core/permission_gate.mjs`: enforces read/proposal/mutation confirmation rules and blocks raw GeometrySpec, GLB/STL/STEP, mesh, and arbitrary file mutation targets.
@@ -150,7 +150,7 @@ Required UI-only views:
 
 - `新项目`: left-side entry that clears the current workbench into a blank ProductPlan input state.
 - New project button visual state: default should be transparent/no filled background; use subtle color only for hover/focus feedback.
-- Compact project/revision list: left-side selection for ProductPlan revisions and project rows; do not make project history a separate large top-level tab. Visible rows should show only the project name, without status/model/quote subtitle explanations.
+- Compact project list: left-side selection is for ProductPlan projects/conversations. Revision history stays inside the project history view, not as the primary project list. Visible rows should show only the project name, without status/model/quote subtitle explanations.
 - Project actions menu: the `...` / `方案菜单` trigger belongs on the right side of the left-sidebar project header, next to `项目`, not in the center thread topbar.
 - Conversation flow: central continuous conversation and ProductPlan revision updates.
 - Internal review material: keep the local human review submission capability in the plan/review flow, but do not expose `审核包` as a left-sidebar primary entry while the current priority is conversation-driven 3D generation.
@@ -193,15 +193,11 @@ Enclosure-specific rule:
 - The DFM mock should check module fit, screen opening, board standoffs, connector access, print tolerance, generated geometry validation, and assembly only.
 - Motion structures are outside the standard path and should become blocked/manual expansion, not a normal ready packet.
 
-## UI-Only Runtime
+## Runtime Defaults
 
-The current frontend prefers backend ProductPlan APIs but should keep a local fallback ProductPlan so visual checks do not collapse into a blank `Failed to fetch` state when the local server cannot run inside the sandbox.
+The current frontend should use backend ProductPlan APIs for real plans and should not synthesize a fake complete ProductPlan when the backend fails. If the server or API is unavailable, show a clear bilingual error and keep the draft input so the user can retry.
 
-The mock UI should stay aligned with the product workflow:
-
-- It should produce request intent, modules, risk limits, quote, blueprint, and device behavior rules.
-- It should flag camera and battery as human-review risks and block motion structures from the standard path.
-- It should show clear UI-only status text in both supported languages.
+The default local chat runtime is the deterministic Forge tool adapter (`modelProvider: "mock"` in code), because it exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifacts without depending on external API keys. OpenAI-backed turns must be explicitly requested/configured and should not break the default UI if the external key or relay is invalid.
 
 ## Verification
 

@@ -17,7 +17,7 @@ export async function runForgeChatTurn({
   workspaceId,
   userMessage,
   sessionId = "session_default",
-  modelProvider = process.env.FORGE_MODEL_PROVIDER || "mock",
+  modelProvider = process.env.FORGE_CHAT_MODEL_PROVIDER || "mock",
   mode = "normal",
   confirmation = null,
   maxToolCalls = 5,

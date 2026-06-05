@@ -1,6 +1,6 @@
 # Forge QueryEngine
 
-Status: implemented for local V1 with a deterministic mock model adapter and an optional OpenAI Responses adapter.
+Status: implemented for local V1 with a deterministic Forge tool adapter and an optional OpenAI Responses adapter.
 
 Forge QueryEngine is the narrow Claude Code-style runtime layer for Forge. It borrows the shape of Claude Code's query loop, tool metadata, permission gate, and transcript persistence, but only for Forge hardware project actions.
 
@@ -51,6 +51,8 @@ HTTP routes:
 - `POST /api/workspaces/:workspaceId/chat/confirm`
 
 The frontend creates the initial `ProductPlan` with `/api/plans`. Once a real workspace exists, later composer turns use `/api/workspaces/:workspaceId/chat/turn`.
+
+The default UI/runtime provider is the local Forge adapter (`modelProvider: "mock"` in code). This avoids external key/relay failures while still exercising real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths. OpenAI-backed turns require an explicit `modelProvider: "openai"` request or `FORGE_CHAT_MODEL_PROVIDER=openai`.
 
 ## Tool Boundary
 
@@ -138,7 +140,7 @@ This keeps the project resumable and inspectable without loading raw model artif
 
 ## Model Adapters
 
-`MockModelAdapter` is deterministic and covered by tests. It maps known user messages to Forge tool calls:
+`MockModelAdapter` is the deterministic local Forge adapter and is covered by tests. It maps known user messages to Forge tool calls:
 
 - add two right-side buttons: component search plus immediate structured patch
 - what-if button/cat-ear questions: proposal only
@@ -148,7 +150,7 @@ This keeps the project resumable and inspectable without loading raw model artif
 - revert: active revision pointer change
 - unsupported flight/mains/drone requests: no unsafe tool execution
 
-`OpenAIResponsesAdapter` exists behind `modelProvider: "openai"` and `OPENAI_API_KEY`. The test suite does not require a live API call.
+`OpenAIResponsesAdapter` exists behind `modelProvider: "openai"` and `OPENAI_API_KEY`. It can also use `FORGE_MODEL_NAME` / `OPENAI_MODEL` and `OPENAI_BASE_URL` for relays. The test suite does not require a live API call.
 
 ## UI Payload
 

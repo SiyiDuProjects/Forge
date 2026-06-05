@@ -5,6 +5,7 @@ import { loadChatSession } from "../src/core/chat_session_store.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
 import { runForgeChatTurn, confirmForgeChatTool } from "../src/core/forge_query_engine.mjs";
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
+import { openAIResponsesUrl } from "../src/core/model_adapters.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
 import { readWorkspaceEvents } from "../src/core/project_workspace.mjs";
@@ -163,4 +164,33 @@ test("ContextPack remains compact and excludes raw generated artifact bytes", as
   assert.ok(contextPack.exclusions.includes("raw GLB/STL/STEP bytes"));
   assert.ok(contextPack.artifactSummary.every((artifact) => typeof artifact.bytes === "number"));
   assert.equal(JSON.stringify(contextPack).includes("glTF"), false);
+});
+
+test("QueryEngine default stays on local Forge tools even if OpenAI env is configured", async () => {
+  const previousProvider = process.env.FORGE_MODEL_PROVIDER;
+  const previousChatProvider = process.env.FORGE_CHAT_MODEL_PROVIDER;
+  process.env.FORGE_MODEL_PROVIDER = "openai";
+  delete process.env.FORGE_CHAT_MODEL_PROVIDER;
+  try {
+    const plan = createChatPlan();
+    const result = await runForgeChatTurn({
+      workspaceId: plan.planId,
+      sessionId: "test_default_provider",
+      userMessage: "Add two buttons on the right side."
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.toolCalls.map((call) => call.name), ["searchComponentLibrary", "applyDesignPatch"]);
+    assert.equal(result.toolResults.every((item) => item.ok), true);
+  } finally {
+    if (previousProvider === undefined) delete process.env.FORGE_MODEL_PROVIDER;
+    else process.env.FORGE_MODEL_PROVIDER = previousProvider;
+    if (previousChatProvider === undefined) delete process.env.FORGE_CHAT_MODEL_PROVIDER;
+    else process.env.FORGE_CHAT_MODEL_PROVIDER = previousChatProvider;
+  }
+});
+
+test("OpenAI adapter normalizes relay base URLs", () => {
+  assert.equal(openAIResponsesUrl("https://gaid.studio"), "https://gaid.studio/v1/responses");
+  assert.equal(openAIResponsesUrl("https://gaid.studio/v1"), "https://gaid.studio/v1/responses");
 });

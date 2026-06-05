@@ -20,6 +20,20 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Real Conversation And Project Switching Fix
+
+- Scope: make the frontend keep one seeded real generated-model conversation, start blank real ProductPlan drafts for new conversations, switch left-sidebar rows by project/conversation instead of revision, and keep default chat turns on the local Forge tool runtime even when external OpenAI env vars are present.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/ARCHITECTURE.md`, `AGENTS.md`
+- Key code handles:
+  - `app.js`
+  - `server.mjs`
+  - `src/core/forge_query_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: `FORGE_LOCAL_CHAT_PROVIDER`, `FORGE_CHAT_MODEL_PROVIDER`, project list not revision list, `data-sidebar-project`, no fake fallback ProductPlan, new project draft, send retry, local Forge tool runtime, generated model seed conversation.
+- Verification: `npm run check` passes with 47 tests; local API check on `http://127.0.0.1:8766` confirms default chat turns run `searchComponentLibrary -> applyDesignPatch` without OpenAI env dependence; Browser check confirms the first screen keeps one generated-model project, `新项目` creates an empty draft, and left-sidebar rows switch projects instead of revisions.
+
 ### 2026-06-04 - Forge QueryEngine And Chat Runtime V1
 
 - Scope: implement the Claude Code-inspired Forge QueryEngine / Chat Runtime V1 while keeping the runtime narrowed to Forge hardware project actions.
@@ -39,7 +53,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `tests/query_engine.test.mjs`
 - Retrieval handles: QueryEngine, Chat Runtime V1, MockModelAdapter, OpenAIResponsesAdapter, ContextPack prompt sections, Tool Protocol export, permission gate, pending_confirmations.json, chat_sessions, tool_call, tool_result, confirmation_required, `/api/workspaces/:workspaceId/chat/turn`.
 - Verification: `node --test tests/query_engine.test.mjs` passes; `npm run check` passes with 45 tests.
-- Next: a live OpenAI-backed turn can be tested only after `OPENAI_API_KEY`, `FORGE_MODEL_PROVIDER=openai`, and `FORGE_MODEL_NAME` are intentionally configured; do not broaden into shell/file-edit/MCP behavior.
+- Next: a live OpenAI-backed turn can be tested only after `OPENAI_API_KEY`, `FORGE_CHAT_MODEL_PROVIDER=openai`, and `FORGE_MODEL_NAME` are intentionally configured; do not broaden into shell/file-edit/MCP behavior.
 
 ### 2026-06-04 - Project Folder Runtime And Tool Protocol Metadata
 
