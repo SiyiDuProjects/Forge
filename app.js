@@ -70,15 +70,12 @@ const copy = {
     required: "待确认",
     confirmed: "已确认",
     modelPreviewState: "只读 3D 预览",
-    prototypePreviewTitle: "原型快照",
     prototypePreviewSubtitle: "这是方案结果视图，不是建模编辑器。",
-    prototypePreviewCta: "查看结构审核视图",
     prototypeViewLabel: "层级",
     previewModes: {
       appearance: "外观层",
       components: "元器件层"
     },
-    prototypeModelSummary: "标准外壳与零件布局快照",
     modelEvidence: "3D 模型 · 零件布局",
     modelShellPath: "外壳路径",
     modelDimensions: "尺寸",
@@ -258,15 +255,12 @@ const copy = {
     required: "needs input",
     confirmed: "confirmed",
     modelPreviewState: "read-only 3D preview",
-    prototypePreviewTitle: "Prototype snapshot",
     prototypePreviewSubtitle: "A result view of the planned prototype, not a modeling editor.",
-    prototypePreviewCta: "Open structure review view",
     prototypeViewLabel: "Layer",
     previewModes: {
       appearance: "Appearance",
       components: "Components"
     },
-    prototypeModelSummary: "Standard shell and parts layout snapshot",
     modelEvidence: "3D model · parts layout",
     modelShellPath: "Shell path",
     modelDimensions: "Dimensions",
@@ -887,7 +881,6 @@ function renderChatWorkspace() {
     `;
     return;
   }
-  const revision = currentRevision();
   const messages = state.productPlan.conversation || [];
   dom.workspaceView.innerHTML = `
     <div class="message-stack">
@@ -895,17 +888,6 @@ function renderChatWorkspace() {
     </div>
     ${state.runtimeError ? `<section class="inline-panel runtime-error-panel"><p class="error-message">${escapeHtml(state.runtimeError)}</p></section>` : ""}
     ${renderChatRuntimePanel()}
-    ${renderPrototypeSnapshot(revision)}
-    <section class="inline-panel flow-panel" aria-label="ProductPlan">
-      <div class="inline-panel-head">
-        <span class="inline-label">ProductPlan · ${escapeHtml(revisionBadge(revision))}</span>
-        <strong>${escapeHtml(planTitle(revision))}</strong>
-      </div>
-      ${renderRevisionDiff(revision)}
-      <div class="flow-list">
-        ${renderPlanSteps(revision)}
-      </div>
-    </section>
   `;
 }
 
@@ -980,58 +962,6 @@ function renderReviewWorkspace() {
   `;
 }
 
-function renderPrototypeSnapshot(revision) {
-  if (!revision) return "";
-  const params = revision.modelPreview?.modelParameters || {};
-  const dimensions = params.dimensionsMm || {};
-  const modules = revision.modules || [];
-  const pending = generationIsPending(revision);
-  const previewEngine = previewEngineForRevision(revision);
-  return `
-    <section class="prototype-snapshot" aria-label="${escapeHtml(t("prototypePreviewTitle"))}">
-      <div class="prototype-snapshot-head">
-        <span class="inline-label">${escapeHtml(t("prototypePreviewTitle"))}</span>
-        <strong>${escapeHtml(planTitle(revision))}</strong>
-        <button class="snapshot-link" type="button" data-open-dialog="dfm">${escapeHtml(t("prototypePreviewCta"))}</button>
-      </div>
-      <div class="prototype-snapshot-body">
-        <div class="prototype-canvas-wrap">
-          <span class="preview-engine-badge" data-model-render-status="conversation">${escapeHtml(renderPreviewStatus(revision))}</span>
-          <canvas data-device-canvas="conversation" data-preview-id="conversation" data-preview-engine="${escapeHtml(previewEngine)}" width="920" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
-        </div>
-        <div class="prototype-snapshot-side">
-          ${renderPreviewControls()}
-          <p>${escapeHtml(t("prototypePreviewSubtitle"))}</p>
-          <p>${escapeHtml(t("modelViewerHint"))}</p>
-          <div class="snapshot-facts">
-            <span>
-              <small>${escapeHtml(t("modelShellPath"))}</small>
-              <strong>${escapeHtml(t("standardShell"))}</strong>
-            </span>
-            <span>
-              <small>${escapeHtml(t("modelDimensions"))}</small>
-              <strong>${escapeHtml(formatDimensions(dimensions))}</strong>
-            </span>
-            <span>
-              <small>${escapeHtml(t("modelOpenings"))}</small>
-              <strong>${escapeHtml(openingSummary(params.openings, modules))}</strong>
-            </span>
-            <span>
-              <small>${escapeHtml(t("sections.parts"))}</small>
-              <strong>${escapeHtml(placedPartsSummary(revision))}</strong>
-            </span>
-            <span>
-              <small>${escapeHtml(t("modelArtifacts"))}</small>
-              <strong>${escapeHtml(artifactSummary(revision))}</strong>
-            </span>
-          </div>
-          ${pending ? `<button class="snapshot-link primary" type="button" data-model-action="generate">${escapeHtml(t("generateModelCta"))}</button>` : ""}
-        </div>
-      </div>
-    </section>
-  `;
-}
-
 function renderMessage(turn) {
   const role = turn.role === "assistant" ? "ai" : "user";
   const title = turn.role === "assistant" ? `<strong>${escapeHtml(t("benchAgent"))}</strong>` : "";
@@ -1097,50 +1027,6 @@ function toolCallSummary(call, result = {}) {
   const count = Array.isArray(call.input?.patches) ? call.input.patches.length : 0;
   if (count) return state.lang === "zh" ? `${count} 个结构化 patch` : `${count} structured patch(es)`;
   return call.input?.message || call.input?.query || "";
-}
-
-function renderPlanSteps(revision) {
-  if (!revision) return "";
-  const missing = state.productPlan.requiredInputs?.missing || [];
-  const steps = [
-    ["scope", t("sections.scope"), planTitle(revision), "done"],
-    ["parts", t("sections.parts"), `${revision.modules?.length || 0} modules`, "done"],
-    ["model", t("sections.model"), artifactSummary(revision), generationIsPending(revision) ? "warn" : "ready"],
-    ["layout", t("sections.layout"), `${revision.electronicsLayout?.placements?.length || 0} placements`, "ready"],
-    ["quote", t("sections.quote"), revision.quoteEstimate?.range || revision.quote?.range || "", "done"],
-    ["risk", t("sections.risk"), revision.riskReport?.blocked ? t("planManual") : t("planReady"), revision.riskReport?.blocked ? "warn" : "done"],
-    ["required", t("required"), missing.length ? missing.join(", ") : t("confirmed"), missing.length ? "warn" : "done"]
-  ];
-  return steps
-    .map(
-      ([key, title, summary, stateName], index) => `
-        <button class="flow-step ${stateName}" type="button" data-step="${escapeHtml(key)}">
-          <span class="step-index">${index + 1}</span>
-          <span>
-            <strong>${escapeHtml(title)}</strong>
-            <small>${escapeHtml(summary)}</small>
-          </span>
-          <b>${stateName === "warn" ? "!" : "✓"}</b>
-        </button>
-      `
-    )
-    .join("");
-}
-
-function renderRevisionDiff(revision) {
-  const changes = revision?.diff?.changes || [];
-  const visibleChanges = changes.length ? changes.slice(0, 5) : [{ type: "revision_created" }];
-  return `
-    <div class="revision-diff" aria-label="${escapeHtml(t("revisionDiffTitle"))}">
-      <div class="revision-diff-head">
-        <span>${escapeHtml(t("revisionDiffTitle"))}</span>
-        <strong>${escapeHtml(revisionBadge(revision))}</strong>
-      </div>
-      <div class="revision-diff-list">
-        ${visibleChanges.map((change) => `<span>${escapeHtml(formatDiffChange(change))}</span>`).join("")}
-      </div>
-    </div>
-  `;
 }
 
 function renderInspector() {
@@ -2207,10 +2093,6 @@ dom.workspaceView.addEventListener("click", (event) => {
   if (reviewAction?.dataset.reviewAction === "contact") {
     openFloating("reviewContact");
     return;
-  }
-  const step = event.target.closest("[data-step]");
-  if (step) {
-    setNotice(step.querySelector("strong")?.textContent || "");
   }
 });
 

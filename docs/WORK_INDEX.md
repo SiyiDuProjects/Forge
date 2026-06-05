@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Center Thread Chat-Only Cleanup
+
+- Scope: remove the numbered ProductPlan flow/status cards and center 3D snapshot from the generated conversation view so the center column reads as a chat thread; keep 3D preview, generation state, and structure checks on the right inspector.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-05-center-thread-chat-only-comment.md`
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+- Retrieval handles: center thread chat only, flow-step, ProductPlan numbered cards, 1-7 steps, prototype-snapshot, right inspector 3D preview.
+- Verification: `npm run check` passes with 48 tests. Browser reload on `http://127.0.0.1:8765` confirms `.flow-step` / `[data-step]` count is 0, center conversation preview count is 0, the generated conversation still shows 10 message bubbles, and the right inspector keeps one 3D canvas with `3D 模型已生成`.
+
 ### 2026-06-05 - Composer Button And 3D Generation Verification
 
 - Scope: fix the visible send button path in the browser, keep empty composer clicks from failing silently, prevent Codex Browser comment overlays from intercepting Forge prototype clicks, and expand the deterministic chat runtime so common finish changes such as graphite/stone-gray create ProductPlan revisions.

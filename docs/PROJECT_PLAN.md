@@ -98,20 +98,20 @@ Avoid:
 
 ### Center Thread
 
-Purpose: Show the build request, agent summary, and command-style run log.
+Purpose: Show the ongoing hardware conversation. The center column should feel like a chat thread, not a ProductPlan status dashboard.
 
 Required content:
 
 - User request bubble
 - Bench agent response
-- Prominent `原型快照` result card after the bench response
-- ProductPlan revision run log
+- Minimal runtime feedback only when a send fails or a chat action needs confirmation
 - Bottom composer for hardware request entry and send/update only
+- Do not show numbered ProductPlan step cards, status packets, or a center 3D preview; generation status and structure preview belong in the right inspector.
 
 Composer actions:
 
 - Send/update ProductPlan button
-- Do not keep `+`, `范围`, `零件`, `风险`, or `3D预览` chips in the composer unless they become real implemented workflows. Current scope/parts/risk/model information lives in the thread, right inspector, and explicit model-generation controls.
+- Do not keep `+`, `范围`, `零件`, `风险`, or `3D预览` chips in the composer unless they become real implemented workflows. Current scope/parts/risk/model information should surface through the right inspector or explicit review surfaces instead of placeholder center chips.
 
 ### Right Inspector
 
@@ -121,7 +121,7 @@ Current sections:
 
 - `原型结构预览（3D）`
 
-The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, and structure checks visible. The generated/pending 3D state belongs in the section header summary, not as a duplicate fact row. Scope, parts list (BOM), quote, risk limits, and review status can remain in the ProductPlan thread/run log and review flow, but should not make the inspector feel like a stacked packet list.
+The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, and structure checks visible. The generated/pending 3D state belongs in the section header summary, not as a duplicate fact row. Scope, parts list (BOM), quote, risk limits, and review status should not be duplicated as numbered center-thread cards. When surfaced, keep them in the right inspector, explicit review surfaces, or compact generated evidence rather than a stacked center packet list.
 
 Visual direction:
 
@@ -186,12 +186,12 @@ Implemented:
 - Right inspector changed toward flat section styling
 - No fake complete ProductPlan fallback when API fetch fails; keep the draft/input visible and show a clear error instead.
 - Conversation-first ProductPlan flow with compact left-side project/conversation selection, center chat, revision history view, and live right-side plan packet
-- Center `原型快照` result card that gives the 3D preview stronger product presence without turning the app into a modeling tool
+- Chat-only center thread: generated conversations show user/assistant messages plus minimal retry/confirmation feedback, without numbered ProductPlan step cards or a center 3D snapshot.
 - Right-side `原型结构预览（3D）` section pinned near the top, expanded by default, with `外观层` and `元器件层` transparency states
 - One seeded real backend-generated conversation with confirmed 3D model artifacts; new projects start as blank real ProductPlan drafts.
-- Expanded UI-only flow states for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet
+- Expanded UI-only flow state data for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet remains available to the plan/review runtime, but it is no longer rendered as numbered center-thread cards.
 - Popovers/dialogs for manufacturing check (DFM), thread actions, review contact submission, and bench settings
-- Composer placeholder shortcuts removed; scope, parts list (BOM), and risk limits remain visible through the ProductPlan thread output, while the right inspector focuses on 3D state instead of composer chips.
+- Composer placeholder shortcuts removed; scope, parts list (BOM), and risk limits are kept out of placeholder composer chips and numbered center cards, while the right inspector focuses on 3D state.
 - Right inspector simplified to a 3D-focused panel: preview canvas, layer controls, shell dimensions, structure checks, and model state only.
 - Bilingual UI copy across the shell, seeded scenario, popovers, inspector, and settings
 - Language settings panel with `简体中文` and `English` options

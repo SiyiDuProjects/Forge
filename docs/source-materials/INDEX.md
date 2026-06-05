@@ -18,6 +18,15 @@ key_handles: comma-separated search handles
 
 Source notes should preserve reusable raw or semi-raw context. Durable decisions should be summarized into `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, or another task doc so future work starts from indexes rather than raw material.
 
+## 2026-06-05
+
+### Center Thread Chat-Only Comment
+
+- File: `docs/source-materials/2026-06-05-center-thread-chat-only-comment.md`
+- Status: applied to UI and summarized into project docs.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: center thread, chat only, numbered ProductPlan cards, flow-step, 1-7 steps, 3D preview right inspector.
+
 ## 2026-06-04
 
 ### Forge QueryEngine And Chat Runtime V1 Goal
