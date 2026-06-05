@@ -69,7 +69,7 @@ Current known local limitation:
 - `src/core/model_adapters.mjs`: deterministic local Forge `MockModelAdapter` for default UI/tool turns and tests plus OpenAI Responses and Codex SDK runtime adapters behind explicit provider configuration.
 - `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks; creates/resumes one Codex thread per Forge project, stores `codexThreadId` in `project_manifest.json`, runs Codex inside the generated project workspace, injects ContextPack/tool boundaries, parses JSON tool intent, checks guarded-file violations, and reports SDK/thread errors without fabricating ProductPlan state.
 - `src/core/runtime_plan_creation.mjs`: runtime-aware ProductPlan creation helper used by `/api/plans`; initializes and persists Codex project thread ids when `runtimeProvider` is `codex`.
-- `src/core/guarded_files.mjs`: guarded project-file snapshot and violation detection for Codex SDK turns.
+- `src/core/guarded_files.mjs`: guarded project-file snapshot and violation detection for Codex SDK turns; guarded writes are allowed only when the new Forge event type corresponds to the changed file class.
 - `scripts/forge-tool.mjs`: CLI wrapper around Forge actions for Codex-side project work; it restores a project from `runtime_plan.json` and writes state only through Forge actions.
 - `src/core/tool_schema_exporter.mjs`: exports Tool Protocol metadata into model-callable tool schemas.
 - `src/core/tool_executor.mjs`: validates and dispatches model tool calls to `forge_actions.mjs`; never executes shell or arbitrary file edits.

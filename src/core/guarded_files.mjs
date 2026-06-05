@@ -32,6 +32,73 @@ const TOOL_EVENT_TYPES = new Set([
   "review_submission_failed"
 ]);
 
+const EVENT_ALLOWED_GUARDED_PATTERNS = {
+  workspace_created: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json"
+  ],
+  proposal_created: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json",
+    "proposals/*.json"
+  ],
+  proposal_staged: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json",
+    "proposals/*.json"
+  ],
+  proposal_committed: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json",
+    "proposals/*.json"
+  ],
+  proposal_rejected: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json",
+    "proposals/*.json"
+  ],
+  revision_created: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json",
+    "revisions/*/revision_manifest.json",
+    "revisions/*/product_plan.json",
+    "revisions/*/geometry-spec.json",
+    "revisions/*/component_descriptors.json",
+    "revisions/*/artifacts/*"
+  ],
+  revision_reverted: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json"
+  ],
+  artifacts_generated: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json",
+    "revisions/*/revision_manifest.json",
+    "revisions/*/product_plan.json",
+    "revisions/*/geometry-spec.json",
+    "revisions/*/component_descriptors.json",
+    "revisions/*/artifacts/*"
+  ],
+  review_submitted: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json"
+  ],
+  review_submission_failed: [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json"
+  ]
+};
+
 export function snapshotGuardedFiles({
   workspaceId,
   rootDir
@@ -65,9 +132,8 @@ export function detectGuardViolations({
   if (changedPaths.length === 0) return [];
   const events = readWorkspaceEvents({ workspaceId, rootDir });
   const newEvents = events.slice(beforeEventCount);
-  const hasToolEvent = newEvents.some((event) => TOOL_EVENT_TYPES.has(event.type));
-  if (hasToolEvent) return [];
-  return changedPaths.map((path) => ({
+  const unauthorizedPaths = changedPaths.filter((path) => !guardedPathAllowedByEvents(path, newEvents));
+  return unauthorizedPaths.map((path) => ({
     code: "GUARD_VIOLATION",
     path,
     message: `Guarded file changed without a corresponding Forge tool event: ${path}`
@@ -124,4 +190,17 @@ function guardedPatternRegex(pattern) {
 
 function normalizePath(path) {
   return String(path || "").replaceAll("\\", "/");
+}
+
+function guardedPathAllowedByEvents(path, events = []) {
+  const normalized = normalizePath(path);
+  const knownEvents = events.filter((event) => TOOL_EVENT_TYPES.has(event.type) || event.type === "workspace_created");
+  if (normalized === "events.jsonl") return knownEvents.length > 0;
+  const allowedPatterns = new Set();
+  for (const event of knownEvents) {
+    for (const pattern of EVENT_ALLOWED_GUARDED_PATTERNS[event.type] || []) {
+      allowedPatterns.add(pattern);
+    }
+  }
+  return [...allowedPatterns].some((pattern) => guardedPatternRegex(pattern).test(normalized));
 }

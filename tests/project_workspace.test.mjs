@@ -20,6 +20,7 @@ import {
   snapshotGuardedFiles
 } from "../src/core/guarded_files.mjs";
 import {
+  appendWorkspaceEvent,
   projectWorkspacePath,
   readRuntimePlan,
   readWorkspaceEvents
@@ -156,6 +157,56 @@ test("guarded file detector allows Forge action event writes", () => {
 
   const validation = validateDesign({ workspaceId: plan.planId });
   assert.equal(validation.ok, true);
+
+  const violations = detectGuardViolations({
+    workspaceId: plan.planId,
+    before,
+    beforeEventCount
+  });
+  assert.deepEqual(violations, []);
+});
+
+test("guarded file detector does not let validation events authorize direct ProductPlan writes", () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const before = snapshotGuardedFiles({ workspaceId: plan.planId });
+  const beforeEventCount = guardedEventCount({ workspaceId: plan.planId });
+
+  writeFileSync(`${workspacePath}/product_plan.json`, JSON.stringify({ tampered: true }, null, 2));
+  appendWorkspaceEvent({
+    workspaceId: plan.planId,
+    type: "validation_completed",
+    actor: "system",
+    payload: { status: "passed" }
+  });
+
+  const violations = detectGuardViolations({
+    workspaceId: plan.planId,
+    before,
+    beforeEventCount
+  });
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].path, "product_plan.json");
+});
+
+test("guarded file detector allows legitimate revision writes from Forge actions", () => {
+  const plan = createWorkspacePlan();
+  const before = snapshotGuardedFiles({ workspaceId: plan.planId });
+  const beforeEventCount = guardedEventCount({ workspaceId: plan.planId });
+
+  const result = applyDesignPatch({
+    workspaceId: plan.planId,
+    message: "Make the shell graphite.",
+    patches: [
+      {
+        type: "plan_patch",
+        set: {
+          "constraints.finish": "graphite"
+        }
+      }
+    ]
+  });
+  assert.equal(result.ok, true);
 
   const violations = detectGuardViolations({
     workspaceId: plan.planId,

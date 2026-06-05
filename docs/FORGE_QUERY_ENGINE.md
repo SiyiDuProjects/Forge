@@ -182,7 +182,7 @@ This keeps the project resumable and inspectable without loading raw model artif
 - revert: active revision pointer change
 - unsupported flight/mains/drone requests: no unsafe tool execution
 
-`CodexSdkRuntimeAdapter` exists behind `runtimeProvider: "codex"` and dynamically imports `@openai/codex-sdk`. It starts/resumes one project-bound Codex thread with the generated Forge project workspace as `workingDirectory`, passes a structured output schema, and snapshots guarded files around the turn. Codex can either call `forge-tool` itself and return an empty `toolCalls` array, or return a JSON tool intent (`assistantMessage`, `toolCalls`) for QueryEngine to permission-check and execute through Forge actions. Direct edits to guarded state files produce `GUARD_VIOLATION` instead of being accepted.
+`CodexSdkRuntimeAdapter` exists behind `runtimeProvider: "codex"` and dynamically imports `@openai/codex-sdk`. It starts/resumes one project-bound Codex thread with the generated Forge project workspace as `workingDirectory`, passes a structured output schema, and snapshots guarded files around the turn. Codex can either call `forge-tool` itself and return an empty `toolCalls` array, or return a JSON tool intent (`assistantMessage`, `toolCalls`) for QueryEngine to permission-check and execute through Forge actions. Direct edits to guarded state files produce `GUARD_VIOLATION` instead of being accepted; validation-only or read-only events do not authorize unrelated ProductPlan, GeometrySpec, revision, or artifact writes.
 
 `OpenAIResponsesAdapter` exists behind `modelProvider: "openai"` and `OPENAI_API_KEY`. It can also use `FORGE_MODEL_NAME` / `OPENAI_MODEL` and `OPENAI_BASE_URL` for relays. The test suite does not require a live API call.
 

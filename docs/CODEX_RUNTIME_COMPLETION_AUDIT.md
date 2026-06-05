@@ -54,7 +54,7 @@ Test coverage:
 
 - Project workspace files and skills are generated.
 - `forge-tool` can restore a Forge project in a separate process.
-- Guarded-file violations are detected.
+- Guarded-file violations are detected, including direct ProductPlan writes hidden behind validation-only events.
 - Project-bound Codex thread ids do not cross projects.
 - Codex-selected ProductPlan creation initializes and persists delayed project thread ids.
 - Runtime aliases resolve correctly.
