@@ -223,6 +223,10 @@ Returns service health, contract version, chain steps, and the API contract list
 
 Returns the stocked/review/deferred module catalog.
 
+### `GET /api/runtime/status`
+
+Returns a read-only runtime preflight for the current UI selection: default runtime/model providers, local Forge and QueryEngine readiness, Codex SDK availability, and the current project's saved `codexThreadId` when a `workspaceId` query parameter is provided. This route never creates a Codex thread and never mutates ProductPlan state.
+
 ### `GET /api/workspaces/:workspaceId/summary`
 
 Returns compact workspace summary for chat/UI context. It does not include large GLB/STL content.

@@ -12,8 +12,9 @@ import { checkToolPermission } from "../src/core/permission_gate.mjs";
 import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
 import { createProductPlanForRuntime } from "../src/core/runtime_plan_creation.mjs";
+import { getRuntimeStatus } from "../src/core/runtime_status.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
-import { projectWorkspacePath, readProjectManifest, readWorkspaceEvents } from "../src/core/project_workspace.mjs";
+import { projectWorkspacePath, readProjectManifest, readWorkspaceEvents, updateProjectManifest } from "../src/core/project_workspace.mjs";
 import { getToolMetadata, listToolMetadata } from "../src/core/tool_registry.mjs";
 
 function createChatPlan() {
@@ -317,6 +318,7 @@ test("Tool schema exporter and API contract expose chat runtime surfaces", () =>
   assert.ok(exported.tools.some((tool) => tool.name === "proposeDesignChange" && tool.createsProposal));
 
   const paths = API_CONTRACT.map((route) => route.path);
+  assert.ok(paths.includes("/api/runtime/status"));
   assert.ok(paths.includes("/api/plans/stream"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/turn/stream"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/turn"));
@@ -350,6 +352,41 @@ test("runtime selection keeps Codex, Forge QueryEngine, mock, and OpenAI roles d
     modelProvider: "mock",
     requestedRuntimeProvider: "mock"
   });
+});
+
+test("runtime status preflight reports Codex SDK and project thread state", async () => {
+  const plan = createChatPlan();
+  updateProjectManifest({
+    workspaceId: plan.planId,
+    patch: { codexThreadId: "thread-runtime-status" }
+  });
+
+  const ready = await getRuntimeStatus({
+    workspaceId: plan.planId,
+    runtimeProvider: "codex",
+    modelProvider: "codex",
+    sdkImporter: async () => ({ Codex: class Codex {} })
+  });
+
+  assert.equal(ready.ok, true);
+  assert.equal(ready.runtimes.mock.ready, true);
+  assert.equal(ready.runtimes["forge-query-engine"].ready, true);
+  assert.equal(ready.runtimes.codex.available, true);
+  assert.equal(ready.runtimes.codex.threadState, "ready");
+  assert.equal(ready.runtimes.codex.codexThreadId, "thread-runtime-status");
+
+  const missing = await getRuntimeStatus({
+    runtimeProvider: "codex",
+    modelProvider: "codex",
+    sdkImporter: async () => {
+      throw new Error("not installed");
+    }
+  });
+
+  assert.equal(missing.runtimes.codex.available, false);
+  assert.equal(missing.runtimes.codex.state, "missing_sdk");
+  assert.match(missing.runtimes.codex.message, /not installed/);
+  assert.equal(missing.runtimes.codex.threadState, "no_workspace");
 });
 
 test("ContextPack remains compact and excludes raw generated artifact bytes", async () => {

@@ -97,6 +97,15 @@ const copy = {
     runtimeQueryEngine: "Forge QueryEngine",
     runtimeCodex: "Codex",
     runtimeChanged: "运行模式已更新",
+    runtimeStatusChecking: "正在检查运行时",
+    runtimeStatusCheckFailed: (message) => `无法检查运行时：${message}`,
+    runtimeStatusLocalReady: "本地 Forge 工具链已就绪",
+    runtimeStatusQueryReady: "Forge QueryEngine 已就绪",
+    runtimeStatusCodexReady: "Codex SDK 已就绪",
+    runtimeStatusCodexMissing: "Codex SDK 不可用，发送会失败",
+    runtimeStatusCodexThread: (threadId) => `项目 thread：${threadId}`,
+    runtimeStatusCodexNoThread: "本项目尚未创建 Codex thread，首次 Codex 运行会创建",
+    runtimeStatusNoWorkspace: "新项目将在首条需求后创建项目 thread",
     approveChange: "确认执行",
     rejectChange: "取消",
     submitNeedContact: "请先填写姓名和邮箱",
@@ -314,6 +323,15 @@ const copy = {
     runtimeQueryEngine: "Forge QueryEngine",
     runtimeCodex: "Codex",
     runtimeChanged: "Runtime mode updated",
+    runtimeStatusChecking: "Checking runtime",
+    runtimeStatusCheckFailed: (message) => `Runtime check failed: ${message}`,
+    runtimeStatusLocalReady: "Local Forge tools are ready",
+    runtimeStatusQueryReady: "Forge QueryEngine is ready",
+    runtimeStatusCodexReady: "Codex SDK is ready",
+    runtimeStatusCodexMissing: "Codex SDK is unavailable; sending will fail",
+    runtimeStatusCodexThread: (threadId) => `Project thread: ${threadId}`,
+    runtimeStatusCodexNoThread: "This project has not created a Codex thread yet; the first Codex run will create one",
+    runtimeStatusNoWorkspace: "A new project thread will be created after the first request",
     approveChange: "Confirm",
     rejectChange: "Cancel",
     submitNeedContact: "Enter name and email first",
@@ -489,6 +507,10 @@ const state = {
   pendingConfirmation: null,
   runtimeError: "",
   runtimeProvider: INITIAL_RUNTIME_PROVIDER,
+  runtimeStatus: null,
+  runtimeStatusLoading: false,
+  runtimeStatusError: "",
+  runtimeStatusRequestId: 0,
   workspaceToken: 0,
   activeRequestController: null,
   contactInfo: { name: "", email: "" }
@@ -512,6 +534,7 @@ const dom = {
   openSettings: document.querySelector("#openSettings"),
   languageSelect: document.querySelector("#languageSelect"),
   runtimeProviderSelect: document.querySelector("#runtimeProviderSelect"),
+  runtimeStatus: document.querySelector("#runtimeStatus"),
   floatingLayer: document.querySelector("#floatingLayer"),
   dfmPopover: document.querySelector("#dfmPopover")
 };
@@ -534,6 +557,7 @@ async function bootstrap() {
   renderStaticText();
   render();
   await createInitialPlan();
+  refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
 }
 
 async function createInitialPlan() {
@@ -839,6 +863,7 @@ async function sendTurn(message) {
     state.pendingConfirmation = response.pendingConfirmation || null;
     state.activeSidebar = "chat";
     setNotice(response.pendingConfirmation ? t("chatConfirmationRequired") : (hasRealPlan ? t("chatRuntimeNotice") : t("rerunNotice")));
+    refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
     return true;
   } catch (error) {
     if (token !== state.workspaceToken) return;
@@ -993,6 +1018,76 @@ async function apiPost(path, body) {
   return payload;
 }
 
+async function apiGet(path) {
+  const response = await fetch(path, {
+    method: "GET",
+    headers: { accept: "application/json" }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+async function refreshRuntimeStatus({ renderAfter = true } = {}) {
+  const requestId = ++state.runtimeStatusRequestId;
+  state.runtimeStatusLoading = true;
+  state.runtimeStatusError = "";
+  if (renderAfter) renderStaticText();
+  try {
+    const payload = await apiGet(runtimeStatusPath());
+    if (requestId !== state.runtimeStatusRequestId) return;
+    state.runtimeStatus = payload;
+    state.runtimeStatusError = "";
+  } catch (error) {
+    if (requestId !== state.runtimeStatusRequestId) return;
+    state.runtimeStatus = null;
+    state.runtimeStatusError = userFacingError(error);
+  } finally {
+    if (requestId === state.runtimeStatusRequestId) {
+      state.runtimeStatusLoading = false;
+      if (renderAfter) renderStaticText();
+    }
+  }
+}
+
+function runtimeStatusPath() {
+  const params = new URLSearchParams({
+    runtimeProvider: currentRuntimeProvider(),
+    modelProvider: currentRuntimeProvider()
+  });
+  if (state.productPlan?.planId) params.set("workspaceId", state.productPlan.planId);
+  return `/api/runtime/status?${params.toString()}`;
+}
+
+function runtimeStatusText() {
+  if (state.runtimeStatusLoading) return t("runtimeStatusChecking");
+  if (state.runtimeStatusError) return t("runtimeStatusCheckFailed", state.runtimeStatusError);
+  const status = state.runtimeStatus;
+  const runtime = currentRuntimeProvider();
+  if (!status?.runtimes) return t("runtimeStatusChecking");
+  if (runtime === "codex") return codexRuntimeStatusLine(status.runtimes.codex || {});
+  if (runtime === "forge-query-engine") return t("runtimeStatusQueryReady");
+  return t("runtimeStatusLocalReady");
+}
+
+function runtimeStatusTone() {
+  if (state.runtimeStatusLoading) return "checking";
+  if (state.runtimeStatusError) return "warning";
+  const runtime = currentRuntimeProvider();
+  const codex = state.runtimeStatus?.runtimes?.codex;
+  if (runtime === "codex" && codex && !codex.available) return "warning";
+  return "ready";
+}
+
+function codexRuntimeStatusLine(codex = {}) {
+  if (!codex.available) return codex.message ? `${t("runtimeStatusCodexMissing")} · ${codex.message}` : t("runtimeStatusCodexMissing");
+  if (codex.codexThreadId) return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusCodexThread", compactId(codex.codexThreadId))}`;
+  if (codex.workspaceId) return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusCodexNoThread")}`;
+  return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusNoWorkspace")}`;
+}
+
 async function apiPostStream(path, body, onTraceEvent = () => {}, { signal = null } = {}) {
   const response = await fetch(path, {
     method: "POST",
@@ -1141,6 +1236,10 @@ function renderStaticText() {
     dom.runtimeProviderSelect.querySelector('option[value="forge-query-engine"]').textContent = t("runtimeQueryEngine");
     dom.runtimeProviderSelect.querySelector('option[value="codex"]').textContent = t("runtimeCodex");
     setAttr("#runtimeProviderSelect", "aria-label", t("runtimeMode"));
+  }
+  if (dom.runtimeStatus) {
+    dom.runtimeStatus.textContent = runtimeStatusText();
+    dom.runtimeStatus.dataset.status = runtimeStatusTone();
   }
   setText(".review-contact-dialog .floating-head strong", t("reviewContactTitle"));
   setText("#reviewContactNameLabel", t("contactName"));
@@ -2971,7 +3070,10 @@ dom.submitReview.addEventListener("click", () => openFloating("reviewContact"));
 window.yWorkbenchSubmitForReview = submitForReview;
 dom.newProject.addEventListener("click", startNewProject);
 dom.openThreadMenu.addEventListener("click", () => openFloating("thread"));
-dom.openSettings.addEventListener("click", () => openFloating("settings"));
+dom.openSettings.addEventListener("click", () => {
+  openFloating("settings");
+  refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
+});
 
 dom.languageSelect.addEventListener("change", async () => {
   state.lang = dom.languageSelect.value === "en" ? "en" : "zh";
@@ -2990,6 +3092,7 @@ dom.runtimeProviderSelect?.addEventListener("change", () => {
   syncActiveProject({ runtimeProvider: value });
   render();
   setNotice(t("runtimeChanged"));
+  refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
 });
 
 dom.floatingLayer.addEventListener("click", (event) => {

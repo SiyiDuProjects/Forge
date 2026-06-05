@@ -20,6 +20,24 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Runtime Preflight Status
+
+- Scope: add a read-only runtime status preflight so `Forge 设置` can show whether local Forge, Forge QueryEngine, and Codex SDK are available, plus the current project's saved `codexThreadId` when one exists.
+- Status: implemented in the current working tree.
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CONTRACTS.md`
+- Key code handles:
+  - `src/core/runtime_status.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `index.html`
+  - `app.js`
+  - `styles.css`
+  - `tests/query_engine.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `/api/runtime/status`, `getRuntimeStatus`, `runtimeStatus`, `runtimeStatusCodexReady`, `runtimeStatusCodexMissing`, `Codex SDK 已就绪`, `Codex SDK is ready`, `codexThreadId`, `threadState`.
+- Verification: `npm run check` passes with 69 tests. Local HTTP smoke against `http://127.0.0.1:8773/api/runtime/status?runtimeProvider=codex&modelProvider=codex` returned `200`, `codexAvailable: true`, `codexState: "ready"`, and `threadState: "no_workspace"`. Browser settings verification on `http://127.0.0.1:8773/?cacheBust=runtime-preflight-status` confirmed the default status line shows `本地 Forge 工具链已就绪`; after selecting `Codex`, it shows `Codex SDK 已就绪 · 本项目尚未创建 Codex thread，首次 Codex 运行会创建`.
+- Boundary: runtime preflight is read-only. It checks SDK importability and existing project manifest fields; it must not create a Codex thread, write ProductPlan/revisions, or change GeometrySpec/artifacts.
+
 ### 2026-06-05 - Right Inspector Runtime Status
 
 - Scope: move the live Codex/Forge execution trace and pending confirmation controls out of the center chat thread and into the right inspector so the center column stays a conversation surface while the right side carries 3D preview, generation state, tool status, warnings, and artifacts.

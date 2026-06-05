@@ -1,4 +1,4 @@
-export const CONTRACT_VERSION = "2026-06-04";
+export const CONTRACT_VERSION = "2026-06-05";
 
 export const WORKBENCH_CHAIN = [
   "parse_request",
@@ -82,6 +82,11 @@ export const API_CONTRACT = [
     method: "GET",
     path: "/api/modules",
     response: ["modules"]
+  },
+  {
+    method: "GET",
+    path: "/api/runtime/status",
+    response: ["ok", "workspaceId", "runtimeProvider", "modelProvider", "defaultRuntimeProvider", "defaultModelProvider", "runtimes"]
   },
   {
     method: "GET",

@@ -1952,6 +1952,26 @@ pre {
   accent-color: #111413;
 }
 
+.runtime-status-note {
+  min-height: 18px;
+  margin: -2px 0 4px;
+  color: #6f766f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.runtime-status-note[data-status="checking"] {
+  color: #7c715d;
+}
+
+.runtime-status-note[data-status="warning"] {
+  color: var(--warn);
+}
+
+.runtime-status-note[data-status="ready"] {
+  color: #4b6659;
+}
+
 .mini-popover {
   left: max(310px, calc(50vw - 360px));
   bottom: 102px;

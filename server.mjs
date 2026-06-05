@@ -25,6 +25,7 @@ import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
 import { createProductPlanForRuntime } from "./src/core/runtime_plan_creation.mjs";
+import { getRuntimeStatus } from "./src/core/runtime_status.mjs";
 import { listToolMetadata } from "./src/core/tool_registry.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -102,6 +103,21 @@ async function handleApi(request, response, url) {
     sendJson(response, 200, {
       modules: listCatalogModules()
     });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/runtime/status") {
+    const runtime = runtimeForRequest({
+      runtimeProvider: url.searchParams.get("runtimeProvider") || "",
+      modelProvider: url.searchParams.get("modelProvider") || ""
+    });
+    sendJson(response, 200, await getRuntimeStatus({
+      workspaceId: url.searchParams.get("workspaceId") || "",
+      runtimeProvider: runtime.runtimeProvider,
+      modelProvider: runtime.modelProvider,
+      defaultRuntimeProvider: defaultChatRuntimeProvider,
+      defaultModelProvider: defaultChatModelProvider
+    }));
     return;
   }
 
