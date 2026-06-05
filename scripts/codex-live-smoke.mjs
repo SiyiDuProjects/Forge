@@ -40,14 +40,24 @@ process.env.FORGE_WORKSPACE_ROOT = workspaceRoot;
 mkdirSync(workspaceRoot, { recursive: true });
 
 try {
-  const { createProductPlan, getProductPlan } = await import("../src/core/product_plan.mjs");
+  const { getProductPlan } = await import("../src/core/product_plan.mjs");
+  const { createProductPlanForRuntime } = await import("../src/core/runtime_plan_creation.mjs");
   const { runForgeChatTurn } = await import("../src/core/forge_query_engine.mjs");
   const { projectWorkspacePath, readWorkspaceEvents } = await import("../src/core/project_workspace.mjs");
 
-  const initial = createProductPlan({
+  const initial = await createProductPlanForRuntime({
     initialMessage: "我想做一个带 3.5 寸屏幕的小桌面闹钟，USB-C 供电，3D 打印外壳。",
-    language: "zh"
+    language: "zh",
+    runtime: {
+      runtimeProvider: "codex",
+      modelProvider: "codex"
+    }
   });
+  if (initial?.ok === false) {
+    throw smokeError(initial.error?.code || "PLAN_CREATION_FAILED", initial.error?.message || "Codex-backed ProductPlan creation failed.", {
+      initial
+    });
+  }
   const workspaceId = initial.productPlan.planId;
   const sessionId = "live_codex_smoke";
   const messages = [

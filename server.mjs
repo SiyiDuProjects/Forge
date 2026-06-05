@@ -21,11 +21,10 @@ import {
   validateDesign
 } from "./src/core/forge_actions.mjs";
 import { confirmForgeChatTool, resolveChatRuntime, runForgeChatTurn } from "./src/core/forge_query_engine.mjs";
-import { ensureCodexProjectThread, runCodexProductTurn } from "./src/core/codex_runtime.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
-import { addProductPlanTurn, createProductPlan, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
-import { persistProjectPlan } from "./src/core/project_workspace.mjs";
+import { addProductPlanTurn, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
+import { createProductPlanForRuntime } from "./src/core/runtime_plan_creation.mjs";
 import { listToolMetadata } from "./src/core/tool_registry.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -274,51 +273,16 @@ async function handleApi(request, response, url) {
   if (request.method === "POST" && url.pathname === "/api/plans") {
     const body = await readJsonBody(request);
     const runtime = runtimeForRequest(body);
-    const result = createProductPlan({
+    const result = await createProductPlanForRuntime({
       message: body.message,
       initialMessage: body.initialMessage,
       assets: body.assets || [],
-      language: body.language
+      language: body.language,
+      runtime
     });
-    result.runtimeProvider = runtime.runtimeProvider;
-    result.modelProvider = runtime.modelProvider;
-    if (runtime.runtimeProvider === "codex") {
-      const thread = await ensureCodexProjectThread({
-        workspaceId: result.productPlan.planId
-      });
-      if (!thread.ok) {
-        sendActionJson(response, thread);
-        return;
-      }
-      let codexThreadId = thread.codexThreadId;
-      if (!codexThreadId) {
-        const initialized = await runCodexProductTurn({
-          thread: thread.thread,
-          workspaceId: result.productPlan.planId,
-          prompt: codexInitializationPrompt({ result, userMessage: body.initialMessage || body.message || "" })
-        });
-        if (!initialized.ok) {
-          sendActionJson(response, initialized);
-          return;
-        }
-        codexThreadId = initialized.codexThreadId;
-      }
-      if (!codexThreadId) {
-        sendActionJson(response, {
-          ok: false,
-          error: {
-            code: "CODEX_THREAD_ID_MISSING",
-            message: "Codex initialized a thread but did not expose a thread id."
-          }
-        });
-        return;
-      }
-      result.codexThreadId = codexThreadId;
-      result.productPlan.workspaceState = {
-        ...(result.productPlan.workspaceState || {}),
-        codexThreadId
-      };
-      persistProjectPlan({ plan: result.productPlan });
+    if (result?.ok === false) {
+      sendActionJson(response, result);
+      return;
     }
     sendJson(response, 200, result);
     return;
@@ -631,26 +595,6 @@ function sendActionJson(response, result) {
       ? 404
       : 400;
   sendJson(response, status, result);
-}
-
-function codexInitializationPrompt({ result, userMessage = "" } = {}) {
-  const plan = result?.productPlan || {};
-  const revision = result?.revision || {};
-  return [
-    "Initialize this Codex thread for one Forge hardware product project.",
-    "This is a product-task runtime thread, not a Forge source-code editing task.",
-    "Do not call tools or request file/model mutations in this initialization turn.",
-    "Return exactly this JSON shape with an empty toolCalls array:",
-    "{\"assistantMessage\":\"Project thread initialized.\",\"toolCalls\":[]}",
-    "",
-    "Forge project summary:",
-    JSON.stringify({
-      planId: plan.planId || "",
-      title: plan.workspaceState?.title || revision.requestText || "",
-      currentRevisionId: plan.currentRevisionId || "",
-      userMessage
-    }, null, 2)
-  ].join("\n");
 }
 
 server.listen(port, host, () => {

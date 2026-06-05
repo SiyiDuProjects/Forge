@@ -42,6 +42,7 @@ The remaining unproven step is a real live Codex SDK run. That live smoke is int
 Implemented surfaces:
 
 - `src/core/codex_runtime.mjs`: project-bound Codex thread creation/resume, project workspace options, prompt assembly, structured output parsing, guarded-file checks.
+- `src/core/runtime_plan_creation.mjs`: runtime-aware `/api/plans` ProductPlan creation and Codex thread initialization/persistence.
 - `src/core/model_adapters.mjs`: `CodexSdkRuntimeAdapter` and runtime adapter selection.
 - `src/core/forge_query_engine.mjs`: `runtimeProvider` routing, Codex response handling, tool execution fallback, UI payload fields.
 - `src/core/project_workspace.mjs`: project file cabinet, generated skills, `runtime_plan.json`, manifest persistence.
@@ -55,6 +56,7 @@ Test coverage:
 - `forge-tool` can restore a Forge project in a separate process.
 - Guarded-file violations are detected.
 - Project-bound Codex thread ids do not cross projects.
+- Codex-selected ProductPlan creation initializes and persists delayed project thread ids.
 - Runtime aliases resolve correctly.
 - Fake Codex can enter the project workspace, call real `forge-tool`, and complete:
   - initial idea
@@ -99,6 +101,7 @@ Expected refusal: JSON error code `LIVE_CODEX_EXTERNAL_ACK_REQUIRED`.
 The live smoke should return `ok: true` and show:
 
 - a non-empty `codexThreadId`
+- initial ProductPlan creation through `runtimeProvider: "codex"`
 - button update applied to the ProductPlan
 - buzzer or speaker requirement captured
 - generated GLB, STL, and STEP artifact paths
@@ -118,4 +121,3 @@ The current Forge MVP should be described as:
 Do not describe it as:
 
 "Codex is fully running in production."
-

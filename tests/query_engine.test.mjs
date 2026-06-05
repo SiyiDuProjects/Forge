@@ -11,6 +11,7 @@ import { runForgeChatTurn, confirmForgeChatTool, resolveChatRuntime } from "../s
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
 import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
+import { createProductPlanForRuntime } from "../src/core/runtime_plan_creation.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
 import { projectWorkspacePath, readProjectManifest, readWorkspaceEvents } from "../src/core/project_workspace.mjs";
 import { getToolMetadata, listToolMetadata } from "../src/core/tool_registry.mjs";
@@ -630,6 +631,66 @@ test("Codex runtime persists delayed SDK thread id after first run", async () =>
   assert.equal(result.ok, true);
   assert.equal(result.codexThreadId, "delayed-thread-id");
   assert.equal(readProjectManifest({ workspaceId: plan.planId }).codexThreadId, "delayed-thread-id");
+});
+
+test("Codex runtime plan creation initializes and persists a delayed project thread id", async () => {
+  let threadId = "";
+  let runCount = 0;
+  const prompts = [];
+  const startOptions = [];
+  const codexFactory = async () => ({
+    startThread(options) {
+      startOptions.push(options);
+      return {
+        get id() {
+          return threadId;
+        },
+        async run(prompt) {
+          runCount += 1;
+          prompts.push(prompt);
+          threadId = "created-plan-thread";
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "Project thread initialized.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    },
+    resumeThread(id) {
+      return {
+        id,
+        async run() {
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "Resumed.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    }
+  });
+
+  const result = await createProductPlanForRuntime({
+    initialMessage: "我想做一个带 3.5 寸屏幕的小桌面闹钟。",
+    language: "zh",
+    runtime: {
+      runtimeProvider: "codex",
+      modelProvider: "codex"
+    },
+    codexFactory
+  });
+
+  assert.equal(result.codexThreadId, "created-plan-thread");
+  assert.equal(result.productPlan.workspaceState.codexThreadId, "created-plan-thread");
+  assert.equal(readProjectManifest({ workspaceId: result.productPlan.planId }).codexThreadId, "created-plan-thread");
+  assert.equal(runCount, 1);
+  assert.equal(startOptions[0].workingDirectory, projectWorkspacePath(result.productPlan.planId));
+  assert.match(prompts[0], /Initialize this Codex thread/);
+  assert.match(prompts[0], /Do not call tools/);
+  assert.match(prompts[0], /小桌面闹钟/);
 });
 
 test("Codex tool intent parser accepts fenced JSON and plain messages", () => {

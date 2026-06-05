@@ -26,6 +26,7 @@ The implementation lives in:
 
 - `src/core/forge_query_engine.mjs`
 - `src/core/codex_runtime.mjs`
+- `src/core/runtime_plan_creation.mjs`
 - `src/core/model_adapters.mjs`
 - `src/core/tool_schema_exporter.mjs`
 - `src/core/tool_executor.mjs`
@@ -56,7 +57,7 @@ HTTP routes:
 - `GET /api/workspaces/:workspaceId/chat/:sessionId`
 - `POST /api/workspaces/:workspaceId/chat/confirm`
 
-The frontend creates the initial `ProductPlan` with `/api/plans`. Once a real workspace exists, later composer turns use `/api/workspaces/:workspaceId/chat/turn`.
+The frontend creates the initial `ProductPlan` with `/api/plans`. That route uses the same runtime boundary as chat turns: if `runtimeProvider: "codex"` is selected, it initializes and persists the project-bound Codex thread id before returning. Once a real workspace exists, later composer turns use `/api/workspaces/:workspaceId/chat/turn`.
 
 The default UI/runtime provider is the local Forge adapter (`modelProvider: "mock"` / `runtimeProvider: "mock"` in code). This avoids external key/relay failures while still exercising real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths.
 
@@ -75,7 +76,7 @@ Optional live Codex smoke:
 FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live
 ```
 
-This script is intentionally not part of `npm run check`. Running `npm run smoke:codex-live` without the env vars only prints the opt-in instructions. The live form creates an isolated smoke workspace, sends that project context through Codex SDK, uses `runtimeProvider: "codex"`, runs the demo sequence of add buttons/buzzer, generate 3D, move USB-C, and revert, then fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves a pending confirmation, or misses the required state checks.
+This script is intentionally not part of `npm run check`. Running `npm run smoke:codex-live` without the env vars only prints the opt-in instructions. The live form creates an isolated smoke workspace, initializes the first ProductPlan through `runtimeProvider: "codex"`, sends that project context through Codex SDK, runs the demo sequence of add buttons/buzzer, generate 3D, move USB-C, and revert, then fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves a pending confirmation, or misses the required state checks.
 
 Codex runtime project workspace files:
 
