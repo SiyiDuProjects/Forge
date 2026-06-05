@@ -588,18 +588,22 @@ async function restoreActiveChatSession({ renderAfter = true } = {}) {
     if (requestToken !== state.workspaceToken || state.activeProjectId !== projectId) return false;
     const productPlan = mergeConversationFromSession(project.productPlan, payload.messages || []);
     const pendingConfirmation = payload.pendingConfirmation || null;
+    const lastChatTurn = restoredTurnFromChatSession({ payload, project, productPlan, pendingConfirmation });
     Object.assign(project, {
       productPlan,
       chatSessionId: payload.sessionId || sessionId,
       chatSessionLoaded: true,
       chatSessionEntries: payload.entries || [],
       chatSessionMessages: payload.messages || [],
+      recentEvents: payload.recentEvents || [],
+      lastChatTurn,
       pendingConfirmation,
       chatSessionError: ""
     });
     if (state.activeProjectId === projectId) {
       state.productPlan = productPlan;
       state.chatSessionId = project.chatSessionId;
+      state.lastChatTurn = lastChatTurn;
       state.pendingConfirmation = pendingConfirmation;
       state.runtimeError = "";
     }
@@ -743,6 +747,42 @@ function mergeConversationFromSession(productPlan, messages = []) {
       assetIds: [],
       createdAt: message.createdAt || ""
     }))
+  };
+}
+
+function restoredTurnFromChatSession({ payload = {}, project = {}, productPlan = null, pendingConfirmation = null } = {}) {
+  const traceEvents = (payload.recentEvents || [])
+    .map(traceEventFromWorkspaceEvent)
+    .filter(Boolean);
+  if (!traceEvents.length && !pendingConfirmation) return null;
+  const messages = payload.messages || [];
+  const userMessage = [...messages].reverse().find((message) => message.role === "user")?.content || "";
+  const assistantMessage = [...messages].reverse().find((message) => message.role === "assistant")?.content || "";
+  return {
+    ok: true,
+    traceState: "restored",
+    traceKind: "chat_session",
+    userMessage,
+    assistantMessage,
+    runtimeProvider: project.runtimeProvider || currentRuntimeProvider(),
+    modelProvider: project.runtimeProvider || currentRuntimeProvider(),
+    codexThreadId: project.codexThreadId || productPlan?.workspaceState?.codexThreadId || "",
+    toolCalls: [],
+    toolResults: [],
+    modelResponses: [],
+    traceEvents,
+    eventsAppended: payload.recentEvents || [],
+    messages
+  };
+}
+
+function traceEventFromWorkspaceEvent(event = {}) {
+  if (!event?.type) return null;
+  return {
+    ...(event.payload || {}),
+    type: event.type,
+    eventId: event.eventId || makeClientId("trace"),
+    timestamp: event.timestamp || ""
   };
 }
 

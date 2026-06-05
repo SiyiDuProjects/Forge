@@ -289,6 +289,7 @@ Returns assistant message, runtime/model provider, chat messages, tool call trac
 
 Returns persisted chat session JSONL entries and message entries for a workspace.
 The response also includes the latest unresolved `pendingConfirmation` for that session, if one exists, so the frontend can restore approval controls after reload or project switch.
+It also returns bounded `recentEvents` from `events.jsonl` for the same session, allowing the frontend to reconstruct a lightweight runtime trace after reload without loading full artifact contents.
 
 ### `POST /api/workspaces/:workspaceId/chat/confirm`
 

@@ -20,6 +20,23 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Runtime Trace Restore And Send Button State
+
+- Scope: restore recent runtime trace rows after reload/project switch by returning bounded session-scoped `events.jsonl` entries from the chat-session API, and make the composer send button visually distinguish idle send state from running stop state.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`
+- Key code handles:
+  - `src/core/chat_session_store.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `app.js`
+  - `index.html`
+  - `styles.css`
+  - `tests/query_engine.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `recentEvents`, `restoredTurnFromChatSession`, `traceEventFromWorkspaceEvent`, `data-running="false"`, `.send-button span::before`, idle send arrow, running stop square, restored runtime trace.
+- Verification: `npm run check` passes with 71 tests. Browser inspection of the prior `http://127.0.0.1:8778/?cacheBust=workspace-restore` page confirmed the button was idle (`data-running="false"` / `aria-busy="false"`) while still looking like a stop square due to CSS, so this is a visual-state fix rather than a stuck-request fix. Reloading the current browser to `http://127.0.0.1:8778/?cacheBust=send-icon-state` confirmed the idle button keeps `data-running="false"` / `aria-busy="false"` and uses CSS pseudo-elements for the send arrow instead of the stop square.
+- Boundary: this restores read-only trace visibility and button affordance only. It does not change Codex thread creation, Forge tool execution, ProductPlan mutation policy, GeometrySpec generation, or explicit 3D generation confirmation.
+
 ### 2026-06-05 - Codex Runtime Restored Per Threaded Project
 
 - Scope: when the frontend restores persisted workspaces, projects with a saved `codexThreadId` reopen with `runtimeProvider: "codex"` so continuing that project resumes the Codex-backed thread instead of silently using local Forge.

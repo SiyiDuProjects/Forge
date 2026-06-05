@@ -9,7 +9,8 @@ import { join } from "node:path";
 import {
   appendWorkspaceEvent,
   defaultProjectWorkspaceRoot,
-  projectWorkspacePath
+  projectWorkspacePath,
+  readWorkspaceEvents
 } from "./project_workspace.mjs";
 import { makeId } from "./utils.mjs";
 import { clone } from "./workspace_state.mjs";
@@ -86,7 +87,8 @@ export function loadChatSession({
     sessionId: safeSessionId(sessionId),
     entries: sliced,
     messages: sliced.filter((entry) => entry.type === "message"),
-    pendingConfirmation: latestPendingConfirmationForSession({ workspaceId, sessionId, rootDir })
+    pendingConfirmation: latestPendingConfirmationForSession({ workspaceId, sessionId, rootDir }),
+    recentEvents: recentWorkspaceEventsForSession({ workspaceId, sessionId, rootDir, limit: 80 })
   };
 }
 
@@ -252,6 +254,23 @@ function latestPendingConfirmationForSession({
     .filter((confirmation) => !safeId || confirmation.sessionId === safeId)
     .sort((a, b) => Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
   return confirmations[0] ? clone(confirmations[0]) : null;
+}
+
+function recentWorkspaceEventsForSession({
+  workspaceId,
+  sessionId = "session_default",
+  rootDir = defaultProjectWorkspaceRoot(),
+  limit = 80
+} = {}) {
+  const safeId = safeSessionId(sessionId);
+  try {
+    return readWorkspaceEvents({ workspaceId, rootDir })
+      .filter((event) => !safeId || event?.payload?.sessionId === safeId)
+      .slice(-limit)
+      .map((event) => clone(event));
+  } catch {
+    return [];
+  }
 }
 
 function writePendingConfirmations({

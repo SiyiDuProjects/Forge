@@ -81,6 +81,8 @@ test("QueryEngine runs a direct model tool loop through Forge actions", async ()
   assert.equal(session.ok, true);
   assert.ok(session.messages.some((message) => message.role === "user" && /buttons/.test(message.content)));
   assert.ok(session.messages.some((message) => message.role === "assistant"));
+  assert.ok(session.recentEvents.some((event) => event.type === "model_request"));
+  assert.ok(session.recentEvents.some((event) => event.type === "chat_turn_completed"));
 
   const events = readWorkspaceEvents({ workspaceId: plan.planId });
   assert.ok(events.some((event) => event.type === "model_request"));
@@ -201,6 +203,7 @@ test("Permission gate turns ambiguous mutations into confirmations and confirm e
   const pendingSession = loadChatSession({ workspaceId: plan.planId, sessionId: "test_confirm" });
   assert.equal(pendingSession.pendingConfirmation.confirmationId, pendingTurn.pendingConfirmation.confirmationId);
   assert.equal(pendingSession.pendingConfirmation.status, "pending");
+  assert.ok(pendingSession.recentEvents.some((event) => event.type === "confirmation_required"));
 
   const confirmed = await confirmForgeChatTool({
     workspaceId: plan.planId,

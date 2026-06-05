@@ -331,6 +331,9 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /async function restorePersistedProjects/);
   assert.match(app, /async function restoreActiveChatSession/);
   assert.match(app, /mergeConversationFromSession/);
+  assert.match(app, /restoredTurnFromChatSession/);
+  assert.match(app, /traceEventFromWorkspaceEvent/);
+  assert.match(app, /recentEvents: payload\.recentEvents/);
   assert.match(app, /runtimeProviderForRestoredWorkspace/);
   assert.match(app, /codexThreadIdForWorkspace/);
   assert.match(app, /codexThreadIdForWorkspace\(workspace\) \? "codex"/);
@@ -376,11 +379,15 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /cancelRunAria/);
   assert.match(app, /sendCancelled/);
   assert.match(app, /dataset\.running/);
+  assert.match(html, /id="runChain"[^>]+data-running="false"/);
   assert.match(styles, /\.trace-timeline/);
   assert.match(styles, /\.trace-row\.running strong/);
   assert.match(styles, /\.runtime-status-panel/);
   assert.match(styles, /\.runtime-status-note/);
   assert.match(styles, /\.send-button\[data-running="true"\]/);
+  assert.match(styles, /\.send-button span::before/);
+  assert.match(styles, /\.send-button span::after/);
+  assert.match(styles, /\.send-button\[data-running="true"\] span::before/);
   assert.match(styles, /\.trace-row\.cancelled strong/);
   assert.match(app, /function submitComposer/);
   assert.match(app, /dom\.runChain\.addEventListener\("click", submitComposer\)/);
