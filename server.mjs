@@ -20,7 +20,7 @@ import {
   stageDesignPatch,
   validateDesign
 } from "./src/core/forge_actions.mjs";
-import { confirmForgeChatTool, runForgeChatTurn } from "./src/core/forge_query_engine.mjs";
+import { confirmForgeChatTool, resolveChatRuntime, runForgeChatTurn } from "./src/core/forge_query_engine.mjs";
 import { ensureCodexProjectThread, runCodexProductTurn } from "./src/core/codex_runtime.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
@@ -144,13 +144,13 @@ async function handleApi(request, response, url) {
   const workspaceChatTurnMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/turn$/);
   if (request.method === "POST" && workspaceChatTurnMatch) {
     const body = await readJsonBody(request);
-    const runtimeProvider = body.runtimeProvider || body.modelProvider || defaultChatRuntimeProvider;
+    const runtime = runtimeForRequest(body);
     sendActionJson(response, await runForgeChatTurn({
       workspaceId: workspaceChatTurnMatch[1],
       sessionId: body.sessionId || "session_default",
       userMessage: body.userMessage || body.message || "",
-      modelProvider: body.modelProvider || defaultChatModelProvider,
-      runtimeProvider,
+      modelProvider: runtime.modelProvider,
+      runtimeProvider: runtime.runtimeProvider,
       mode: body.mode || "normal",
       confirmation: body.confirmation || null
     }));
@@ -273,14 +273,16 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/plans") {
     const body = await readJsonBody(request);
-    const runtimeProvider = body.runtimeProvider || body.modelProvider || defaultChatRuntimeProvider;
+    const runtime = runtimeForRequest(body);
     const result = createProductPlan({
       message: body.message,
       initialMessage: body.initialMessage,
       assets: body.assets || [],
       language: body.language
     });
-    if (runtimeProvider === "codex") {
+    result.runtimeProvider = runtime.runtimeProvider;
+    result.modelProvider = runtime.modelProvider;
+    if (runtime.runtimeProvider === "codex") {
       const thread = await ensureCodexProjectThread({
         workspaceId: result.productPlan.planId
       });
@@ -603,6 +605,15 @@ async function readJsonBody(request) {
     error.statusCode = 400;
     throw error;
   }
+}
+
+function runtimeForRequest(body = {}) {
+  const explicitRuntime = body.runtime || body.runtimeProvider || "";
+  const explicitModel = body.modelProvider || "";
+  return resolveChatRuntime({
+    runtimeProvider: explicitRuntime || (explicitModel ? "" : defaultChatRuntimeProvider),
+    modelProvider: explicitModel || defaultChatModelProvider
+  });
 }
 
 function sendJson(response, status, payload) {

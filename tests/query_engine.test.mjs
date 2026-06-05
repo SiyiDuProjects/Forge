@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
+import { writeFileSync } from "node:fs";
 import { test } from "node:test";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import { loadChatSession } from "../src/core/chat_session_store.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
 import { ensureCodexProjectThread, parseCodexToolIntent } from "../src/core/codex_runtime.mjs";
-import { runForgeChatTurn, confirmForgeChatTool } from "../src/core/forge_query_engine.mjs";
+import { runForgeChatTurn, confirmForgeChatTool, resolveChatRuntime } from "../src/core/forge_query_engine.mjs";
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
 import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
-import { readProjectManifest, readWorkspaceEvents } from "../src/core/project_workspace.mjs";
+import { projectWorkspacePath, readProjectManifest, readWorkspaceEvents } from "../src/core/project_workspace.mjs";
 import { getToolMetadata, listToolMetadata } from "../src/core/tool_registry.mjs";
 
 function createChatPlan() {
@@ -171,6 +172,34 @@ test("Tool schema exporter and API contract expose chat runtime surfaces", () =>
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/confirm"));
 });
 
+test("runtime selection keeps Codex, Forge QueryEngine, mock, and OpenAI roles distinct", () => {
+  assert.deepEqual(resolveChatRuntime({ runtimeProvider: "codex", modelProvider: "mock" }), {
+    runtimeProvider: "codex",
+    modelProvider: "codex",
+    requestedRuntimeProvider: "codex"
+  });
+  assert.deepEqual(resolveChatRuntime({ runtimeProvider: "forge-query-engine", modelProvider: "openai" }), {
+    runtimeProvider: "forge-query-engine",
+    modelProvider: "openai",
+    requestedRuntimeProvider: "forge-query-engine"
+  });
+  assert.deepEqual(resolveChatRuntime({ runtimeProvider: "forge-query-engine", modelProvider: "forge-query-engine" }), {
+    runtimeProvider: "forge-query-engine",
+    modelProvider: "mock",
+    requestedRuntimeProvider: "forge-query-engine"
+  });
+  assert.deepEqual(resolveChatRuntime({ modelProvider: "openai" }), {
+    runtimeProvider: "forge-query-engine",
+    modelProvider: "openai",
+    requestedRuntimeProvider: "openai"
+  });
+  assert.deepEqual(resolveChatRuntime({ runtimeProvider: "mock", modelProvider: "codex" }), {
+    runtimeProvider: "mock",
+    modelProvider: "mock",
+    requestedRuntimeProvider: "mock"
+  });
+});
+
 test("ContextPack remains compact and excludes raw generated artifact bytes", async () => {
   const plan = createChatPlan();
   await runForgeChatTurn({
@@ -216,13 +245,17 @@ test("Codex runtime creates and reuses one thread for a Forge project", async ()
   let startCount = 0;
   let resumeCount = 0;
   let runCount = 0;
+  const startOptions = [];
+  const resumeOptions = [];
   const codexFactory = async () => ({
-    startThread() {
+    startThread(options) {
       startCount += 1;
+      startOptions.push(options);
       return fakeCodexThread(`codex-thread-${startCount}`);
     },
-    resumeThread(threadId) {
+    resumeThread(threadId, options) {
       resumeCount += 1;
+      resumeOptions.push(options);
       return fakeCodexThread(threadId);
     }
   });
@@ -276,10 +309,61 @@ test("Codex runtime creates and reuses one thread for a Forge project", async ()
   assert.equal(result.codexThreadId, "codex-thread-1");
   assert.equal(startCount, 1);
   assert.equal(resumeCount, 1);
+  assert.equal(startOptions[0].workingDirectory, projectWorkspacePath(plan.planId));
+  assert.equal(startOptions[0].skipGitRepoCheck, true);
+  assert.equal(startOptions[0].sandboxMode, "workspace-write");
+  assert.equal(resumeOptions[0].workingDirectory, projectWorkspacePath(plan.planId));
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);
   assert.equal(getProductPlan(plan.planId).revisions.at(-1).productPlanSnapshot.constraints.finish, "graphite");
   assert.equal(readProjectManifest({ workspaceId: plan.planId }).codexThreadId, "codex-thread-1");
   assert.ok(result.modelResponses.every((response) => response.codexThreadId === "codex-thread-1"));
+});
+
+test("Codex runtime reports guarded direct file writes instead of accepting them", async () => {
+  const plan = createChatPlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const codexFactory = async () => ({
+    startThread() {
+      return {
+        id: "guard-thread",
+        async run() {
+          writeFileSync(`${workspacePath}/product_plan.json`, JSON.stringify({ tampered: true }, null, 2));
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "I changed ProductPlan directly.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    },
+    resumeThread(threadId) {
+      return {
+        id: threadId,
+        async run() {
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "Resumed.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    }
+  });
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_guarded_write",
+    userMessage: "Directly rewrite the product plan file.",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.assistantMessage, /Guarded file changed/);
+  assert.equal(result.modelResponses[0].ok, false);
+  assert.equal(result.modelResponses[0].errorCode, "GUARD_VIOLATION");
 });
 
 test("Codex runtime keeps project threads isolated", async () => {

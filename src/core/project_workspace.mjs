@@ -11,10 +11,12 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeId } from "./utils.mjs";
 import { clone } from "./workspace_state.mjs";
+import { listToolMetadata } from "./tool_registry.mjs";
 
 export const PROJECT_WORKSPACE_VERSION = "forge_project_workspace_v1";
 
 const defaultWorkspaceRootUrl = new URL("../../data/workspaces/", import.meta.url);
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export function defaultProjectWorkspaceRoot() {
   return process.env.FORGE_WORKSPACE_ROOT || fileURLToPath(defaultWorkspaceRootUrl);
@@ -27,6 +29,12 @@ export function projectWorkspacePath(workspaceId, { rootDir = defaultProjectWork
 export function readProjectManifest({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
   if (!workspaceId) return null;
   return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), "project_manifest.json"));
+}
+
+export function readRuntimePlan({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  if (!workspaceId) return null;
+  const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
+  return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), manifest.runtimePlanPath || "runtime_plan.json"));
 }
 
 export function updateProjectManifest({ workspaceId, patch = {}, rootDir = defaultProjectWorkspaceRoot() } = {}) {
@@ -58,6 +66,7 @@ export function ensureProjectWorkspace({ plan, rootDir = defaultProjectWorkspace
   const previousManifest = readJsonIfExists(manifestPath) || {};
   const manifest = projectManifestFor(plan, previousManifest);
   writeJson(join(workspacePath, "project_manifest.json"), manifest);
+  writeJson(join(workspacePath, manifest.runtimePlanPath || "runtime_plan.json"), plan);
   writeJson(join(workspacePath, "product_plan.json"), plan.workspaceState?.productPlan || {});
   writeMarkdownIndexes({ workspacePath, plan, manifest });
 
@@ -342,7 +351,8 @@ function ensureWorkspaceDirs(workspacePath) {
     join(workspacePath, "source-materials", "uploads"),
     join(workspacePath, "source-materials", "datasheets"),
     join(workspacePath, "source-materials", "notes"),
-    join(workspacePath, "review")
+    join(workspacePath, "review"),
+    join(workspacePath, "skills")
   ]) {
     mkdirSync(path, { recursive: true });
   }
@@ -358,6 +368,7 @@ function projectManifestFor(plan, previous = {}) {
     status: plan.status || "",
     currentRevisionId: plan.currentRevisionId || "",
     currentProductPlanPath: "product_plan.json",
+    runtimePlanPath: "runtime_plan.json",
     eventsPath: "events.jsonl",
     proposalsPath: "proposals/",
     revisionsPath: "revisions/",
@@ -455,9 +466,61 @@ ${warnings}
 }
 
 function writeMarkdownIndexes({ workspacePath, plan, manifest }) {
+  writeFileSync(join(workspacePath, "AGENTS.md"), agentsMarkdown(plan, manifest));
   writeFileSync(join(workspacePath, "CURRENT_STATE.md"), currentStateMarkdown(plan, manifest));
   writeFileSync(join(workspacePath, "WORK_INDEX.md"), workIndexMarkdown(plan, manifest));
+  writeFileSync(join(workspacePath, "FORGE_TOOLS.md"), forgeToolsMarkdown(plan, manifest));
   writeFileSync(join(workspacePath, "DECISIONS.md"), decisionsMarkdown(plan));
+  writeSkillFiles({ workspacePath, manifest });
+}
+
+function agentsMarkdown(plan, manifest) {
+  return `# Forge Project Agent Rules
+
+This directory is a Forge hardware project workspace for Codex SDK.
+
+## Role
+
+- Codex owns product-task reasoning: understand the user's hardware goal, ask follow-up questions, split work, choose Forge tools, inspect tool output, and summarize progress.
+- Forge owns state, validation, generation, revisions, guarded files, and UI-ready outputs.
+
+## Required Workflow
+
+1. Start from \`WORK_INDEX.md\`, \`CURRENT_STATE.md\`, \`DECISIONS.md\`, and \`FORGE_TOOLS.md\`.
+2. Read JSON files only when details are needed.
+3. Use skills under \`skills/\` for task-specific method.
+4. Use \`forge-tool\` for every project-changing action.
+5. Never directly edit guarded source-of-truth or generated artifact files.
+
+## Guarded Files
+
+Do not write these files directly:
+
+- \`project_manifest.json\`
+- \`product_plan.json\`
+- \`runtime_plan.json\`
+- \`events.jsonl\`
+- \`proposals/*.json\`
+- \`revisions/*/revision_manifest.json\`
+- \`revisions/*/product_plan.json\`
+- \`revisions/*/geometry-spec.json\`
+- \`revisions/*/component_descriptors.json\`
+- \`revisions/*/artifacts/*\`
+- GLB/STL/STEP artifacts
+- ComponentDescriptor source-of-truth files outside this project workspace
+
+Allowed scratch space:
+
+- \`source-materials/notes/\`
+- new markdown notes that do not replace the generated state files
+
+## Current Project
+
+- Workspace: ${manifest.workspaceId}
+- Title: ${manifest.title}
+- Current revision: ${manifest.currentRevisionId || "none"}
+- Status: ${manifest.status || "unknown"}
+`;
 }
 
 function currentStateMarkdown(plan, manifest) {
@@ -493,7 +556,7 @@ function workIndexMarkdown(plan, manifest) {
   )).join("\n") || "- none";
   return `# Forge Work Index
 
-Project folder runtime index. JSON files remain the source of truth.
+Project folder runtime index for Codex SDK. JSON files remain the source of truth; markdown files are navigation aids.
 
 ## Project
 
@@ -501,6 +564,8 @@ Project folder runtime index. JSON files remain the source of truth.
 - Current revision: ${manifest.currentRevisionId || "none"}
 - ProductPlan: ${manifest.currentProductPlanPath}
 - Events: ${manifest.eventsPath}
+- Tools: FORGE_TOOLS.md
+- Skills: skills/
 
 ## Recent Revisions
 
@@ -510,6 +575,146 @@ ${revisions}
 
 ${proposals}
 `;
+}
+
+function forgeToolsMarkdown(plan, manifest) {
+  const command = forgeToolCommand();
+  const tools = listToolMetadata().map((tool) => {
+    const sideEffects = (tool.sideEffects || []).map((item) => `    - ${item}`).join("\n") || "    - none";
+    return `### ${cliNameForTool(tool.name)}
+
+- Forge action: \`${tool.name}\`
+- Requires confirmation: ${Boolean(tool.permission?.requiresConfirmation)}
+- Read-only: ${Boolean(tool.behavior?.readOnly)}
+- Creates revision: ${Boolean(tool.behavior?.createsRevision)}
+- Writes artifacts: ${Boolean(tool.behavior?.writesArtifacts)}
+- Side effects:
+${sideEffects}
+`;
+  }).join("\n");
+  return `# Forge Tools
+
+Use \`forge-tool\` to inspect or change this project. Commands output stable JSON.
+
+Default workspace: ${manifest.workspaceId}
+
+Command prefix:
+
+\`\`\`bash
+${command}
+\`\`\`
+
+Examples:
+
+\`\`\`bash
+${command} summary
+${command} search-component --query button --componentType button --limit 5
+${command} propose --message "Add two right-side buttons."
+${command} validate
+${command} generate --reason user_confirmed_model_generation
+${command} revert --revisionId <revision-id>
+${command} review --name "Reviewer" --email reviewer@example.com
+\`\`\`
+
+Rules:
+
+- Read project files freely.
+- Write project-changing state only through these commands.
+- Do not directly edit guarded files listed in \`AGENTS.md\`.
+- If a command returns \`ok: false\`, report the error and do not fake success.
+
+## Commands
+
+${tools}
+
+### review
+
+- Forge action: \`submitProductPlanReview\`
+- Requires confirmation: true
+- Read-only: false
+- Creates revision: false
+- Writes artifacts: false
+- Side effects:
+    - write review/review_request.json
+    - write review/human_review_notes.md
+    - append events.jsonl review_submitted or review_submission_failed
+
+Use this only for local human-review material. It is not supplier ordering, payment, or manufacturing start.
+`;
+}
+
+function writeSkillFiles({ workspacePath }) {
+  const skills = {
+    "hardware-workflow.md": `# Forge Skill: Hardware Workflow
+
+- Understand the hardware idea in plain language first.
+- Extract product type, display size, power, enclosure finish, user-facing functions, and risk modules.
+- Ask concise follow-up questions when core build constraints are missing.
+- Keep MVP scope on USB-C low-voltage desktop display/frame/sensor-screen prototypes.
+- Treat battery and camera as human-review risk items.
+- Treat motion structures, supplier ordering, payment, and real manufacturing as out of scope.
+`,
+    "product-plan-update.md": `# Forge Skill: ProductPlan Update
+
+- Use ProductPlan as the source object for requirements and constraints.
+- Prefer proposal/stage for exploratory changes.
+- Use apply/commit only when the user is explicit.
+- Never rewrite ProductPlan JSON directly; call forge-tool.
+- Summarize the resulting revision or proposal id.
+`,
+    "component-selection.md": `# Forge Skill: Component Selection
+
+- Search ComponentDescriptor-backed modules before adding parts.
+- Use supported components when possible.
+- Do not invent mechanical metadata, holes, connectors, keepouts, or cable exits.
+- If a component is missing or unverified, surface it as a review/validation issue.
+`,
+    "3d-generation.md": `# Forge Skill: 3D Generation
+
+- GeometrySpec is the only 3D-generation input for a locked revision.
+- Ordinary conversation may update requirements or geometry preferences, but must not write GLB/STL/STEP.
+- Generate artifacts only after explicit user confirmation such as "生成 3D 模型" or "build it".
+- Use validate before generate when risk or geometry is unclear.
+`,
+    "validation-review.md": `# Forge Skill: Validation And Review
+
+- Use forge-tool validate for fit, descriptor, geometry, and guarded-workflow checks.
+- Review material is local human-review material only.
+- Do not claim production readiness, certification, supplier ordering, or payment.
+- Surface warnings and blocked items plainly.
+`,
+    "revision-revert.md": `# Forge Skill: Revision And Revert
+
+- Revisions are immutable history.
+- Revert by calling forge-tool revert with a revision id.
+- Do not edit historical revision folders directly.
+- After revert, summarize the active revision and any available artifacts.
+`
+  };
+  for (const [fileName, body] of Object.entries(skills)) {
+    writeFileSync(join(workspacePath, "skills", fileName), body);
+  }
+}
+
+function forgeToolCommand() {
+  return `node ${join(repoRoot, "scripts", "forge-tool.mjs")}`;
+}
+
+function cliNameForTool(actionName) {
+  const mapping = {
+    getWorkspaceSummary: "summary",
+    searchComponentLibrary: "search-component",
+    proposeDesignChange: "propose",
+    stageDesignPatch: "stage",
+    commitStagedChange: "commit",
+    applyDesignPatch: "apply",
+    validateDesign: "validate",
+    regenerateRevision: "generate",
+    revertRevision: "revert",
+    getRevisionArtifacts: "artifacts",
+    rejectStagedChange: "reject"
+  };
+  return mapping[actionName] || actionName;
 }
 
 function decisionsMarkdown(plan) {

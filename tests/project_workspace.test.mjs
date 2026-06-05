@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
@@ -13,7 +15,13 @@ import {
 } from "../src/core/forge_actions.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
 import {
+  detectGuardViolations,
+  guardedEventCount,
+  snapshotGuardedFiles
+} from "../src/core/guarded_files.mjs";
+import {
   projectWorkspacePath,
+  readRuntimePlan,
   readWorkspaceEvents
 } from "../src/core/project_workspace.mjs";
 import {
@@ -29,29 +37,132 @@ function createWorkspacePlan() {
   }).productPlan;
 }
 
+const FORGE_TOOL = fileURLToPath(new URL("../scripts/forge-tool.mjs", import.meta.url));
+
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function runForgeTool(args, cwd) {
+  const result = spawnSync(process.execPath, [FORGE_TOOL, ...args], {
+    cwd,
+    encoding: "utf8"
+  });
+  let json = null;
+  try {
+    json = JSON.parse(result.stdout || "{}");
+  } catch {
+    json = { ok: false, stdout: result.stdout, stderr: result.stderr };
+  }
+  return { ...result, json };
 }
 
 test("ProductPlan creation writes a durable Forge project folder", () => {
   const plan = createWorkspacePlan();
   const workspacePath = projectWorkspacePath(plan.planId);
   const manifest = readJson(`${workspacePath}/project_manifest.json`);
+  const runtimePlan = readRuntimePlan({ workspaceId: plan.planId });
   const productPlan = readJson(`${workspacePath}/product_plan.json`);
+  const agents = readFileSync(`${workspacePath}/AGENTS.md`, "utf8");
+  const tools = readFileSync(`${workspacePath}/FORGE_TOOLS.md`, "utf8");
   const events = readWorkspaceEvents({ workspaceId: plan.planId });
 
   assert.equal(manifest.version, "forge_project_workspace_v1");
   assert.equal(manifest.workspaceId, plan.planId);
   assert.equal(manifest.currentRevisionId, plan.currentRevisionId);
   assert.equal(manifest.currentProductPlanPath, "product_plan.json");
+  assert.equal(manifest.runtimePlanPath, "runtime_plan.json");
   assert.equal(manifest.eventsPath, "events.jsonl");
+  assert.equal(runtimePlan.planId, plan.planId);
   assert.equal(productPlan.productType, "desktop_display");
+  assert.ok(existsSync(`${workspacePath}/AGENTS.md`));
   assert.ok(existsSync(`${workspacePath}/CURRENT_STATE.md`));
   assert.ok(existsSync(`${workspacePath}/WORK_INDEX.md`));
+  assert.ok(existsSync(`${workspacePath}/FORGE_TOOLS.md`));
   assert.ok(existsSync(`${workspacePath}/DECISIONS.md`));
+  assert.ok(existsSync(`${workspacePath}/skills/hardware-workflow.md`));
+  assert.ok(existsSync(`${workspacePath}/skills/3d-generation.md`));
+  assert.match(agents, /forge-tool/);
+  assert.match(agents, /Guarded Files/);
+  assert.match(tools, /search-component/);
+  assert.match(tools, /generate --reason/);
+  assert.match(tools, /review --name/);
   assert.ok(events.some((event) => event.type === "workspace_created"));
   assert.ok(events.some((event) => event.type === "revision_created"));
   assert.ok(events.some((event) => event.type === "user_message"));
+});
+
+test("forge-tool restores a project workspace in a separate process", () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const beforeRevisionCount = readJson(`${workspacePath}/runtime_plan.json`).revisions.length;
+
+  const summary = runForgeTool(["summary"], workspacePath);
+  assert.equal(summary.status, 0, summary.stderr);
+  assert.equal(summary.json.ok, true);
+  assert.equal(summary.json.workspaceId, plan.planId);
+  assert.equal(summary.json.currentRevisionId, plan.currentRevisionId);
+
+  const search = runForgeTool(["search-component", "--query", "button", "--componentType", "button", "--limit", "2"], workspacePath);
+  assert.equal(search.status, 0, search.stderr);
+  assert.equal(search.json.ok, true);
+  assert.ok(search.json.results.some((item) => item.componentType === "button"));
+
+  const propose = runForgeTool(["propose", "--message", "What if we add two right-side buttons?"], workspacePath);
+  assert.equal(propose.status, 0, propose.stderr);
+  assert.equal(propose.json.ok, true);
+  assert.ok(propose.json.proposalId);
+  assert.ok(existsSync(`${workspacePath}/proposals/${propose.json.proposalId}.json`));
+
+  const patches = JSON.stringify([
+    {
+      type: "plan_patch",
+      set: {
+        "constraints.finish": "graphite"
+      }
+    }
+  ]);
+  const apply = runForgeTool(["apply", "--message", "Make the shell graphite.", "--patches", patches], workspacePath);
+  assert.equal(apply.status, 0, apply.stderr);
+  assert.equal(apply.json.ok, true);
+  assert.equal(apply.json.applied, true);
+
+  const runtimePlan = readJson(`${workspacePath}/runtime_plan.json`);
+  assert.equal(runtimePlan.revisions.length, beforeRevisionCount + 1);
+  assert.equal(runtimePlan.workspaceState.productPlan.constraints.finish, "graphite");
+});
+
+test("guarded file detector catches direct source-of-truth writes", () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const before = snapshotGuardedFiles({ workspaceId: plan.planId });
+  const beforeEventCount = guardedEventCount({ workspaceId: plan.planId });
+
+  writeFileSync(`${workspacePath}/product_plan.json`, JSON.stringify({ tampered: true }, null, 2));
+
+  const violations = detectGuardViolations({
+    workspaceId: plan.planId,
+    before,
+    beforeEventCount
+  });
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].path, "product_plan.json");
+});
+
+test("guarded file detector allows Forge action event writes", () => {
+  const plan = createWorkspacePlan();
+  const before = snapshotGuardedFiles({ workspaceId: plan.planId });
+  const beforeEventCount = guardedEventCount({ workspaceId: plan.planId });
+
+  const validation = validateDesign({ workspaceId: plan.planId });
+  assert.equal(validation.ok, true);
+
+  const violations = detectGuardViolations({
+    workspaceId: plan.planId,
+    before,
+    beforeEventCount
+  });
+  assert.deepEqual(violations, []);
 });
 
 test("events.jsonl is append-only for validation events", () => {

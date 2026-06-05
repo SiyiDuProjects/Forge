@@ -1,9 +1,15 @@
 import {
   appendWorkspaceEvent,
   defaultProjectWorkspaceRoot,
+  projectWorkspacePath,
   readProjectManifest,
   updateProjectManifest
 } from "./project_workspace.mjs";
+import {
+  detectGuardViolations,
+  guardedEventCount,
+  snapshotGuardedFiles
+} from "./guarded_files.mjs";
 
 export const CODEX_RUNTIME_VERSION = "forge_codex_runtime_v1";
 export const CODEX_SDK_PACKAGE = "@openai/codex-sdk";
@@ -11,6 +17,7 @@ export const CODEX_SDK_PACKAGE = "@openai/codex-sdk";
 export async function ensureCodexProjectThread({
   workspaceId,
   rootDir = defaultProjectWorkspaceRoot(),
+  workspacePath = "",
   codexFactory = null
 } = {}) {
   if (!workspaceId) {
@@ -25,6 +32,9 @@ export async function ensureCodexProjectThread({
 
   const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
   const existingThreadId = manifest.codexThreadId || "";
+  const threadOptions = codexThreadOptions({
+    workspacePath: workspacePath || projectWorkspacePath(workspaceId, { rootDir })
+  });
   const client = await createCodexClient({ codexFactory });
   if (!client.ok) return client;
 
@@ -33,7 +43,7 @@ export async function ensureCodexProjectThread({
       return {
         ok: true,
         codexThreadId: existingThreadId,
-        thread: client.codex.resumeThread(existingThreadId),
+        thread: client.codex.resumeThread(existingThreadId, threadOptions),
         created: false
       };
     }
@@ -46,7 +56,7 @@ export async function ensureCodexProjectThread({
         }
       };
     }
-    const thread = client.codex.startThread();
+    const thread = client.codex.startThread(threadOptions);
     const codexThreadId = codexThreadIdFrom(thread);
     if (codexThreadId) {
       persistCodexThreadId({ workspaceId, rootDir, codexThreadId });
@@ -73,7 +83,8 @@ export async function runCodexProductTurn({
   thread,
   prompt = "",
   workspaceId = "",
-  rootDir = defaultProjectWorkspaceRoot()
+  rootDir = defaultProjectWorkspaceRoot(),
+  outputSchema = codexOutputSchema()
 } = {}) {
   if (!thread || typeof thread.run !== "function") {
     return {
@@ -85,7 +96,22 @@ export async function runCodexProductTurn({
     };
   }
   try {
-    const result = await thread.run(prompt);
+    const before = workspaceId ? snapshotGuardedFiles({ workspaceId, rootDir }) : null;
+    const beforeEventCount = workspaceId ? guardedEventCount({ workspaceId, rootDir }) : 0;
+    const result = await thread.run(prompt, outputSchema ? { outputSchema } : {});
+    const guardViolations = workspaceId
+      ? detectGuardViolations({ workspaceId, rootDir, before, beforeEventCount })
+      : [];
+    if (guardViolations.length > 0) {
+      return {
+        ok: false,
+        error: {
+          code: "GUARD_VIOLATION",
+          message: guardViolations.map((item) => item.message).join("; ")
+        },
+        guardViolations
+      };
+    }
     return {
       ok: true,
       result,
@@ -114,7 +140,9 @@ export function buildCodexProductPrompt({
 } = {}) {
   return [
     "You are the Codex runtime for Forge hardware product tasks.",
-    "You may plan and decide, but Forge project state must only change through the exported Forge tool intents.",
+    "You are running inside one Forge project workspace. Read AGENTS.md, WORK_INDEX.md, CURRENT_STATE.md, DECISIONS.md, FORGE_TOOLS.md, and skills/ when needed.",
+    "You may plan and decide, but Forge project state must only change through forge-tool commands or exported Forge tool intents.",
+    "Prefer calling forge-tool commands from FORGE_TOOLS.md for project-changing work.",
     "Do not directly write raw GeometrySpec, GLB, STL, STEP, mesh data, supplier orders, payments, or manufacturing actions.",
     "Return exactly one JSON object. Do not wrap it in prose unless you are unable to comply.",
     "JSON shape:",
@@ -128,6 +156,7 @@ export function buildCodexProductPrompt({
       ]
     }, null, 2),
     "Use toolCalls only for available Forge tools from the prompt. If you need no tool, return an empty toolCalls array.",
+    "If you used forge-tool yourself, summarize the result and return an empty toolCalls array.",
     "If tool results are present, summarize them and do not repeat a tool call unless another step is needed.",
     "",
     "## Forge Prompt",
@@ -139,6 +168,37 @@ export function buildCodexProductPrompt({
     "## Current User Message",
     String(userMessage || "")
   ].join("\n");
+}
+
+export function codexThreadOptions({ workspacePath = "" } = {}) {
+  return {
+    workingDirectory: workspacePath,
+    skipGitRepoCheck: true,
+    sandboxMode: "workspace-write"
+  };
+}
+
+export function codexOutputSchema() {
+  return {
+    type: "object",
+    properties: {
+      assistantMessage: { type: "string" },
+      toolCalls: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            input: { type: "object" }
+          },
+          required: ["name", "input"],
+          additionalProperties: true
+        }
+      }
+    },
+    required: ["assistantMessage", "toolCalls"],
+    additionalProperties: false
+  };
 }
 
 export function parseCodexToolIntent(text = "") {

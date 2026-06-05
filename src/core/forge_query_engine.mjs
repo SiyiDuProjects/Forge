@@ -29,7 +29,7 @@ export async function runForgeChatTurn({
   const text = String(userMessage || "").trim();
   if (!workspaceId) return fail("UNKNOWN_WORKSPACE", "workspaceId is required.");
   if (!text) return fail("EMPTY_MESSAGE", "userMessage is required.");
-  const provider = runtimeProvider || modelProvider;
+  const runtime = resolveChatRuntime({ runtimeProvider, modelProvider });
 
   const turnId = makeId("chatturn");
   const eventsAppended = [];
@@ -41,7 +41,14 @@ export async function runForgeChatTurn({
     rootDir,
     type: "chat_turn_started",
     actor: "system",
-    payload: { turnId, sessionId, modelProvider: provider, runtimeProvider: provider, mode }
+    payload: {
+      turnId,
+      sessionId,
+      modelProvider: runtime.modelProvider,
+      runtimeProvider: runtime.runtimeProvider,
+      requestedRuntimeProvider: runtime.requestedRuntimeProvider,
+      mode
+    }
   });
   eventsAppended.push(startedEvent);
 
@@ -86,7 +93,7 @@ export async function runForgeChatTurn({
   const session = loadChatSession({ workspaceId, sessionId, limit: 24, rootDir });
   const exported = exportToolsForModel({
     tools: listToolMetadata(),
-    provider: provider === "openai" ? "openai" : "generic"
+    provider: runtime.modelProvider === "openai" ? "openai" : "generic"
   });
   const prompt = buildPromptSections({
     contextPack,
@@ -102,15 +109,15 @@ export async function runForgeChatTurn({
     payload: {
       turnId,
       sessionId,
-      modelProvider: provider,
-      runtimeProvider: provider,
+      modelProvider: runtime.modelProvider,
+      runtimeProvider: runtime.runtimeProvider,
       toolCount: exported.tools.length,
       promptSectionCount: prompt.sections.length
     }
   }));
 
   const adapter = modelAdapterFactory({
-    provider,
+    provider: runtime.modelProvider,
     workspaceId,
     rootDir,
     sessionId,
@@ -294,6 +301,8 @@ export async function runForgeChatTurn({
     workspaceId,
     sessionId,
     turnId,
+    runtimeProvider: runtime.runtimeProvider,
+    modelProvider: runtime.modelProvider,
     assistantMessage,
     messages: finalSession.messages || [],
     toolCalls,
@@ -315,9 +324,80 @@ export async function runForgeChatTurn({
       ok: Boolean(response?.ok),
       toolCallCount: response?.toolCalls?.length || 0,
       hasFinalMessage: Boolean(response?.finalMessage),
+      errorCode: response?.error?.code || "",
+      errorMessage: response?.error?.message || "",
       codexThreadId: response?.codexThreadId || ""
     }))
   };
+}
+
+export function resolveChatRuntime({
+  runtimeProvider = "",
+  modelProvider = ""
+} = {}) {
+  const requestedRuntimeProvider = normalizeRuntimeAlias(runtimeProvider);
+  const requestedModelProvider = normalizeModelProvider(modelProvider);
+
+  if (requestedRuntimeProvider === "codex") {
+    return {
+      runtimeProvider: "codex",
+      modelProvider: "codex",
+      requestedRuntimeProvider: runtimeProvider || modelProvider || ""
+    };
+  }
+  if (requestedRuntimeProvider === "mock") {
+    return {
+      runtimeProvider: "mock",
+      modelProvider: "mock",
+      requestedRuntimeProvider: runtimeProvider || modelProvider || ""
+    };
+  }
+  if (requestedRuntimeProvider === "forge-query-engine") {
+    return {
+      runtimeProvider: "forge-query-engine",
+      modelProvider: requestedModelProvider === "openai" ? "openai" : "mock",
+      requestedRuntimeProvider: runtimeProvider || modelProvider || ""
+    };
+  }
+
+  if (requestedModelProvider === "codex") {
+    return {
+      runtimeProvider: "codex",
+      modelProvider: "codex",
+      requestedRuntimeProvider: runtimeProvider || modelProvider || ""
+    };
+  }
+  if (requestedModelProvider === "openai") {
+    return {
+      runtimeProvider: "forge-query-engine",
+      modelProvider: "openai",
+      requestedRuntimeProvider: runtimeProvider || modelProvider || ""
+    };
+  }
+  return {
+    runtimeProvider: "mock",
+    modelProvider: "mock",
+    requestedRuntimeProvider: runtimeProvider || modelProvider || ""
+  };
+}
+
+function normalizeRuntimeAlias(value = "") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (["codex", "codex-sdk", "codex_sdk"].includes(normalized)) return "codex";
+  if (["mock", "local", "deterministic"].includes(normalized)) return "mock";
+  if (["forge-query-engine", "forge_query_engine", "query-engine", "query_engine", "forge"].includes(normalized)) {
+    return "forge-query-engine";
+  }
+  if (normalized === "openai") return "";
+  return "";
+}
+
+function normalizeModelProvider(value = "") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["codex", "codex-sdk", "codex_sdk"].includes(normalized)) return "codex";
+  if (normalized === "openai") return "openai";
+  return "mock";
 }
 
 export async function confirmForgeChatTool({

@@ -106,8 +106,8 @@ export const API_CONTRACT = [
   {
     method: "POST",
     path: "/api/workspaces/:workspaceId/chat/turn",
-    body: ["sessionId", "userMessage", "modelProvider", "runtimeProvider", "mode", "confirmation"],
-    response: ["ok", "assistantMessage", "messages", "toolCalls", "toolResults", "proposal", "revision", "pendingConfirmation", "productPlan", "codexThreadId"]
+    body: ["sessionId", "userMessage", "runtime", "modelProvider", "runtimeProvider", "mode", "confirmation"],
+    response: ["ok", "runtimeProvider", "modelProvider", "assistantMessage", "messages", "toolCalls", "toolResults", "proposal", "revision", "pendingConfirmation", "productPlan", "codexThreadId"]
   },
   {
     method: "GET",
@@ -169,8 +169,8 @@ export const API_CONTRACT = [
   {
     method: "POST",
     path: "/api/plans",
-    body: ["message", "initialMessage", "assets", "language", "modelProvider", "runtimeProvider"],
-    response: ["productPlan", "revision", "codexThreadId"]
+    body: ["message", "initialMessage", "assets", "language", "runtime", "modelProvider", "runtimeProvider"],
+    response: ["productPlan", "revision", "runtimeProvider", "modelProvider", "codexThreadId"]
   },
   {
     method: "POST",

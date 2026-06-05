@@ -20,10 +20,17 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-05
 
+### Codex SDK Project Secretary Runtime Direction
+
+- File: `docs/source-materials/2026-06-05-codex-sdk-project-secretary-runtime-direction.md`
+- Status: summarized into the Codex project-task runtime docs.
+- Related docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/WORK_INDEX.md`, `AGENTS.md`
+- Key handles: Codex SDK, project file cabinet, project secretary, Forge tools, skills, thread memory, no cross-project memory, MVP not fully usable.
+
 ### Codex SDK Forge Product Runtime Plan
 
 - File: `docs/source-materials/2026-06-05-codex-sdk-forge-product-runtime-plan.md`
-- Status: implemented as optional Codex SDK runtime provider for Forge product tasks.
+- Status: implemented as Codex SDK project-task runtime mode for Forge product tasks.
 - Related docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `AGENTS.md`
 - Key handles: Codex SDK, @openai/codex-sdk, runtimeProvider codex, codexThreadId, ProductPlan, ContextPack, Forge actions, thread memory, no cross-project memory.
 

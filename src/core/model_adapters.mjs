@@ -5,6 +5,8 @@ import {
   parseCodexToolIntent,
   runCodexProductTurn
 } from "./codex_runtime.mjs";
+import { projectWorkspacePath } from "./project_workspace.mjs";
+import { hydrateProductPlanFromWorkspace } from "./product_plan.mjs";
 
 export function createModelAdapter({
   provider = process.env.FORGE_MODEL_PROVIDER || "mock",
@@ -12,10 +14,11 @@ export function createModelAdapter({
   rootDir = undefined,
   codexFactory = null
 } = {}) {
-  if (provider === "codex") {
-    return new CodexModelAdapter({ workspaceId, rootDir, codexFactory });
+  const normalizedProvider = normalizeAdapterProvider(provider);
+  if (normalizedProvider === "codex") {
+    return new CodexSdkRuntimeAdapter({ workspaceId, rootDir, codexFactory });
   }
-  if (provider === "openai") return new OpenAIResponsesAdapter();
+  if (normalizedProvider === "openai") return new OpenAIResponsesAdapter();
   return new MockModelAdapter();
 }
 
@@ -205,7 +208,7 @@ export class OpenAIResponsesAdapter {
   }
 }
 
-export class CodexModelAdapter {
+export class CodexSdkRuntimeAdapter {
   constructor({
     workspaceId = "",
     rootDir = undefined,
@@ -213,6 +216,7 @@ export class CodexModelAdapter {
   } = {}) {
     this.workspaceId = workspaceId;
     this.rootDir = rootDir;
+    this.workspacePath = workspaceId ? projectWorkspacePath(workspaceId, { rootDir }) : "";
     this.codexFactory = codexFactory;
   }
 
@@ -224,6 +228,7 @@ export class CodexModelAdapter {
     const thread = await ensureCodexProjectThread({
       workspaceId: this.workspaceId,
       rootDir: this.rootDir,
+      workspacePath: this.workspacePath,
       codexFactory: this.codexFactory
     });
     if (!thread.ok) return thread;
@@ -239,6 +244,11 @@ export class CodexModelAdapter {
       })
     });
     if (!run.ok) return run;
+    hydrateProductPlanFromWorkspace({
+      planId: this.workspaceId,
+      rootDir: this.rootDir,
+      force: true
+    });
     const parsed = parseCodexToolIntent(run.text);
     return {
       ok: true,
@@ -249,6 +259,15 @@ export class CodexModelAdapter {
       codexThreadCreated: Boolean(thread.created)
     };
   }
+}
+
+export class CodexModelAdapter extends CodexSdkRuntimeAdapter {}
+
+function normalizeAdapterProvider(provider = "") {
+  const value = String(provider || "").trim().toLowerCase();
+  if (value === "codex") return "codex";
+  if (value === "openai") return "openai";
+  return "mock";
 }
 
 export function openAIResponsesUrl(baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com") {

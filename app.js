@@ -463,6 +463,7 @@ async function createInitialPlan() {
     const response = await apiPost("/api/plans", {
       initialMessage: turns[0],
       language: state.lang,
+      runtime: FORGE_LOCAL_CHAT_PROVIDER,
       modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
       runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
     });
@@ -608,12 +609,14 @@ async function sendTurn(message) {
       ? await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/turn`, {
         sessionId: state.chatSessionId,
         userMessage: message,
+        runtime: FORGE_LOCAL_CHAT_PROVIDER,
         modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
         runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
       })
       : await apiPost("/api/plans", {
         initialMessage: message,
         language: state.lang,
+        runtime: FORGE_LOCAL_CHAT_PROVIDER,
         modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
         runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
       });

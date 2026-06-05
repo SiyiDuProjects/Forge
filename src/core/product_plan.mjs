@@ -6,7 +6,8 @@ import {
   persistProjectPlan,
   persistReviewSubmission,
   persistRevision,
-  persistRevisionRevert
+  persistRevisionRevert,
+  readRuntimePlan
 } from "./project_workspace.mjs";
 import { createReviewSubmission } from "./review_queue.mjs";
 import { isGenerationRequest, processUserTurn } from "./sparker_orchestrator.mjs";
@@ -168,6 +169,16 @@ export function addProductPlanTurn({ planId, message, assetIds = [], assets = []
 
 export function getProductPlan(planId) {
   return plans.get(planId);
+}
+
+export function hydrateProductPlanFromWorkspace({ planId, rootDir, force = false } = {}) {
+  const id = String(planId || "").trim();
+  if (!id) return null;
+  if (!force && plans.has(id)) return plans.get(id);
+  const plan = readRuntimePlan({ workspaceId: id, rootDir });
+  if (!plan?.planId) return null;
+  plans.set(plan.planId, plan);
+  return plan;
 }
 
 export function listProductPlans() {

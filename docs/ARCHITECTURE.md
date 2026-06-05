@@ -10,11 +10,13 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 - `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, project context packs, tool metadata, QueryEngine/Codex runtime chat routes, and review submission.
 - `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, Forge actions, project folder persistence, context pack building, tool metadata, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
 - `src/core/forge_query_engine.mjs`: Forge-native chat runtime loop. It persists user messages before model work, builds ContextPack and prompt sections, exports tool schemas, calls a model adapter, runs the permission gate, executes Forge actions, records tool events, persists assistant messages, and returns UI-ready payloads.
-- `src/core/model_adapters.mjs`: deterministic local Forge adapter for default QueryEngine/UI turns and tests plus optional OpenAI Responses and Codex SDK adapters behind explicit configuration.
-- `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks. It creates/resumes one Codex thread per Forge project, injects Forge ContextPack/tool boundaries into that thread, parses Codex JSON tool intent, and reports SDK/thread errors without fabricating ProductPlan state.
+- `src/core/model_adapters.mjs`: deterministic local Forge adapter for default QueryEngine/UI turns and tests plus OpenAI Responses and Codex SDK runtime adapters behind explicit configuration.
+- `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks. It creates/resumes one Codex thread per Forge project, runs that thread with the project workspace as the working directory, injects Forge ContextPack/tool boundaries, parses Codex JSON tool intent, and reports SDK/thread/guard errors without fabricating ProductPlan state.
+- `src/core/guarded_files.mjs`: guarded-file snapshot and violation detector for Codex SDK turns. It blocks accidental direct edits to ProductPlan, manifests, revision sources, GeometrySpec, and artifacts when no corresponding Forge tool event was recorded.
 - `src/core/tool_schema_exporter.mjs`, `src/core/tool_executor.mjs`, `src/core/permission_gate.mjs`, `src/core/chat_session_store.mjs`, and `src/core/prompt_sections.mjs`: the narrow Claude Code-inspired runtime support layer for tool schemas, action dispatch, confirmation/denial, append-only chat sessions, and prompt assembly.
 - `src/core/forge_actions.mjs`: stable action contract for future chat/tool-calling layers. It exposes summaries, component search, proposal staging, committed patch application, regeneration, validation, revert, and artifact retrieval while keeping ProductPlan and GeometrySpec under Forge control.
-- `src/core/project_workspace.mjs`: file-backed Forge project runtime. It writes `data/workspaces/<planId>/project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, proposal JSON files, immutable revision folders, revision-scoped artifacts, local review files, and markdown indexes.
+- `src/core/project_workspace.mjs`: file-backed Forge project runtime. It writes `data/workspaces/<planId>/project_manifest.json`, `runtime_plan.json`, `product_plan.json`, append-only `events.jsonl`, proposal JSON files, immutable revision folders, revision-scoped artifacts, local review files, generated `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, and project-local `skills/*.md`.
+- `scripts/forge-tool.mjs`: CLI wrapper around Forge actions. Codex can run it from inside a project workspace to inspect summaries, search components, propose/stage/commit/apply changes, validate, generate, revert, fetch artifacts, submit local review material, or reject proposals without directly writing guarded files.
 - `src/core/context_pack_builder.mjs`: compact context builder for future chat/runtime layers. It reads project folder summaries and metadata while excluding raw GLB/STL/STEP bytes and full event history.
 - `src/core/tool_registry.mjs`: Tool Protocol metadata for every Forge action, including schema handles, confirmation policy, read/write behavior, side effects, concurrency lock, rollback strategy, and disallowed raw mutation targets.
 - `src/contracts`: stable names for API routes, chain steps, statuses, and supported languages.
@@ -24,7 +26,7 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 
 ## Flow
 
-1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace. When `runtimeProvider: "codex"` is active, the project manifest also stores a `codexThreadId` and subsequent turns resume that Codex thread.
+1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace. When `runtimeProvider: "codex"` is active, the project manifest also stores a `codexThreadId` and subsequent turns resume that Codex thread inside the project workspace.
 2. `interpretRequest` extracts product type, screen, standardized 3D printed enclosure finish, sources, functions, and options.
 3. `matchModules` chooses stocked modules, review-required modules, the standard 3D printed shell, and deferred modules from the catalog.
 4. `evaluateRisk` marks review level, warnings, and blocked scope. Camera and battery stay reviewable as human-review risks; motion structures leave the standard path.
@@ -39,15 +41,18 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 
 ## QueryEngine Boundary
 
-Forge QueryEngine is a narrow adaptation of Claude Code's query loop. It does not turn Forge into a general coding agent. It only connects model tool calls to the existing Forge action contract:
+Forge QueryEngine is a narrow adaptation of Claude Code's query loop. It does not turn Forge into a general coding agent. It only connects model or Codex product-task decisions to the existing Forge action contract:
 
 - Context comes from `ContextPack`, not raw project-file scanning.
 - Tools come from `tool_registry.mjs`, not ad hoc model instructions.
-- Codex SDK turns may own product-task intent and thread context, but their output is still parsed into Forge tool intent.
+- Codex SDK turns may own product-task intent, thread context, follow-up decisions, and task splitting for one Forge project.
+- Codex reads generated project workspace files such as `AGENTS.md`, `WORK_INDEX.md`, `CURRENT_STATE.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, and `skills/*.md`.
+- Codex may call `forge-tool` itself or return Forge tool intent JSON. In both cases, Forge actions own the actual state mutation.
 - Tool execution goes through `tool_executor.mjs` and `forge_actions.mjs`.
 - Mutations require explicit wording or `/chat/confirm` approval when the permission gate marks them ambiguous.
+- Guarded-file snapshots reject Codex turns that directly edit source-of-truth files without a Forge tool event.
 - Chat transcripts live in `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`.
-- Raw GeometrySpec, GLB, STL, STEP, mesh vertices, arbitrary file writes, shell tools, MCP, remote sessions, plugins, supplier ordering, and manufacturing actions remain outside V1.
+- Raw GeometrySpec, GLB, STL, STEP, mesh vertices, arbitrary file writes, arbitrary shell state mutation, MCP, remote sessions, plugins, supplier ordering, and manufacturing actions remain outside V1. The bounded exception is running the generated `forge-tool` CLI from the project workspace.
 
 ## Action Boundary
 
@@ -69,8 +74,9 @@ Project-changing actions append to the workspace `events.jsonl` log and persist 
 The local project folder is a durable workspace record, not a user-facing CAD export:
 
 - Source of truth: `project_manifest.json` including optional `codexThreadId`, `product_plan.json`, `events.jsonl`, `proposals/*.json`, `revisions/*/revision_manifest.json`, `revisions/*/product_plan.json`, `revisions/*/geometry-spec.json`, and `revisions/*/component_descriptors.json`.
+- Runtime state: `runtime_plan.json` preserves the full Forge runtime ProductPlan so `forge-tool` can restore the project in a separate process.
 - Derived artifacts: `revisions/*/artifacts/model.glb`, STL shell files, STEP handoff, `validation_report.json`, `component_asset_manifest.json`, and `design_summary.md`.
-- Context aids: `CURRENT_STATE.md`, `WORK_INDEX.md`, and `DECISIONS.md` are generated summaries for humans and AI context. JSON/events remain authoritative.
+- Context aids: generated `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, and `skills/*.md` are summaries/rules for humans and Codex. JSON/events remain authoritative.
 - Chat/runtime layers must call Forge tools/actions. They must not directly edit `GeometrySpec`, GLB, STL, STEP, arbitrary files, or mesh data.
 
 ## UI Boundary
