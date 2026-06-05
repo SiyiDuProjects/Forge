@@ -69,6 +69,14 @@ Runtime/provider options:
 
 The browser can set `window.FORGE_RUNTIME_PROVIDER = "codex"` or `localStorage.forgeRuntimeProvider = "codex"` before loading the app. If the Codex SDK is unavailable or cannot start/resume a thread, the API returns a clear structured error and the UI keeps the draft input instead of fabricating a ProductPlan response.
 
+Optional live Codex smoke:
+
+```bash
+npm run smoke:codex-live
+```
+
+This script is intentionally not part of `npm run check`. It creates an isolated smoke workspace, uses `runtimeProvider: "codex"`, runs the demo sequence of add buttons/buzzer, generate 3D, move USB-C, and revert, then fails with stable JSON if Codex cannot start, produces a guarded-file violation, leaves a pending confirmation, or misses the required state checks.
+
 Codex runtime project workspace files:
 
 - `AGENTS.md`: project-local rules and guarded-file list.

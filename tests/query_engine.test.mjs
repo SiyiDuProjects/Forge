@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import { loadChatSession } from "../src/core/chat_session_store.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
@@ -18,6 +20,35 @@ function createChatPlan() {
     initialMessage: "Small woodgrain desktop display for photos and weather, 3.5 inch, USB-C powered.",
     language: "en"
   }).productPlan;
+}
+
+const FORGE_TOOL = fileURLToPath(new URL("../scripts/forge-tool.mjs", import.meta.url));
+
+function runForgeToolForCodex(cwd, args) {
+  const result = spawnSync(process.execPath, [FORGE_TOOL, ...args], {
+    cwd,
+    encoding: "utf8"
+  });
+  let json = null;
+  try {
+    json = JSON.parse(result.stdout || "{}");
+  } catch {
+    json = {
+      ok: false,
+      error: {
+        code: "INVALID_FORGE_TOOL_JSON",
+        message: result.stdout || result.stderr || "forge-tool did not return JSON"
+      }
+    };
+  }
+  if (result.status !== 0 || json?.ok === false) {
+    throw new Error(json?.error?.message || result.stderr || `forge-tool failed: ${args.join(" ")}`);
+  }
+  return json;
+}
+
+function readRuntimePlan(workspacePath) {
+  return JSON.parse(readFileSync(`${workspacePath}/runtime_plan.json`, "utf8"));
 }
 
 test("QueryEngine runs a direct model tool loop through Forge actions", async () => {
@@ -366,6 +397,149 @@ test("Codex runtime reports guarded direct file writes instead of accepting them
   assert.equal(result.modelResponses[0].errorCode, "GUARD_VIOLATION");
 });
 
+test("Codex runtime demo can drive idea, modification, generation, USB move, and revert through forge-tool", async () => {
+  const plan = createProductPlan({
+    initialMessage: "我想做一个带 3.5 寸屏幕的小桌面闹钟。",
+    language: "zh"
+  }).productPlan;
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const initialRevisionId = plan.currentRevisionId;
+  let revisionBeforeUsbMove = "";
+  const observedToolCommands = [];
+  const codexFactory = async () => ({
+    startThread(options) {
+      return fakeForgeToolCodexThread("forge-tool-demo-thread", options);
+    },
+    resumeThread(threadId, options) {
+      return fakeForgeToolCodexThread(threadId, options);
+    }
+  });
+
+  function fakeForgeToolCodexThread(id, options) {
+    return {
+      id,
+      async run(prompt) {
+        const cwd = options.workingDirectory;
+        const currentMessage = String(prompt || "").split("## Current User Message").pop() || "";
+        const tool = (args) => {
+          observedToolCommands.push(args.join(" "));
+          return runForgeToolForCodex(cwd, args);
+        };
+        if (currentMessage.includes("加两个按钮") || currentMessage.includes("蜂鸣器")) {
+          const search = tool(["search-component", "--query", "button", "--componentType", "button", "--limit", "5"]);
+          const patches = JSON.stringify([
+            {
+              type: "component_patch",
+              add: [
+                { componentType: "button", componentId: "button_6mm", quantity: 2 },
+                { componentType: "speaker", componentId: "speaker_20mm", quantity: 1 }
+              ]
+            },
+            {
+              type: "plan_patch",
+              set: {
+                "requirements.buzzer": true
+              }
+            },
+            {
+              type: "geometry_preference_patch",
+              set: {
+                "placements.buttons.semanticPosition": "right_side",
+                "placements.speaker.semanticPosition": "back_right"
+              }
+            }
+          ]);
+          const applied = tool(["apply", "--message", "Add right-side buttons and a buzzer/speaker alert module.", "--patches", patches]);
+          return codexJson(`已调用 forge-tool 搜索 ${search.results.length} 个按钮组件，并创建版本 ${applied.newRevisionId}。`);
+        }
+        if (currentMessage.includes("生成 3D 模型")) {
+          const validation = tool(["validate"]);
+          const generated = tool(["generate", "--reason", "user_confirmed_model_generation"]);
+          return codexJson(`已先 validate=${validation.status}，再生成 3D 模型版本 ${generated.revisionId}。`);
+        }
+        if (currentMessage.includes("USB-C") || currentMessage.includes("后面左侧")) {
+          revisionBeforeUsbMove = readRuntimePlan(cwd).currentRevisionId;
+          const patches = JSON.stringify([
+            {
+              type: "geometry_preference_patch",
+              set: {
+                "placements.usb_c.semanticPosition": "back_left"
+              }
+            }
+          ]);
+          const applied = tool(["apply", "--message", "Move USB-C to the rear-left side.", "--patches", patches]);
+          return codexJson(`已通过 forge-tool 移动 USB-C，创建版本 ${applied.newRevisionId}。`);
+        }
+        if (currentMessage.includes("回退")) {
+          const reverted = tool(["revert", "--revisionId", revisionBeforeUsbMove]);
+          return codexJson(`已回退到 ${reverted.currentRevisionId}。`);
+        }
+        return codexJson("我会先读取项目状态再决定下一步。");
+      }
+    };
+  }
+
+  const addTurn = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_forge_tool_demo",
+    userMessage: "加两个按钮，放在右侧，再加一个蜂鸣器。",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+  assert.equal(addTurn.ok, true);
+  assert.equal(addTurn.codexThreadId, "forge-tool-demo-thread");
+  assert.equal(addTurn.toolCalls.length, 0);
+  assert.match(addTurn.assistantMessage, /forge-tool/);
+  assert.equal(addTurn.productPlan.workspaceState.productPlan.requirements.buttons, 2);
+  assert.equal(addTurn.productPlan.workspaceState.productPlan.requirements.buzzer, true);
+  assert.equal(addTurn.productPlan.workspaceState.productPlan.geometryPreferences.placements.buttons.semanticPosition, "right_side");
+
+  const generateTurn = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_forge_tool_demo",
+    userMessage: "生成 3D 模型。",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+  assert.equal(generateTurn.ok, true);
+  assert.equal(generateTurn.toolCalls.length, 0);
+  assert.ok(generateTurn.productPlan.currentRevisionId);
+  const generatedRevision = generateTurn.productPlan.revisions.find((revision) => revision.revisionId === generateTurn.productPlan.currentRevisionId);
+  assert.equal(generatedRevision.modelArtifacts.status, "generated");
+  assert.ok(generatedRevision.modelArtifacts.artifacts.glb.localPath);
+  assert.ok(generatedRevision.modelArtifacts.artifacts.stl.localPath);
+  assert.ok(generatedRevision.modelArtifacts.artifacts.step.localPath);
+
+  const usbTurn = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_forge_tool_demo",
+    userMessage: "把 USB-C 移到后面左侧。",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+  assert.equal(usbTurn.ok, true);
+  assert.notEqual(usbTurn.productPlan.currentRevisionId, revisionBeforeUsbMove);
+  assert.equal(usbTurn.productPlan.workspaceState.productPlan.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
+
+  const revertTurn = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_forge_tool_demo",
+    userMessage: "回退到上一个版本。",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+  assert.equal(revertTurn.ok, true);
+  assert.equal(revertTurn.productPlan.currentRevisionId, revisionBeforeUsbMove);
+  assert.notEqual(revertTurn.productPlan.currentRevisionId, initialRevisionId);
+  assert.ok(observedToolCommands.some((command) => command.startsWith("search-component")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("validate")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("generate")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("revert")));
+  const events = readWorkspaceEvents({ workspaceId: plan.planId });
+  assert.ok(events.some((event) => event.type === "revision_reverted"));
+  assert.ok(events.some((event) => event.type === "validation_completed"));
+});
+
 test("Codex runtime keeps project threads isolated", async () => {
   const first = createChatPlan();
   const second = createChatPlan();
@@ -400,6 +574,15 @@ test("Codex runtime keeps project threads isolated", async () => {
   assert.equal(firstAgain.codexThreadId, "thread-1");
   assert.notEqual(readProjectManifest({ workspaceId: first.planId }).codexThreadId, readProjectManifest({ workspaceId: second.planId }).codexThreadId);
 });
+
+function codexJson(assistantMessage) {
+  return {
+    finalResponse: JSON.stringify({
+      assistantMessage,
+      toolCalls: []
+    })
+  };
+}
 
 test("Codex runtime persists delayed SDK thread id after first run", async () => {
   const plan = createChatPlan();

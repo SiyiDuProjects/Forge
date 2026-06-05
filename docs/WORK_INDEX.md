@@ -28,6 +28,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 - Main docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `AGENTS.md`
 - Key code handles:
   - `scripts/forge-tool.mjs`
+  - `scripts/codex-live-smoke.mjs`
   - `src/core/codex_runtime.mjs`
   - `src/core/model_adapters.mjs`
   - `src/core/forge_query_engine.mjs`
@@ -40,8 +41,8 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `tests/project_workspace.test.mjs`
   - `tests/query_engine.test.mjs`
 - Retrieval handles: Codex SDK, @openai/codex-sdk, CodexSdkRuntimeAdapter, runtime codex, runtimeProvider codex, FORGE_CHAT_RUNTIME_PROVIDER, forgeRuntimeProvider, codexThreadId, project file cabinet, project secretary, AGENTS.md in project workspace, FORGE_TOOLS.md, skills/, forge-tool, runtime_plan.json, guarded files, GUARD_VIOLATION, no cross-project memory.
-- Verification: `node --check server.mjs`, `node --check app.js`, `node --test tests/query_engine.test.mjs` passes with 17 QueryEngine tests, `node --test tests/project_workspace.test.mjs` passes with 9 project-workspace tests, and full `npm run check` passes with 58 tests.
-- Next: do a live Codex SDK smoke only in an environment where the Codex CLI/SDK can start a thread. Default UI remains `runtimeProvider: "mock"` until live Codex runtime is deliberately selected.
+- Verification: `node --check server.mjs`, `node --check app.js`, `node --test tests/query_engine.test.mjs` passes with 18 QueryEngine tests including the forge-tool demo path, `node --test tests/project_workspace.test.mjs` passes with 9 project-workspace tests, `node scripts/codex-live-smoke.mjs` skips without live opt-in, and full `npm run check` passes with 59 tests.
+- Next: do `npm run smoke:codex-live` only in an environment where the Codex CLI/SDK can start a thread. Default UI remains `runtimeProvider: "mock"` until live Codex runtime is deliberately selected.
 
 ### 2026-06-05 - Center Thread Chat-Only Cleanup
 

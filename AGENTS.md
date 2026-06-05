@@ -45,6 +45,7 @@ Current product boundary:
 - Start local server: `npm start`
 - Dev alias: `npm run dev`
 - Syntax check: `npm run check`
+- Optional live Codex SDK smoke: `npm run smoke:codex-live` (requires a working Codex CLI/SDK environment and is not part of default checks)
 
 Current known local limitation:
 

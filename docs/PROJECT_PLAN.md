@@ -211,6 +211,7 @@ Implemented:
 - Generated project-workspace context for Codex: `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, `skills/*.md`, and `runtime_plan.json`.
 - `forge-tool` CLI wrapper for Codex-side tool calls into Forge actions without direct guarded-file mutation.
 - Guarded-file detector for Codex SDK turns so direct edits to ProductPlan, manifests, revision sources, GeometrySpec, or artifacts return `GUARD_VIOLATION`.
+- Optional live Codex smoke script: `npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite.
 - API routes for `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
 - Minimal center-thread QueryEngine trace and confirmation card in the UI.
 
@@ -315,7 +316,7 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, QueryEngine / Chat Runtime V1, and Codex SDK project-task runtime mode are implemented. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface. A real Codex SDK live smoke is still required before calling the Codex-backed MVP fully usable.
+Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, QueryEngine / Chat Runtime V1, and Codex SDK project-task runtime mode are implemented. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface. Default tests cover the Codex path with a fake Codex thread that actually calls `forge-tool`; a real Codex SDK live smoke via `npm run smoke:codex-live` is still required before calling the Codex-backed MVP fully usable in a live environment.
 
 - Keep user turns creating ProductPlan revisions.
 - Keep prototype structure preview (3D), electronics layout, quote, and review submission on unified jobs.
