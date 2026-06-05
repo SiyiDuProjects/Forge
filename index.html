@@ -112,6 +112,17 @@
                 </span>
                 <input type="checkbox" checked />
               </label>
+              <label class="settings-row">
+                <span>
+                  <strong>运行模式</strong>
+                  <small>默认使用本地 Forge 工具链；需要真实 Codex 时手动切换。</small>
+                </span>
+                <select id="runtimeProviderSelect" aria-label="运行模式">
+                  <option value="mock" selected>本地 Forge</option>
+                  <option value="forge-query-engine">Forge QueryEngine</option>
+                  <option value="codex">Codex</option>
+                </select>
+              </label>
             </section>
 
             <section class="settings-panel" data-settings-panel="language" hidden>

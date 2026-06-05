@@ -478,6 +478,59 @@ pre {
   gap: 6px;
 }
 
+.trace-timeline {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgba(232, 230, 223, 0.76);
+  border-bottom: 1px solid rgba(232, 230, 223, 0.58);
+  padding: 8px 0;
+}
+
+.trace-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.7fr) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 2px;
+  color: #858984;
+  font-size: 12px;
+}
+
+.trace-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #303430;
+  font-size: 12px;
+  text-align: right;
+}
+
+.trace-row p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #70766f;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.trace-row.running strong {
+  color: #1f6f58;
+}
+
+.trace-row.pending strong {
+  color: #7c715d;
+}
+
+.trace-row.blocked strong {
+  color: var(--warn);
+}
+
 .workspace-view {
   gap: 18px;
 }

@@ -66,6 +66,8 @@ test("QueryEngine runs a direct model tool loop through Forge actions", async ()
   assert.equal(result.ok, true);
   assert.equal(result.pendingConfirmation, null);
   assert.ok(result.assistantMessage.includes(result.revision.revisionId));
+  assert.match(result.assistantMessage, /explicit confirmation/);
+  assert.doesNotMatch(result.assistantMessage, /updated the 3D model\/shell artifact state/);
   assert.deepEqual(result.toolCalls.map((call) => call.name), ["searchComponentLibrary", "applyDesignPatch"]);
   assert.equal(result.toolResults.every((item) => item.ok), true);
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);

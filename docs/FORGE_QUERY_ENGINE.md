@@ -68,7 +68,7 @@ Runtime/provider options:
 - `runtimeProvider: "mock"`: deterministic local Forge adapter, used by default for stable local UI/tests.
 - `modelProvider: "openai"` or `FORGE_CHAT_MODEL_PROVIDER=openai`: use the OpenAI Responses adapter behind `OPENAI_API_KEY`.
 
-The browser can set `window.FORGE_RUNTIME_PROVIDER = "codex"` or `localStorage.forgeRuntimeProvider = "codex"` before loading the app. If the Codex SDK is unavailable or cannot start/resume a thread, the API returns a clear structured error and the UI keeps the draft input instead of fabricating a ProductPlan response.
+The browser can switch runtime providers from `Forge 设置 -> 运行模式`, or set `window.FORGE_RUNTIME_PROVIDER = "codex"` / `localStorage.forgeRuntimeProvider = "codex"` before loading the app. If the Codex SDK is unavailable or cannot start/resume a thread, the API returns a clear structured error and the UI keeps the draft input instead of fabricating a ProductPlan response.
 
 If a model-selected tool call is denied by the permission gate, QueryEngine records the denied result and feeds it back into the next model iteration. This lets Codex recover from a rejected raw GeometrySpec/artifact mutation by choosing a legal Forge tool path such as `proposeDesignChange` or a structured patch.
 
@@ -206,3 +206,4 @@ QueryEngine returns:
 - `codexThreadId` when the Codex runtime provider is active
 
 The current UI renders a compact QueryEngine trace and pending confirmation card in the center thread.
+The trace is result-based rather than SSE streaming: during an active turn it shows a running state, and after the API returns it displays runtime/model response counts, Forge tool summaries, proposal or revision state, explicit confirmation requirements, Codex thread id when available, and artifact generation status.

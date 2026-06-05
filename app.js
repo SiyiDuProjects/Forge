@@ -3,15 +3,25 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const SUPPORTED_LANGUAGES = ["zh", "en"];
+const RUNTIME_PROVIDER_VALUES = ["mock", "forge-query-engine", "codex"];
 const threePreviewInstances = new Map();
-const FORGE_LOCAL_CHAT_PROVIDER = localChatProvider();
+const INITIAL_RUNTIME_PROVIDER = localChatProvider();
 
 function localChatProvider() {
   try {
-    return window.FORGE_RUNTIME_PROVIDER || window.localStorage.getItem("forgeRuntimeProvider") || "mock";
+    return normalizeRuntimeProvider(window.FORGE_RUNTIME_PROVIDER || window.localStorage.getItem("forgeRuntimeProvider"));
   } catch {
     return "mock";
   }
+}
+
+function normalizeRuntimeProvider(value = "") {
+  const normalized = String(value || "mock");
+  return RUNTIME_PROVIDER_VALUES.includes(normalized) ? normalized : "mock";
+}
+
+function currentRuntimeProvider() {
+  return normalizeRuntimeProvider(state?.runtimeProvider);
 }
 
 const copy = {
@@ -53,8 +63,26 @@ const copy = {
     rerunNotice: "已更新 ProductPlan revision",
     chatRuntimeNotice: "Forge 工具链已更新项目",
     chatConfirmationRequired: "需要确认后执行",
-    chatTraceTitle: "工具调用",
+    chatTraceTitle: "执行过程",
+    chatTraceRunning: "正在执行",
     chatTraceEmpty: "本轮没有执行工具",
+    traceReceived: "收到请求",
+    tracePrepare: "准备项目上下文",
+    traceWaiting: "等待运行结果",
+    traceRuntime: "运行模式",
+    traceModel: "模型响应",
+    traceToolDenied: "工具被拦截，已回流修正",
+    traceProposal: "方案变更",
+    traceRevision: "版本更新",
+    traceArtifacts: "3D 生成",
+    traceConfirmation: "等待确认",
+    traceFailed: "执行失败",
+    traceDone: "完成",
+    runtimeMode: "运行模式",
+    runtimeLocal: "本地 Forge",
+    runtimeQueryEngine: "Forge QueryEngine",
+    runtimeCodex: "Codex",
+    runtimeChanged: "运行模式已更新",
     approveChange: "确认执行",
     rejectChange: "取消",
     submitNeedContact: "请先填写姓名和邮箱",
@@ -186,6 +214,7 @@ const copy = {
       ["对话优先", "用户持续聊天，右侧 ProductPlan 实时更新。"],
       ["标准 3D 打印外壳", "木纹、鼠尾草绿、石墨黑都只是标准外壳的表面效果。"],
       ["结果预览优先", "3D 视图用于理解原型结果，不提供建模编辑工具。"],
+      ["运行模式", "默认使用本地 Forge 工具链；需要真实 Codex 时手动切换。"],
       ["界面语言", "保留中文和 English 两套文案。"],
       ["文案维护规则", "新增按钮、状态、弹窗、文档都要同步更新中英文。"]
     ],
@@ -237,8 +266,26 @@ const copy = {
     rerunNotice: "ProductPlan revision updated",
     chatRuntimeNotice: "Forge tool runtime updated the project",
     chatConfirmationRequired: "Confirmation required",
-    chatTraceTitle: "Tool calls",
+    chatTraceTitle: "Execution trace",
+    chatTraceRunning: "Running",
     chatTraceEmpty: "No tool executed in this turn",
+    traceReceived: "Request received",
+    tracePrepare: "Preparing project context",
+    traceWaiting: "Waiting for runtime result",
+    traceRuntime: "Runtime",
+    traceModel: "Model response",
+    traceToolDenied: "Tool denied and fed back",
+    traceProposal: "Plan change",
+    traceRevision: "Revision update",
+    traceArtifacts: "3D generation",
+    traceConfirmation: "Waiting for confirmation",
+    traceFailed: "Execution failed",
+    traceDone: "Done",
+    runtimeMode: "Runtime mode",
+    runtimeLocal: "Local Forge",
+    runtimeQueryEngine: "Forge QueryEngine",
+    runtimeCodex: "Codex",
+    runtimeChanged: "Runtime mode updated",
     approveChange: "Confirm",
     rejectChange: "Cancel",
     submitNeedContact: "Enter name and email first",
@@ -370,6 +417,7 @@ const copy = {
       ["Conversation first", "The user keeps chatting while the right-side ProductPlan updates."],
       ["Standard 3D printed shell", "Woodgrain, sage, and graphite are finish treatments on the same shell path."],
       ["Result preview first", "The 3D view helps users understand the prototype result; it does not expose modeling tools."],
+      ["Runtime mode", "Use the local Forge tool runtime by default; switch manually when a real Codex run is needed."],
       ["Interface language", "Keep both Chinese and English copy."],
       ["Copy maintenance", "Buttons, statuses, popovers, and docs must stay bilingual."]
     ],
@@ -409,8 +457,10 @@ const state = {
   submittingReview: false,
   chatSessionId: "session_default",
   lastChatTurn: null,
+  activeTrace: null,
   pendingConfirmation: null,
   runtimeError: "",
+  runtimeProvider: INITIAL_RUNTIME_PROVIDER,
   workspaceToken: 0,
   contactInfo: { name: "", email: "" }
 };
@@ -432,6 +482,7 @@ const dom = {
   newProject: document.querySelector("#newProject"),
   openSettings: document.querySelector("#openSettings"),
   languageSelect: document.querySelector("#languageSelect"),
+  runtimeProviderSelect: document.querySelector("#runtimeProviderSelect"),
   floatingLayer: document.querySelector("#floatingLayer"),
   dfmPopover: document.querySelector("#dfmPopover")
 };
@@ -463,9 +514,9 @@ async function createInitialPlan() {
     const response = await apiPost("/api/plans", {
       initialMessage: turns[0],
       language: state.lang,
-      runtime: FORGE_LOCAL_CHAT_PROVIDER,
-      modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
-      runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
+      runtime: currentRuntimeProvider(),
+      modelProvider: currentRuntimeProvider(),
+      runtimeProvider: currentRuntimeProvider()
     });
     let productPlan = response.productPlan;
     for (const message of turns.slice(1)) {
@@ -515,8 +566,10 @@ function createProjectRecord({ productPlan = null, title = "", kind = "user", is
     productPlan,
     chatSessionId: createSessionId(projectId),
     lastChatTurn: null,
+    activeTrace: null,
     pendingConfirmation: null,
     runtimeError: "",
+    runtimeProvider: state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER,
     contactInfo: productPlan?.contactInfo || { name: "", email: "" },
     createdAt: new Date().toISOString()
   };
@@ -527,8 +580,10 @@ function saveActiveProject() {
   if (!project) return;
   project.productPlan = state.productPlan;
   project.lastChatTurn = state.lastChatTurn;
+  project.activeTrace = state.activeTrace;
   project.pendingConfirmation = state.pendingConfirmation;
   project.runtimeError = state.runtimeError;
+  project.runtimeProvider = state.runtimeProvider;
   project.contactInfo = { ...state.contactInfo };
   project.title = state.productPlan ? projectTitleFromPlan(state.productPlan) : (project.title || t("newDraftTitle"));
 }
@@ -541,8 +596,10 @@ function activateProject(projectId) {
   state.productPlan = project.productPlan || null;
   state.chatSessionId = project.chatSessionId || createSessionId(project.projectId);
   state.lastChatTurn = project.lastChatTurn || null;
+  state.activeTrace = project.activeTrace || null;
   state.pendingConfirmation = project.pendingConfirmation || null;
   state.runtimeError = project.runtimeError || "";
+  state.runtimeProvider = project.runtimeProvider || state.runtimeProvider || INITIAL_RUNTIME_PROVIDER;
   state.contactInfo = { ...(project.contactInfo || state.productPlan?.contactInfo || { name: "", email: "" }) };
   state.activeSidebar = "chat";
   return true;
@@ -565,16 +622,20 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
   project.title = projectTitleFromPlan(productPlan);
   project.chatSessionId = fields.chatSessionId || project.chatSessionId || createSessionId(productPlan.planId);
   project.lastChatTurn = fields.lastChatTurn ?? project.lastChatTurn ?? null;
+  project.activeTrace = fields.activeTrace ?? project.activeTrace ?? null;
   project.pendingConfirmation = fields.pendingConfirmation ?? project.pendingConfirmation ?? null;
   project.runtimeError = fields.runtimeError || "";
+  project.runtimeProvider = fields.runtimeProvider || state.runtimeProvider || project.runtimeProvider || INITIAL_RUNTIME_PROVIDER;
   project.contactInfo = productPlan.contactInfo || project.contactInfo || { name: "", email: "" };
   project.kind = fields.kind || project.kind || "user";
   state.activeProjectId = project.projectId;
   state.productPlan = productPlan;
   state.chatSessionId = project.chatSessionId;
   state.lastChatTurn = project.lastChatTurn;
+  state.activeTrace = project.activeTrace;
   state.pendingConfirmation = project.pendingConfirmation;
   state.runtimeError = project.runtimeError;
+  state.runtimeProvider = project.runtimeProvider;
   state.contactInfo = { ...project.contactInfo };
   return project;
 }
@@ -597,37 +658,93 @@ function syncActiveProject(fields = {}) {
   saveActiveProject();
 }
 
+function createRunningTrace({ message = "", hasRealPlan = false } = {}) {
+  return {
+    ok: true,
+    traceState: "running",
+    traceKind: hasRealPlan ? "chat_turn" : "plan_create",
+    userMessage: message,
+    runtimeProvider: currentRuntimeProvider(),
+    modelProvider: currentRuntimeProvider(),
+    toolCalls: [],
+    toolResults: [],
+    modelResponses: [],
+    eventsAppended: [],
+    startedAt: new Date().toISOString()
+  };
+}
+
+function createFailedTrace({ message = "", error = "" } = {}) {
+  return {
+    ok: false,
+    traceState: "failed",
+    traceKind: "chat_turn",
+    userMessage: message,
+    runtimeProvider: currentRuntimeProvider(),
+    modelProvider: currentRuntimeProvider(),
+    assistantMessage: error || t("sendFailed"),
+    toolCalls: [],
+    toolResults: [],
+    modelResponses: [],
+    eventsAppended: []
+  };
+}
+
+function planCreationTrace(response = {}, message = "") {
+  return {
+    ok: true,
+    traceState: "done",
+    traceKind: "plan_create",
+    userMessage: message,
+    runtimeProvider: response.runtimeProvider || currentRuntimeProvider(),
+    modelProvider: response.modelProvider || response.runtimeProvider || currentRuntimeProvider(),
+    codexThreadId: response.codexThreadId || response.productPlan?.workspaceState?.codexThreadId || "",
+    assistantMessage: response.assistantMessage || t("rerunNotice"),
+    toolCalls: [],
+    toolResults: [],
+    modelResponses: response.codexThreadId ? [{ ok: true, toolCallCount: 0, codexThreadId: response.codexThreadId }] : [],
+    eventsAppended: [],
+    revision: response.revision || response.productPlan?.revisions?.at?.(-1) || null,
+    productPlan: response.productPlan || null
+  };
+}
+
 async function sendTurn(message) {
   const token = ++state.workspaceToken;
+  const hasRealPlan = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback");
   state.loading = true;
   state.runtimeError = "";
-  syncActiveProject({ runtimeError: "" });
+  state.activeTrace = createRunningTrace({ message, hasRealPlan });
+  state.lastChatTurn = null;
+  syncActiveProject({ runtimeError: "", activeTrace: state.activeTrace, lastChatTurn: null, runtimeProvider: state.runtimeProvider });
   render();
   try {
-    const hasRealPlan = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback");
     const response = hasRealPlan
       ? await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/turn`, {
         sessionId: state.chatSessionId,
         userMessage: message,
-        runtime: FORGE_LOCAL_CHAT_PROVIDER,
-        modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
-        runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
+        runtime: currentRuntimeProvider(),
+        modelProvider: currentRuntimeProvider(),
+        runtimeProvider: currentRuntimeProvider()
       })
       : await apiPost("/api/plans", {
         initialMessage: message,
         language: state.lang,
-        runtime: FORGE_LOCAL_CHAT_PROVIDER,
-        modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
-        runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
+        runtime: currentRuntimeProvider(),
+        modelProvider: currentRuntimeProvider(),
+        runtimeProvider: currentRuntimeProvider()
       });
     if (token !== state.workspaceToken) return;
     if (!response.productPlan) throw new Error("ProductPlan was not returned.");
+    const completedTrace = hasRealPlan ? response : planCreationTrace(response, message);
     upsertProjectFromPlan(response.productPlan, {
-      lastChatTurn: hasRealPlan ? response : null,
+      lastChatTurn: completedTrace,
+      activeTrace: null,
       pendingConfirmation: response.pendingConfirmation || null,
       runtimeError: ""
     });
-    state.lastChatTurn = hasRealPlan ? response : null;
+    state.lastChatTurn = completedTrace;
+    state.activeTrace = null;
     state.pendingConfirmation = response.pendingConfirmation || null;
     state.activeSidebar = "chat";
     setNotice(response.pendingConfirmation ? t("chatConfirmationRequired") : (hasRealPlan ? t("chatRuntimeNotice") : t("rerunNotice")));
@@ -635,8 +752,9 @@ async function sendTurn(message) {
   } catch (error) {
     if (token !== state.workspaceToken) return;
     state.runtimeError = userFacingError(error);
-    syncActiveProject({ runtimeError: state.runtimeError });
+    state.activeTrace = createFailedTrace({ message, error: state.runtimeError });
     state.pendingConfirmation = null;
+    syncActiveProject({ runtimeError: state.runtimeError, activeTrace: state.activeTrace, pendingConfirmation: null });
     state.activeSidebar = "chat";
     setNotice(t("sendFailed"));
     return false;
@@ -793,7 +911,7 @@ function renderStaticText() {
     dom.draftStatus.textContent = "";
     dom.draftStatus.hidden = true;
   }
-  setText("#composerSummary", state.loading ? "..." : t("composerDefault"));
+  setText("#composerSummary", state.loading ? t("chatTraceRunning") : t("composerDefault"));
   setText("#scopeLevel", planStatusText());
   setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
   setAttr(".thread-list", "aria-label", t("projectListAria"));
@@ -829,6 +947,13 @@ function renderStaticText() {
     dom.languageSelect.value = state.lang;
     dom.languageSelect.querySelector('option[value="zh"]').textContent = t("langZh");
     dom.languageSelect.querySelector('option[value="en"]').textContent = t("langEn");
+  }
+  if (dom.runtimeProviderSelect) {
+    dom.runtimeProviderSelect.value = currentRuntimeProvider();
+    dom.runtimeProviderSelect.querySelector('option[value="mock"]').textContent = t("runtimeLocal");
+    dom.runtimeProviderSelect.querySelector('option[value="forge-query-engine"]').textContent = t("runtimeQueryEngine");
+    dom.runtimeProviderSelect.querySelector('option[value="codex"]').textContent = t("runtimeCodex");
+    setAttr("#runtimeProviderSelect", "aria-label", t("runtimeMode"));
   }
   setText(".review-contact-dialog .floating-head strong", t("reviewContactTitle"));
   setText("#reviewContactNameLabel", t("contactName"));
@@ -895,6 +1020,7 @@ function renderChatWorkspace() {
         <p>${escapeHtml(t("noPlan"))}</p>
         ${state.runtimeError ? `<p class="error-message">${escapeHtml(state.runtimeError)}</p>` : ""}
       </section>
+      ${state.activeTrace ? renderChatRuntimePanel() : ""}
     `;
     return;
   }
@@ -992,16 +1118,18 @@ function renderMessage(turn) {
 
 function renderChatRuntimePanel() {
   const pending = state.pendingConfirmation;
-  const turn = state.lastChatTurn;
+  const turn = state.activeTrace || state.lastChatTurn;
   if (!pending && !turn) return "";
   const calls = turn?.toolCalls || [];
   const results = turn?.toolResults || [];
+  const running = turn?.traceState === "running";
   return `
     <section class="inline-panel chat-runtime-panel" aria-label="${escapeHtml(t("chatTraceTitle"))}">
       <div class="inline-panel-head">
-        <span class="inline-label">QueryEngine</span>
-        <strong>${escapeHtml(pending ? t("chatConfirmationRequired") : t("chatTraceTitle"))}</strong>
+        <span class="inline-label">${escapeHtml(runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()))}</span>
+        <strong>${escapeHtml(pending ? t("chatConfirmationRequired") : running ? t("chatTraceRunning") : t("chatTraceTitle"))}</strong>
       </div>
+      ${renderTraceTimeline(turn, pending)}
       ${pending ? `
         <div class="packet-status warning">${escapeHtml(pending.toolCall?.name || "")}</div>
         <p class="section-note">${escapeHtml(pending.permission?.reason || t("chatConfirmationRequired"))}</p>
@@ -1027,15 +1155,145 @@ function renderChatRuntimePanel() {
               </button>
             </div>
           `;
-        }).join("") : `<p class="section-note">${escapeHtml(t("chatTraceEmpty"))}</p>`}
+        }).join("") : `<p class="section-note">${escapeHtml(running ? t("traceWaiting") : t("chatTraceEmpty"))}</p>`}
       </div>
     </section>
   `;
 }
 
+function renderTraceTimeline(turn = {}, pending = null) {
+  const rows = traceRows(turn, pending);
+  if (!rows.length) return "";
+  return `
+    <div class="trace-timeline">
+      ${rows.map((row) => `
+        <div class="trace-row ${escapeHtml(row.status || "done")}">
+          <span>${escapeHtml(row.label)}</span>
+          <strong>${escapeHtml(row.value || "")}</strong>
+          ${row.detail ? `<p>${escapeHtml(row.detail)}</p>` : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function traceRows(turn = {}, pending = null) {
+  if (turn?.traceState === "running") {
+    return [
+      { status: "done", label: t("traceReceived"), value: t("traceDone"), detail: turn.userMessage || "" },
+      { status: "running", label: t("tracePrepare"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
+      { status: "pending", label: t("traceWaiting"), value: t("chatTraceRunning"), detail: normalizeRuntimeProvider(turn.runtimeProvider) === "codex" ? "Codex thread / Forge tools" : "Forge QueryEngine" }
+    ];
+  }
+  if (turn?.traceState === "failed") {
+    return [
+      { status: "blocked", label: t("traceRuntime"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
+      { status: "blocked", label: t("traceFailed"), value: turn.assistantMessage || t("sendFailed") }
+    ];
+  }
+
+  const rows = [];
+  rows.push({
+    status: "done",
+    label: t("traceRuntime"),
+    value: runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()),
+    detail: traceRuntimeDetail(turn)
+  });
+  if (turn?.codexThreadId) {
+    rows.push({
+      status: "done",
+      label: "Codex thread",
+      value: compactId(turn.codexThreadId),
+      detail: turn.codexThreadId
+    });
+  }
+  const modelResponses = turn?.modelResponses || [];
+  if (modelResponses.length) {
+    const failed = modelResponses.find((response) => response.ok === false);
+    rows.push({
+      status: failed ? "blocked" : "done",
+      label: t("traceModel"),
+      value: failed ? (failed.errorCode || t("traceFailed")) : `${modelResponses.length}`,
+      detail: failed?.errorMessage || modelResponses.map((response) => {
+        const count = response.toolCallCount || 0;
+        return state.lang === "zh" ? `${count} 个工具意图` : `${count} tool intent${count === 1 ? "" : "s"}`;
+      }).join(" / ")
+    });
+  }
+  if ((turn?.toolResults || []).some((item) => item.summary?.code === "RAW_MUTATION_TARGET")) {
+    rows.push({
+      status: "blocked",
+      label: t("traceToolDenied"),
+      value: "RAW_MUTATION_TARGET",
+      detail: state.lang === "zh" ? "已拒绝直接改 GeometrySpec / artifacts" : "Rejected direct GeometrySpec / artifact mutation"
+    });
+  }
+  if (turn?.proposal?.proposalId) {
+    rows.push({
+      status: "done",
+      label: t("traceProposal"),
+      value: turn.proposal.proposalId,
+      detail: turn.proposal.status || ""
+    });
+  }
+  if (turn?.revision?.revisionId) {
+    rows.push({
+      status: "done",
+      label: t("traceRevision"),
+      value: turn.revision.revisionId,
+      detail: turn.revision.status || turn.revision.modelArtifacts?.status || ""
+    });
+  }
+  const artifacts = turn?.artifactPaths || {};
+  if (Object.values(artifacts).some(Boolean)) {
+    rows.push({
+      status: "done",
+      label: t("traceArtifacts"),
+      value: t("traceDone"),
+      detail: Object.keys(artifacts).filter((key) => artifacts[key]).slice(0, 4).join(", ")
+    });
+  }
+  if (pending) {
+    rows.push({
+      status: "pending",
+      label: t("traceConfirmation"),
+      value: pending.toolCall?.name || "",
+      detail: pending.permission?.reason || ""
+    });
+  }
+  const eventCount = Array.isArray(turn?.eventsAppended) ? turn.eventsAppended.length : 0;
+  if (eventCount && rows.length <= 1) {
+    rows.push({
+      status: "done",
+      label: "events.jsonl",
+      value: String(eventCount),
+      detail: state.lang === "zh" ? "已写入项目事件" : "Project events appended"
+    });
+  }
+  return rows;
+}
+
+function traceRuntimeDetail(turn = {}) {
+  const model = turn?.modelProvider || turn?.runtimeProvider || currentRuntimeProvider();
+  return model ? `modelProvider: ${model}` : "";
+}
+
+function runtimeDisplayName(value = "") {
+  const normalized = String(value || "mock");
+  if (normalized === "codex") return t("runtimeCodex");
+  if (normalized === "forge-query-engine") return "Forge QueryEngine";
+  return t("runtimeLocal");
+}
+
+function compactId(value = "") {
+  const text = String(value || "");
+  if (text.length <= 16) return text;
+  return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
 function toolCallSummary(call, result = {}) {
   if (result.message) return result.message;
-  if (result.artifactPaths && Object.keys(result.artifactPaths).length > 0) {
+  if (result.artifactPaths && Object.values(result.artifactPaths).some(Boolean)) {
     return state.lang === "zh" ? "已返回派生文件路径" : "Returned derived artifact paths";
   }
   if (call.permission?.requiresConfirmation) return call.permission.reason || t("chatConfirmationRequired");
@@ -1529,12 +1787,15 @@ function startNewProject() {
   state.loading = false;
   state.submittingReview = false;
   state.lastChatTurn = null;
+  state.activeTrace = null;
   state.pendingConfirmation = null;
   state.runtimeError = "";
   syncActiveProject({
     lastChatTurn: null,
+    activeTrace: null,
     pendingConfirmation: null,
-    runtimeError: ""
+    runtimeError: "",
+    runtimeProvider: state.runtimeProvider
   });
   if (dom.ideaInput) dom.ideaInput.value = "";
   render();
@@ -2239,6 +2500,17 @@ dom.languageSelect.addEventListener("change", async () => {
     window.localStorage.setItem("yWorkbenchLanguage", state.lang);
   } catch {}
   render();
+});
+
+dom.runtimeProviderSelect?.addEventListener("change", () => {
+  const value = normalizeRuntimeProvider(dom.runtimeProviderSelect.value);
+  state.runtimeProvider = value;
+  try {
+    window.localStorage.setItem("forgeRuntimeProvider", value);
+  } catch {}
+  syncActiveProject({ runtimeProvider: value });
+  render();
+  setNotice(t("runtimeChanged"));
 });
 
 dom.floatingLayer.addEventListener("click", (event) => {

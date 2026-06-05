@@ -77,7 +77,7 @@ Test coverage:
 
 ## What Is Not Done
 
-Execution trace streaming is not yet exposed as a polished frontend feature. Forge records model/tool events in `events.jsonl`, but the current UI still waits for the turn result instead of streaming every Codex internal step live.
+Execution trace streaming is not yet exposed as a polished SSE/live-step feature. Forge records model/tool events in `events.jsonl`, and the current UI now has a runtime selector plus a result-based execution trace for runtime/model responses, Forge tool summaries, proposal/revision state, pending confirmations, Codex thread id when available, and artifact generation status. The UI still waits for the turn result instead of streaming every Codex internal step live.
 
 ## How To Run The Live Smoke
 

@@ -352,9 +352,13 @@ function finalMessageForResults({ userMessage = "", toolResults = [] } = {}) {
   const regenerated = summaries.find((summary) => summary.regenerated);
   const reverted = summaries.find((summary) => summary.reverted);
   const proposal = summaries.find((summary) => summary.proposalId);
-  const artifacts = summaries.find((summary) => Object.keys(summary.artifactPaths || {}).length > 0);
+  const artifacts = summaries.find((summary) => Object.values(summary.artifactPaths || {}).some(Boolean));
   if (applied) {
-    return localized(userMessage, `已通过 Forge action 创建新版本 ${applied.newRevisionId}，并更新 3D 模型/外壳文件状态。`, `I created revision ${applied.newRevisionId} through Forge actions and updated the 3D model/shell artifact state.`);
+    return localized(
+      userMessage,
+      `已通过 Forge action 创建新版本 ${applied.newRevisionId}；3D 模型仍需明确确认生成，未写入新的模型文件。`,
+      `I created revision ${applied.newRevisionId} through Forge actions. 3D model generation still needs explicit confirmation, so no new model files were written.`
+    );
   }
   if (committed) {
     return localized(userMessage, `已提交暂存方案，生成新版本 ${committed.newRevisionId}，相关验证和模型证据已写入项目文件夹。`, `I committed the staged proposal and created revision ${committed.newRevisionId}; validation and model evidence were written to the project folder.`);

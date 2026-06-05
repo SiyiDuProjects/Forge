@@ -20,6 +20,22 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Frontend Runtime Selector And Execution Trace
+
+- Scope: make the Codex/Forge runtime path visible in the browser instead of leaving chat turns as opaque loading. The settings dialog now exposes `本地 Forge`, `Forge QueryEngine`, and `Codex`; the center thread renders a result-based execution trace with runtime/model response, Forge tool summaries, revision/proposal state, pending confirmation, Codex thread id when present, and artifact generation status.
+- Status: implemented and browser-verified on a local 8768 service.
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
+- Key code handles:
+  - `index.html`
+  - `app.js`
+  - `styles.css`
+  - `src/core/model_adapters.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: runtimeProviderSelect, runtime selector, 本地 Forge, Forge QueryEngine, Codex, activeTrace, renderTraceTimeline, traceRows, execution trace, trace-timeline, explicit 3D generation confirmation, no fake model files.
+- Verification: `npm run check` passes with 65 tests. Browser verification on `http://127.0.0.1:8768` confirms settings exposes the three runtime modes; blank `新项目` hides the right inspector; first hardware request creates a ProductPlan and right inspector with `3D 模型状态 待确认生成`; ordinary graphite/USB-C update creates a revision and says no new model files were written; explicit `生成模型` runs `regenerateRevision`, flips the right inspector to `3D 模型已生成`, and shows generated evidence links.
+- Remaining caveat: the trace is result-based, not SSE/live-step streaming. During long Codex runs it shows an active running state, then renders the returned model/tool trace when the API completes.
+
 ### 2026-06-05 - Codex SDK Project-Task Runtime And Forge Tool Collection Layer
 
 - Scope: upgrade the Codex SDK path from an optional model adapter into a project-task runtime mode. Codex runs inside the generated Forge project workspace, reads project rules/indexes/Skills/tool docs, and can either return Forge tool intent or call `forge-tool`; Forge still owns ProductPlan, revisions, GeometrySpec, artifacts, validation, and guarded writes.
