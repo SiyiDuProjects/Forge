@@ -1884,10 +1884,14 @@ function renderInspector() {
   }
   dom.inspectorContent.hidden = false;
   const sections = [];
+  const runtimeLeads = runtimeStatusShouldLead();
+  if (runtimeStatus && runtimeLeads) {
+    sections.push(["runtime", t("chatTraceTitle"), inspectorSectionSummary("runtime", revision), runtimeStatus]);
+  }
   if (revision) {
     sections.push(["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]);
   }
-  if (runtimeStatus) {
+  if (runtimeStatus && !runtimeLeads) {
     sections.push(["runtime", t("chatTraceTitle"), inspectorSectionSummary("runtime", revision), runtimeStatus]);
   }
   dom.inspectorContent.innerHTML = sections
@@ -1907,6 +1911,17 @@ function renderInspector() {
       `;
     })
     .join("");
+}
+
+function runtimeStatusShouldLead() {
+  const turn = state.activeTrace || state.lastChatTurn;
+  return Boolean(
+    state.pendingConfirmation
+    || turn?.traceState === "running"
+    || turn?.traceState === "failed"
+    || turn?.traceState === "cancelled"
+    || turn?.ok === false
+  );
 }
 
 function renderModelFullscreen() {

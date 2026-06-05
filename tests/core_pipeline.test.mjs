@@ -342,6 +342,9 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /renderRuntimeStatusSection/);
   assert.match(app, /runtime-status-panel/);
   assert.match(app, /sections\.push\(\["runtime"/);
+  assert.match(app, /function runtimeStatusShouldLead/);
+  assert.match(app, /runtimeStatus && runtimeLeads/);
+  assert.match(app, /state\.pendingConfirmation/);
   assert.doesNotMatch(app, /\$\{renderRuntimeStatusSection\(\)\}/);
   assert.match(app, /renderTraceTimeline/);
   assert.match(app, /traceEventRows/);

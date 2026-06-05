@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Runtime Status Leads During Active Turns
+
+- Scope: put the right-inspector execution status before the 3D preview whenever a turn is running, failed, cancelled, or waiting for confirmation, so users see progress and confirmation controls immediately after sending.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `runtimeStatusShouldLead`, `runtimeStatus && runtimeLeads`, `state.pendingConfirmation`, right inspector active runtime status, `需要确认后执行`, `确认执行`.
+- Verification: `npm run check` passes with 69 tests. Browser verification on `http://127.0.0.1:8777/?cacheBust=runtime-status-leads` confirmed ordinary completed QueryEngine turns keep `原型结构预览（3D）` first, while a pending confirmation turn (`Maybe move USB-C to back-left?`) makes `执行状态` the first inspector card with `确认执行` visible and moves `原型结构预览（3D）` to the second card.
+- Boundary: this is inspector ordering only. It does not change QueryEngine/Codex decisions, confirmation policy, ProductPlan writes, GeometrySpec, or generated artifacts.
+
 ### 2026-06-05 - Composer Runtime Visibility
 
 - Scope: show the selected runtime directly in the composer so users can see before sending whether the next turn will run through local Forge, Forge QueryEngine, or Codex.
