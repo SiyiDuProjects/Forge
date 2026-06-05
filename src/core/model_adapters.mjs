@@ -1,6 +1,20 @@
 import { makeId } from "./utils.mjs";
+import {
+  buildCodexProductPrompt,
+  ensureCodexProjectThread,
+  parseCodexToolIntent,
+  runCodexProductTurn
+} from "./codex_runtime.mjs";
 
-export function createModelAdapter({ provider = process.env.FORGE_MODEL_PROVIDER || "mock" } = {}) {
+export function createModelAdapter({
+  provider = process.env.FORGE_MODEL_PROVIDER || "mock",
+  workspaceId = "",
+  rootDir = undefined,
+  codexFactory = null
+} = {}) {
+  if (provider === "codex") {
+    return new CodexModelAdapter({ workspaceId, rootDir, codexFactory });
+  }
   if (provider === "openai") return new OpenAIResponsesAdapter();
   return new MockModelAdapter();
 }
@@ -187,6 +201,52 @@ export class OpenAIResponsesAdapter {
       finalMessage: extractOpenAIText(json),
       toolCalls: extractOpenAIToolCalls(json),
       rawResponseId: json.id || ""
+    };
+  }
+}
+
+export class CodexModelAdapter {
+  constructor({
+    workspaceId = "",
+    rootDir = undefined,
+    codexFactory = null
+  } = {}) {
+    this.workspaceId = workspaceId;
+    this.rootDir = rootDir;
+    this.codexFactory = codexFactory;
+  }
+
+  async runTurn({
+    prompt = "",
+    userMessage = "",
+    toolResults = []
+  } = {}) {
+    const thread = await ensureCodexProjectThread({
+      workspaceId: this.workspaceId,
+      rootDir: this.rootDir,
+      codexFactory: this.codexFactory
+    });
+    if (!thread.ok) return thread;
+
+    const run = await runCodexProductTurn({
+      thread: thread.thread,
+      workspaceId: this.workspaceId,
+      rootDir: this.rootDir,
+      prompt: buildCodexProductPrompt({
+        forgePrompt: prompt,
+        toolResults,
+        userMessage
+      })
+    });
+    if (!run.ok) return run;
+    const parsed = parseCodexToolIntent(run.text);
+    return {
+      ok: true,
+      finalMessage: parsed.finalMessage,
+      toolCalls: parsed.toolCalls,
+      rawResponseId: run.codexThreadId || thread.codexThreadId,
+      codexThreadId: run.codexThreadId || thread.codexThreadId,
+      codexThreadCreated: Boolean(thread.created)
     };
   }
 }

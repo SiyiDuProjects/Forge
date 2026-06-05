@@ -415,12 +415,6 @@ pre {
   font-size: 15px;
 }
 
-.message.ai strong {
-  display: block;
-  margin-bottom: 9px;
-  font-size: 15px;
-}
-
 .message.ai ul {
   margin: 10px 0 0;
   padding-left: 20px;

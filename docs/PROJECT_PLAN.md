@@ -107,6 +107,7 @@ Required content:
 - Minimal runtime feedback only when a send fails or a chat action needs confirmation
 - Bottom composer for hardware request entry and send/update only
 - Do not show numbered ProductPlan step cards, status packets, or a center 3D preview; generation status and structure preview belong in the right inspector.
+- Do not prefix assistant messages with role labels such as `原型助手` or `Prototype assistant`; the bubble content should stand on its own.
 
 Composer actions:
 
@@ -205,7 +206,8 @@ Implemented:
 - Proposal storage on `workspaceState.proposals` with proposed/staged/committed/rejected lifecycle states
 - Forge QueryEngine / Chat Runtime V1: `ContextPack -> prompt sections -> model adapter -> tool schema export -> permission gate -> tool executor -> Forge actions -> assistant/UI payload`.
 - Chat session JSONL and pending confirmation storage under `data/workspaces/<planId>/chat_sessions/`.
-- Deterministic local Forge chat adapter (`modelProvider: "mock"` in code) for default UI/tool turns and tests, plus optional OpenAI Responses adapter behind explicit OpenAI configuration.
+- Deterministic local Forge chat adapter (`modelProvider: "mock"` / `runtimeProvider: "mock"` in code) for default UI/tool turns and tests, plus optional OpenAI Responses and Codex SDK adapters behind explicit configuration.
+- Codex SDK runtime provider for Forge product tasks: `runtimeProvider: "codex"` creates or resumes one Codex thread per Forge project, stores `codexThreadId` in `project_manifest.json`, injects ContextPack each turn, and lets Codex decide Forge tool intent while Forge still executes and persists the actual state changes.
 - API routes for `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
 - Minimal center-thread QueryEngine trace and confirmation card in the UI.
 
@@ -220,7 +222,7 @@ Implementation boundary:
 - The 3D preview should remain a result/evidence surface. Users may rotate, zoom, pan, and switch between appearance/component transparency layers, but cannot drag parts, edit holes, or directly modify geometry.
 - Conversation turns can update `GeometrySpec` and validation without writing GLB/STL/STEP; a clear confirmation such as "生成模型", "现在造一下", or "build it" is required before model artifacts are written.
 - Future chatbot, agent, or tool-calling layers must use the Forge action contract instead of directly mutating files, meshes, `GeometrySpec`, GLB, STL, STEP, or ProductPlan internals.
-- QueryEngine currently supports a controlled subset of chat actions: discuss/propose, search components, apply structured patches, commit proposals, regenerate, revert, validate, and retrieve artifact metadata. It does not expose shell, arbitrary file edits, direct model artifact edits, external plugins, or long-term memory/RAG.
+- QueryEngine currently supports a controlled subset of chat actions: discuss/propose, search components, apply structured patches, commit proposals, regenerate, revert, validate, and retrieve artifact metadata. Codex runtime can choose among those Forge product actions, but it does not expose shell, arbitrary file edits, direct model artifact edits, external plugins, or long-term memory/RAG.
 
 Known local verification limits:
 
@@ -279,7 +281,7 @@ QueryEngine flow for an existing workspace:
 1. User sends a chat message.
 2. QueryEngine appends the user message to chat JSONL and `events.jsonl`.
 3. QueryEngine builds ContextPack and prompt sections.
-4. The model adapter chooses Forge tool calls.
+4. The model adapter chooses Forge tool calls. In `runtimeProvider: "codex"`, the adapter first creates or resumes the project-bound Codex thread and asks Codex to return Forge tool intent JSON.
 5. Permission gate allows, denies, or creates a pending confirmation.
 6. Tool executor calls `forge_actions.mjs`; no raw file or GeometrySpec mutation is allowed.
 7. QueryEngine appends tool results and assistant message, then returns updated `productPlan`, trace, proposal/revision summary, warnings, artifact paths, or confirmation state to the UI.
@@ -310,7 +312,7 @@ Status: current UI pass complete; keep auditing during future changes.
 
 ### Phase 3: Workflow Depth
 
-Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, and QueryEngine / Chat Runtime V1 complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface.
+Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact generation, confirmed placed-part GLB, ComponentDescriptor v2 mechanical proxy pass, Forge action contract, QueryEngine / Chat Runtime V1, and optional Codex SDK runtime provider complete. The first descriptor-driven hardware prototype generator path is implemented for the standard desktop display archetype, and chat/tool-calling now has a controlled backend runtime surface.
 
 - Keep user turns creating ProductPlan revisions.
 - Keep prototype structure preview (3D), electronics layout, quote, and review submission on unified jobs.
@@ -320,6 +322,7 @@ Status: ProductPlan API, conversation-first v1, bounded GeometrySpec artifact ge
 - Keep the viewer read-only except rotate, zoom, pan, risk markers, and appearance/component layer switching.
 - Keep non-standard hardware in `manual_expansion_draft`.
 - Keep AI/chat runtimes outside direct Forge state mutation; QueryEngine should call actions for summary, component search, proposal, patch application, validation, regeneration, revert, and artifact retrieval.
+- Keep Codex runtime memory project-scoped. The Codex thread owns continuity inside one Forge project; cross-project or cross-thread truth comes from AGENTS, project docs, ProductPlan, revisions, events, proposals, and artifact manifests through ContextPack, not Codex Memories, vector DB, or generic RAG.
 
 Implemented V1 conversational hardware prototype path:
 

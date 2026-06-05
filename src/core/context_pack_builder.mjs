@@ -64,6 +64,7 @@ export function buildContextPack({
       title: manifest.title,
       status: manifest.status,
       currentRevisionId,
+      codexThreadId: manifest.codexThreadId || "",
       projectPath: workspacePath,
       updatedAt: manifest.updatedAt,
       eventsPath: manifest.eventsPath || "events.jsonl"

@@ -24,6 +24,28 @@ export function projectWorkspacePath(workspaceId, { rootDir = defaultProjectWork
   return join(rootDir, safePathSegment(workspaceId || "unknown_workspace"));
 }
 
+export function readProjectManifest({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  if (!workspaceId) return null;
+  return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), "project_manifest.json"));
+}
+
+export function updateProjectManifest({ workspaceId, patch = {}, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  if (!workspaceId) throw new Error("updateProjectManifest requires workspaceId.");
+  const workspacePath = projectWorkspacePath(workspaceId, { rootDir });
+  ensureWorkspaceDirs(workspacePath);
+  const manifest = {
+    ...(readProjectManifest({ workspaceId, rootDir }) || {
+      version: PROJECT_WORKSPACE_VERSION,
+      projectId: workspaceId,
+      workspaceId
+    }),
+    ...clone(patch || {}),
+    updatedAt: new Date().toISOString()
+  };
+  writeJson(join(workspacePath, "project_manifest.json"), manifest);
+  return manifest;
+}
+
 export function ensureProjectWorkspace({ plan, rootDir = defaultProjectWorkspaceRoot() } = {}) {
   const workspaceId = plan?.planId || plan?.workspaceState?.workspaceId;
   if (!workspaceId) throw new Error("ensureProjectWorkspace requires a ProductPlan.");
@@ -341,6 +363,7 @@ function projectManifestFor(plan, previous = {}) {
     revisionsPath: "revisions/",
     sourceMaterialsPath: "source-materials/",
     reviewPath: "review/",
+    codexThreadId: previous.codexThreadId || plan.workspaceState?.codexThreadId || "",
     createdAt: previous.createdAt || plan.createdAt || now,
     updatedAt: plan.updatedAt || now
   };

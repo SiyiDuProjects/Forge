@@ -99,7 +99,8 @@ Forge QueryEngine lives in `src/core/forge_query_engine.mjs`. It is the local ch
 Runtime modules:
 
 - `forge_query_engine.mjs`: chat turn lifecycle and tool loop
-- `model_adapters.mjs`: deterministic mock adapter and optional OpenAI Responses adapter
+- `model_adapters.mjs`: deterministic mock adapter, optional OpenAI Responses adapter, and optional Codex SDK adapter
+- `codex_runtime.mjs`: project-bound Codex thread creation/resume, Codex product prompt assembly, JSON tool-intent parsing, and SDK/thread error reporting
 - `tool_schema_exporter.mjs`: model-callable tool schema export from Tool Protocol metadata
 - `permission_gate.mjs`: read/proposal/mutation confirmation and denial rules
 - `tool_executor.mjs`: action dispatch to `forge_actions.mjs`
@@ -108,7 +109,11 @@ Runtime modules:
 
 Chat session files live under `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`. Pending confirmations live in `chat_sessions/pending_confirmations.json`.
 
+When the Codex runtime is active, `project_manifest.json` stores `codexThreadId`. That thread is only the project-level conversation context; durable Forge state still comes from ProductPlan, revisions, proposals, events, and artifact manifests.
+
 Important chat/runtime events include `chat_turn_started`, `context_pack_built`, `model_request`, `model_response`, `tool_call`, `tool_result`, `tool_failed`, `confirmation_required`, `confirmation_resolved`, and `chat_turn_completed`.
+
+Codex-specific setup also appends `codex_thread_created` when a project first receives a Codex thread.
 
 Mutation tools such as `applyDesignPatch`, `commitStagedChange`, `regenerateRevision`, and `revertRevision` run only when the user wording is explicit or an approved confirmation is supplied. Raw `GeometrySpec`, GLB/STL/STEP, mesh, artifact-byte, and arbitrary file mutation targets are denied before action execution.
 
@@ -243,12 +248,15 @@ Body:
   "sessionId": "session_default",
   "userMessage": "Add two buttons on the right side.",
   "modelProvider": "mock",
+  "runtimeProvider": "mock",
   "mode": "normal",
   "confirmation": null
 }
 ```
 
-Returns assistant message, chat messages, tool call trace, tool results, proposal summary, revision summary, validation warnings, artifact paths, pending confirmation if required, appended events, and updated `productPlan`.
+`runtimeProvider` may be `mock` or `codex`. `modelProvider: "openai"` is still supported for the OpenAI Responses adapter. When `runtimeProvider: "codex"`, the server requires `@openai/codex-sdk`, creates or resumes the project-bound Codex thread, injects ContextPack, and parses Codex output into Forge tool intent before execution.
+
+Returns assistant message, chat messages, tool call trace, tool results, proposal summary, revision summary, validation warnings, artifact paths, pending confirmation if required, appended events, updated `productPlan`, and `codexThreadId` when available.
 
 ### `GET /api/workspaces/:workspaceId/chat/:sessionId`
 
@@ -322,11 +330,15 @@ Creates a ProductPlan from an initial conversation turn.
 {
   "initialMessage": "Small woodgrain desktop display with photos and weather, 3.5 inch",
   "assets": [],
-  "language": "en"
+  "language": "en",
+  "modelProvider": "mock",
+  "runtimeProvider": "mock"
 }
 ```
 
-Returns `{ "productPlan": ..., "revision": ..., "assistantMessage": ... }`.
+When `runtimeProvider: "codex"`, project creation also creates and stores the project-bound Codex thread id before returning. If the SDK is unavailable, the route returns a structured error and the frontend keeps the user's draft input.
+
+Returns `{ "productPlan": ..., "revision": ..., "assistantMessage": ..., "codexThreadId": ... }`.
 
 ### `POST /api/plans/:planId/turns`
 

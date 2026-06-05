@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-05
 
+### Codex SDK Forge Product Runtime Plan
+
+- File: `docs/source-materials/2026-06-05-codex-sdk-forge-product-runtime-plan.md`
+- Status: implemented as optional Codex SDK runtime provider for Forge product tasks.
+- Related docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `AGENTS.md`
+- Key handles: Codex SDK, @openai/codex-sdk, runtimeProvider codex, codexThreadId, ProductPlan, ContextPack, Forge actions, thread memory, no cross-project memory.
+
 ### Center Thread Chat-Only Comment
 
 - File: `docs/source-materials/2026-06-05-center-thread-chat-only-comment.md`

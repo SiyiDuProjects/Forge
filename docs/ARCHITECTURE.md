@@ -7,10 +7,11 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 - `index.html`: application shell, dialogs, settings, popover mounts, and composer.
 - `styles.css`: Codex-like desktop layout, inspector density, popovers, and responsive behavior.
 - `app.js`: browser-side conversation-first state machine, bilingual copy, ProductPlan rendering, QueryEngine trace/confirmation UI, contact capture, canvas preview, and popover rendering.
-- `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, project context packs, tool metadata, QueryEngine chat routes, and review submission.
+- `server.mjs`: static file server and JSON API wrapper around the core pipeline, ProductPlan, assets, jobs, geometry/model generation, layout previews, project context packs, tool metadata, QueryEngine/Codex runtime chat routes, and review submission.
 - `src/core`: pure planning modules for parsing, module matching, risk gates, quote estimates, product specs, ProductPlan revisions, Forge actions, project folder persistence, context pack building, tool metadata, generation jobs, GeometrySpec/model artifact generation, structure/layout outputs, firmware previews, review queue writes, and observability helpers.
 - `src/core/forge_query_engine.mjs`: Forge-native chat runtime loop. It persists user messages before model work, builds ContextPack and prompt sections, exports tool schemas, calls a model adapter, runs the permission gate, executes Forge actions, records tool events, persists assistant messages, and returns UI-ready payloads.
-- `src/core/model_adapters.mjs`: deterministic local Forge adapter for default QueryEngine/UI turns and tests plus optional OpenAI Responses adapter behind explicit OpenAI configuration.
+- `src/core/model_adapters.mjs`: deterministic local Forge adapter for default QueryEngine/UI turns and tests plus optional OpenAI Responses and Codex SDK adapters behind explicit configuration.
+- `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks. It creates/resumes one Codex thread per Forge project, injects Forge ContextPack/tool boundaries into that thread, parses Codex JSON tool intent, and reports SDK/thread errors without fabricating ProductPlan state.
 - `src/core/tool_schema_exporter.mjs`, `src/core/tool_executor.mjs`, `src/core/permission_gate.mjs`, `src/core/chat_session_store.mjs`, and `src/core/prompt_sections.mjs`: the narrow Claude Code-inspired runtime support layer for tool schemas, action dispatch, confirmation/denial, append-only chat sessions, and prompt assembly.
 - `src/core/forge_actions.mjs`: stable action contract for future chat/tool-calling layers. It exposes summaries, component search, proposal staging, committed patch application, regeneration, validation, revert, and artifact retrieval while keeping ProductPlan and GeometrySpec under Forge control.
 - `src/core/project_workspace.mjs`: file-backed Forge project runtime. It writes `data/workspaces/<planId>/project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, proposal JSON files, immutable revision folders, revision-scoped artifacts, local review files, and markdown indexes.
@@ -23,7 +24,7 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 
 ## Flow
 
-1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace.
+1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace. When `runtimeProvider: "codex"` is active, the project manifest also stores a `codexThreadId` and subsequent turns resume that Codex thread.
 2. `interpretRequest` extracts product type, screen, standardized 3D printed enclosure finish, sources, functions, and options.
 3. `matchModules` chooses stocked modules, review-required modules, the standard 3D printed shell, and deferred modules from the catalog.
 4. `evaluateRisk` marks review level, warnings, and blocked scope. Camera and battery stay reviewable as human-review risks; motion structures leave the standard path.
@@ -42,6 +43,7 @@ Forge QueryEngine is a narrow adaptation of Claude Code's query loop. It does no
 
 - Context comes from `ContextPack`, not raw project-file scanning.
 - Tools come from `tool_registry.mjs`, not ad hoc model instructions.
+- Codex SDK turns may own product-task intent and thread context, but their output is still parsed into Forge tool intent.
 - Tool execution goes through `tool_executor.mjs` and `forge_actions.mjs`.
 - Mutations require explicit wording or `/chat/confirm` approval when the permission gate marks them ambiguous.
 - Chat transcripts live in `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`.
@@ -66,7 +68,7 @@ Project-changing actions append to the workspace `events.jsonl` log and persist 
 
 The local project folder is a durable workspace record, not a user-facing CAD export:
 
-- Source of truth: `project_manifest.json`, `product_plan.json`, `events.jsonl`, `proposals/*.json`, `revisions/*/revision_manifest.json`, `revisions/*/product_plan.json`, `revisions/*/geometry-spec.json`, and `revisions/*/component_descriptors.json`.
+- Source of truth: `project_manifest.json` including optional `codexThreadId`, `product_plan.json`, `events.jsonl`, `proposals/*.json`, `revisions/*/revision_manifest.json`, `revisions/*/product_plan.json`, `revisions/*/geometry-spec.json`, and `revisions/*/component_descriptors.json`.
 - Derived artifacts: `revisions/*/artifacts/model.glb`, STL shell files, STEP handoff, `validation_report.json`, `component_asset_manifest.json`, and `design_summary.md`.
 - Context aids: `CURRENT_STATE.md`, `WORK_INDEX.md`, and `DECISIONS.md` are generated summaries for humans and AI context. JSON/events remain authoritative.
 - Chat/runtime layers must call Forge tools/actions. They must not directly edit `GeometrySpec`, GLB, STL, STEP, arbitrary files, or mesh data.

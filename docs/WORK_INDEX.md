@@ -20,6 +20,25 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Codex SDK Forge Product Runtime Provider
+
+- Scope: add an optional Codex SDK runtime provider so Forge product tasks can use one Codex thread per project while all state changes still pass through Forge ContextPack, permission gates, tool executor, and Forge actions.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-05-codex-sdk-forge-product-runtime-plan.md`
+- Main docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `AGENTS.md`
+- Key code handles:
+  - `src/core/codex_runtime.mjs`
+  - `src/core/model_adapters.mjs`
+  - `src/core/forge_query_engine.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `server.mjs`
+  - `app.js`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: Codex SDK, @openai/codex-sdk, CodexModelAdapter, runtimeProvider codex, FORGE_CHAT_RUNTIME_PROVIDER, forgeRuntimeProvider, codexThreadId, codex_thread_created, ContextPack injection, Forge tool intent, no cross-project memory.
+- Verification: `node --check server.mjs`, `node --check app.js`, `node --check src/core/codex_runtime.mjs`, `node --test tests/query_engine.test.mjs` passes with 15 QueryEngine tests, and `npm run check` passes with 53 tests.
+- Next: install and configure real `@openai/codex-sdk` only when testing live Codex turns; default UI remains `runtimeProvider: "mock"` so missing SDK or external credentials do not block normal local ProductPlan updates.
+
 ### 2026-06-05 - Center Thread Chat-Only Cleanup
 
 - Scope: remove the numbered ProductPlan flow/status cards and center 3D snapshot from the generated conversation view so the center column reads as a chat thread; keep 3D preview, generation state, and structure checks on the right inspector.
@@ -29,8 +48,8 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 - Key code handles:
   - `app.js`
   - `styles.css`
-- Retrieval handles: center thread chat only, flow-step, ProductPlan numbered cards, 1-7 steps, prototype-snapshot, right inspector 3D preview.
-- Verification: `npm run check` passes with 48 tests. Browser reload on `http://127.0.0.1:8765` confirms `.flow-step` / `[data-step]` count is 0, center conversation preview count is 0, the generated conversation still shows 10 message bubbles, and the right inspector keeps one 3D canvas with `3D 模型已生成`.
+- Retrieval handles: center thread chat only, flow-step, ProductPlan numbered cards, 1-7 steps, prototype-snapshot, 原型助手, Prototype assistant, assistant role label, right inspector 3D preview.
+- Verification: `npm run check` passes with 48 tests. Browser reload on `http://127.0.0.1:8765` confirms `.flow-step` / `[data-step]` count is 0, center conversation preview count is 0, the generated conversation still shows 10 message bubbles, assistant role-label elements count is 0, page text no longer contains `原型助手` / `Prototype assistant`, and the right inspector keeps one 3D canvas with `3D 模型已生成`.
 
 ### 2026-06-05 - Composer Button And 3D Generation Verification
 

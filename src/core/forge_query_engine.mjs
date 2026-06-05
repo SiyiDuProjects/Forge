@@ -18,14 +18,18 @@ export async function runForgeChatTurn({
   userMessage,
   sessionId = "session_default",
   modelProvider = process.env.FORGE_CHAT_MODEL_PROVIDER || "mock",
+  runtimeProvider = "",
   mode = "normal",
   confirmation = null,
   maxToolCalls = 5,
-  rootDir = defaultProjectWorkspaceRoot()
+  rootDir = defaultProjectWorkspaceRoot(),
+  codexFactory = null,
+  modelAdapterFactory = createModelAdapter
 } = {}) {
   const text = String(userMessage || "").trim();
   if (!workspaceId) return fail("UNKNOWN_WORKSPACE", "workspaceId is required.");
   if (!text) return fail("EMPTY_MESSAGE", "userMessage is required.");
+  const provider = runtimeProvider || modelProvider;
 
   const turnId = makeId("chatturn");
   const eventsAppended = [];
@@ -37,7 +41,7 @@ export async function runForgeChatTurn({
     rootDir,
     type: "chat_turn_started",
     actor: "system",
-    payload: { turnId, sessionId, modelProvider, mode }
+    payload: { turnId, sessionId, modelProvider: provider, runtimeProvider: provider, mode }
   });
   eventsAppended.push(startedEvent);
 
@@ -82,7 +86,7 @@ export async function runForgeChatTurn({
   const session = loadChatSession({ workspaceId, sessionId, limit: 24, rootDir });
   const exported = exportToolsForModel({
     tools: listToolMetadata(),
-    provider: modelProvider === "openai" ? "openai" : "generic"
+    provider: provider === "openai" ? "openai" : "generic"
   });
   const prompt = buildPromptSections({
     contextPack,
@@ -98,13 +102,20 @@ export async function runForgeChatTurn({
     payload: {
       turnId,
       sessionId,
-      modelProvider,
+      modelProvider: provider,
+      runtimeProvider: provider,
       toolCount: exported.tools.length,
       promptSectionCount: prompt.sections.length
     }
   }));
 
-  const adapter = createModelAdapter({ provider: modelProvider });
+  const adapter = modelAdapterFactory({
+    provider,
+    workspaceId,
+    rootDir,
+    sessionId,
+    codexFactory
+  });
   let assistantMessage = "";
   let pendingConfirmation = null;
   let loopToolResults = [];
@@ -131,7 +142,8 @@ export async function runForgeChatTurn({
         ok: Boolean(modelResult?.ok),
         toolCallCount: modelResult?.toolCalls?.length || 0,
         hasFinalMessage: Boolean(modelResult?.finalMessage),
-        responseId: modelResult?.rawResponseId || ""
+        responseId: modelResult?.rawResponseId || "",
+        codexThreadId: modelResult?.codexThreadId || ""
       }
     }));
 
@@ -298,10 +310,12 @@ export async function runForgeChatTurn({
     pendingConfirmation,
     eventsAppended,
     productPlan: clone(getProductPlan(workspaceId) || null),
+    codexThreadId: modelResponses.find((response) => response?.codexThreadId)?.codexThreadId || "",
     modelResponses: modelResponses.map((response) => ({
       ok: Boolean(response?.ok),
       toolCallCount: response?.toolCalls?.length || 0,
-      hasFinalMessage: Boolean(response?.finalMessage)
+      hasFinalMessage: Boolean(response?.finalMessage),
+      codexThreadId: response?.codexThreadId || ""
     }))
   };
 }

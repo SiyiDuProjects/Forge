@@ -3,12 +3,13 @@ import { test } from "node:test";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import { loadChatSession } from "../src/core/chat_session_store.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
+import { ensureCodexProjectThread, parseCodexToolIntent } from "../src/core/codex_runtime.mjs";
 import { runForgeChatTurn, confirmForgeChatTool } from "../src/core/forge_query_engine.mjs";
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
-import { openAIResponsesUrl } from "../src/core/model_adapters.mjs";
+import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
-import { readWorkspaceEvents } from "../src/core/project_workspace.mjs";
+import { readProjectManifest, readWorkspaceEvents } from "../src/core/project_workspace.mjs";
 import { getToolMetadata, listToolMetadata } from "../src/core/tool_registry.mjs";
 
 function createChatPlan() {
@@ -207,6 +208,190 @@ test("QueryEngine default stays on local Forge tools even if OpenAI env is confi
     if (previousChatProvider === undefined) delete process.env.FORGE_CHAT_MODEL_PROVIDER;
     else process.env.FORGE_CHAT_MODEL_PROVIDER = previousChatProvider;
   }
+});
+
+test("Codex runtime creates and reuses one thread for a Forge project", async () => {
+  const plan = createChatPlan();
+  const initialRevisionCount = plan.revisions.length;
+  let startCount = 0;
+  let resumeCount = 0;
+  let runCount = 0;
+  const codexFactory = async () => ({
+    startThread() {
+      startCount += 1;
+      return fakeCodexThread(`codex-thread-${startCount}`);
+    },
+    resumeThread(threadId) {
+      resumeCount += 1;
+      return fakeCodexThread(threadId);
+    }
+  });
+
+  function fakeCodexThread(id) {
+    return {
+      id,
+      async run() {
+        runCount += 1;
+        if (runCount === 1) {
+          return {
+            final_response: JSON.stringify({
+              toolCalls: [
+                {
+                  name: "applyDesignPatch",
+                  input: {
+                    message: "Make the shell graphite.",
+                    patches: [
+                      {
+                        type: "plan_patch",
+                        set: {
+                          "constraints.finish": "graphite"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            })
+          };
+        }
+        return {
+          final_response: JSON.stringify({
+            assistantMessage: "Updated through the Codex runtime.",
+            toolCalls: []
+          })
+        };
+      }
+    };
+  }
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_runtime",
+    userMessage: "Make the shell graphite.",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.codexThreadId, "codex-thread-1");
+  assert.equal(startCount, 1);
+  assert.equal(resumeCount, 1);
+  assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);
+  assert.equal(getProductPlan(plan.planId).revisions.at(-1).productPlanSnapshot.constraints.finish, "graphite");
+  assert.equal(readProjectManifest({ workspaceId: plan.planId }).codexThreadId, "codex-thread-1");
+  assert.ok(result.modelResponses.every((response) => response.codexThreadId === "codex-thread-1"));
+});
+
+test("Codex runtime keeps project threads isolated", async () => {
+  const first = createChatPlan();
+  const second = createChatPlan();
+  let index = 0;
+  const codexFactory = async () => ({
+    startThread() {
+      index += 1;
+      return { id: `thread-${index}`, async run() { return { final_response: "{}" }; } };
+    },
+    resumeThread(threadId) {
+      return { id: threadId, async run() { return { final_response: "{}" }; } };
+    }
+  });
+
+  const firstThread = await ensureCodexProjectThread({
+    workspaceId: first.planId,
+    codexFactory
+  });
+  const secondThread = await ensureCodexProjectThread({
+    workspaceId: second.planId,
+    codexFactory
+  });
+  const firstAgain = await ensureCodexProjectThread({
+    workspaceId: first.planId,
+    codexFactory
+  });
+
+  assert.equal(firstThread.ok, true);
+  assert.equal(secondThread.ok, true);
+  assert.equal(firstThread.codexThreadId, "thread-1");
+  assert.equal(secondThread.codexThreadId, "thread-2");
+  assert.equal(firstAgain.codexThreadId, "thread-1");
+  assert.notEqual(readProjectManifest({ workspaceId: first.planId }).codexThreadId, readProjectManifest({ workspaceId: second.planId }).codexThreadId);
+});
+
+test("Codex runtime persists delayed SDK thread id after first run", async () => {
+  const plan = createChatPlan();
+  let threadId = "";
+  const codexFactory = async () => ({
+    startThread() {
+      return {
+        get id() {
+          return threadId;
+        },
+        async run() {
+          threadId = "delayed-thread-id";
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "Project thread initialized after run.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    },
+    resumeThread(id) {
+      return {
+        id,
+        async run() {
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "Resumed.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    }
+  });
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_delayed_thread_id",
+    userMessage: "Just discuss the current plan.",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.codexThreadId, "delayed-thread-id");
+  assert.equal(readProjectManifest({ workspaceId: plan.planId }).codexThreadId, "delayed-thread-id");
+});
+
+test("Codex tool intent parser accepts fenced JSON and plain messages", () => {
+  const parsed = parseCodexToolIntent(`Result:\n\`\`\`json\n{"assistantMessage":"ok","toolCalls":[{"name":"validateDesign","input":{"mode":"current_or_proposal"}}]}\n\`\`\``);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.finalMessage, "ok");
+  assert.equal(parsed.toolCalls[0].name, "validateDesign");
+
+  const plain = parseCodexToolIntent("Ask one more question before changing the plan.");
+  assert.equal(plain.finalMessage, "Ask one more question before changing the plan.");
+  assert.deepEqual(plain.toolCalls, []);
+});
+
+test("Codex adapter reports missing SDK without fabricating a plan response", async () => {
+  const plan = createChatPlan();
+  const adapter = new CodexModelAdapter({
+    workspaceId: plan.planId,
+    codexFactory: async () => {
+      throw new Error("module not installed");
+    }
+  });
+  const result = await adapter.runTurn({
+    prompt: "prompt",
+    userMessage: "hello"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "CODEX_SDK_UNAVAILABLE");
+  assert.match(result.error.message, /@openai\/codex-sdk/);
 });
 
 test("OpenAI adapter normalizes relay base URLs", () => {

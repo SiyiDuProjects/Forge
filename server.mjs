@@ -21,9 +21,11 @@ import {
   validateDesign
 } from "./src/core/forge_actions.mjs";
 import { confirmForgeChatTool, runForgeChatTurn } from "./src/core/forge_query_engine.mjs";
+import { ensureCodexProjectThread, runCodexProductTurn } from "./src/core/codex_runtime.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn, createProductPlan, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
+import { persistProjectPlan } from "./src/core/project_workspace.mjs";
 import { listToolMetadata } from "./src/core/tool_registry.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -31,6 +33,7 @@ const threeDir = fileURLToPath(new URL("./node_modules/three/", import.meta.url)
 const port = Number(process.env.PORT || 8765);
 const host = process.env.HOST || "127.0.0.1";
 const defaultChatModelProvider = process.env.FORGE_CHAT_MODEL_PROVIDER || "mock";
+const defaultChatRuntimeProvider = process.env.FORGE_CHAT_RUNTIME_PROVIDER || defaultChatModelProvider;
 const logger = createLogger({ service: "forge-hardware-workbench" });
 
 const mimeTypes = {
@@ -141,11 +144,13 @@ async function handleApi(request, response, url) {
   const workspaceChatTurnMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/chat\/turn$/);
   if (request.method === "POST" && workspaceChatTurnMatch) {
     const body = await readJsonBody(request);
+    const runtimeProvider = body.runtimeProvider || body.modelProvider || defaultChatRuntimeProvider;
     sendActionJson(response, await runForgeChatTurn({
       workspaceId: workspaceChatTurnMatch[1],
       sessionId: body.sessionId || "session_default",
       userMessage: body.userMessage || body.message || "",
       modelProvider: body.modelProvider || defaultChatModelProvider,
+      runtimeProvider,
       mode: body.mode || "normal",
       confirmation: body.confirmation || null
     }));
@@ -268,12 +273,52 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/plans") {
     const body = await readJsonBody(request);
-    sendJson(response, 200, createProductPlan({
+    const runtimeProvider = body.runtimeProvider || body.modelProvider || defaultChatRuntimeProvider;
+    const result = createProductPlan({
       message: body.message,
       initialMessage: body.initialMessage,
       assets: body.assets || [],
       language: body.language
-    }));
+    });
+    if (runtimeProvider === "codex") {
+      const thread = await ensureCodexProjectThread({
+        workspaceId: result.productPlan.planId
+      });
+      if (!thread.ok) {
+        sendActionJson(response, thread);
+        return;
+      }
+      let codexThreadId = thread.codexThreadId;
+      if (!codexThreadId) {
+        const initialized = await runCodexProductTurn({
+          thread: thread.thread,
+          workspaceId: result.productPlan.planId,
+          prompt: codexInitializationPrompt({ result, userMessage: body.initialMessage || body.message || "" })
+        });
+        if (!initialized.ok) {
+          sendActionJson(response, initialized);
+          return;
+        }
+        codexThreadId = initialized.codexThreadId;
+      }
+      if (!codexThreadId) {
+        sendActionJson(response, {
+          ok: false,
+          error: {
+            code: "CODEX_THREAD_ID_MISSING",
+            message: "Codex initialized a thread but did not expose a thread id."
+          }
+        });
+        return;
+      }
+      result.codexThreadId = codexThreadId;
+      result.productPlan.workspaceState = {
+        ...(result.productPlan.workspaceState || {}),
+        codexThreadId
+      };
+      persistProjectPlan({ plan: result.productPlan });
+    }
+    sendJson(response, 200, result);
     return;
   }
 
@@ -575,6 +620,26 @@ function sendActionJson(response, result) {
       ? 404
       : 400;
   sendJson(response, status, result);
+}
+
+function codexInitializationPrompt({ result, userMessage = "" } = {}) {
+  const plan = result?.productPlan || {};
+  const revision = result?.revision || {};
+  return [
+    "Initialize this Codex thread for one Forge hardware product project.",
+    "This is a product-task runtime thread, not a Forge source-code editing task.",
+    "Do not call tools or request file/model mutations in this initialization turn.",
+    "Return exactly this JSON shape with an empty toolCalls array:",
+    "{\"assistantMessage\":\"Project thread initialized.\",\"toolCalls\":[]}",
+    "",
+    "Forge project summary:",
+    JSON.stringify({
+      planId: plan.planId || "",
+      title: plan.workspaceState?.title || revision.requestText || "",
+      currentRevisionId: plan.currentRevisionId || "",
+      userMessage
+    }, null, 2)
+  ].join("\n");
 }
 
 server.listen(port, host, () => {

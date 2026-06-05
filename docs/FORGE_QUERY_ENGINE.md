@@ -1,8 +1,8 @@
 # Forge QueryEngine
 
-Status: implemented for local V1 with a deterministic Forge tool adapter and an optional OpenAI Responses adapter.
+Status: implemented for local V1 with a deterministic Forge tool adapter, an optional OpenAI Responses adapter, and an optional Codex SDK runtime provider for Forge product tasks.
 
-Forge QueryEngine is the narrow Claude Code-style runtime layer for Forge. It borrows the shape of Claude Code's query loop, tool metadata, permission gate, and transcript persistence, but only for Forge hardware project actions.
+Forge QueryEngine is now the Forge state and tool orchestration layer. It borrows the shape of Claude Code's query loop, tool metadata, permission gate, and transcript persistence, but only for Forge hardware project actions. When `runtimeProvider: "codex"` is selected, Codex owns product-task intent and thread context while QueryEngine still controls ContextPack injection, permission checks, Forge action execution, and local persistence.
 
 ## Runtime Flow
 
@@ -13,6 +13,7 @@ User message
   -> build Forge prompt sections
   -> export Tool Protocol schemas
   -> call ModelAdapter
+  -> Codex runtime returns Forge tool intent when runtimeProvider=codex
   -> permission-check tool calls
   -> execute Forge actions
   -> append tool events and chat transcript
@@ -22,6 +23,7 @@ User message
 The implementation lives in:
 
 - `src/core/forge_query_engine.mjs`
+- `src/core/codex_runtime.mjs`
 - `src/core/model_adapters.mjs`
 - `src/core/tool_schema_exporter.mjs`
 - `src/core/tool_executor.mjs`
@@ -39,6 +41,7 @@ runForgeChatTurn({
   userMessage,
   sessionId,
   modelProvider,
+  runtimeProvider,
   mode,
   confirmation
 })
@@ -52,7 +55,14 @@ HTTP routes:
 
 The frontend creates the initial `ProductPlan` with `/api/plans`. Once a real workspace exists, later composer turns use `/api/workspaces/:workspaceId/chat/turn`.
 
-The default UI/runtime provider is the local Forge adapter (`modelProvider: "mock"` in code). This avoids external key/relay failures while still exercising real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths. OpenAI-backed turns require an explicit `modelProvider: "openai"` request or `FORGE_CHAT_MODEL_PROVIDER=openai`.
+The default UI/runtime provider is the local Forge adapter (`modelProvider: "mock"` / `runtimeProvider: "mock"` in code). This avoids external key/relay failures while still exercising real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths.
+
+Optional providers:
+
+- `runtimeProvider: "codex"` or `FORGE_CHAT_RUNTIME_PROVIDER=codex`: use `@openai/codex-sdk` on the server. Each Forge project stores one `codexThreadId` in `project_manifest.json`; new projects create a Codex thread, and later turns resume the same thread.
+- `modelProvider: "openai"` or `FORGE_CHAT_MODEL_PROVIDER=openai`: use the OpenAI Responses adapter behind `OPENAI_API_KEY`.
+
+The browser can set `window.FORGE_RUNTIME_PROVIDER = "codex"` or `localStorage.forgeRuntimeProvider = "codex"` before loading the app. If the Codex SDK is unavailable or cannot start/resume a thread, the API returns a clear structured error and the UI keeps the draft input instead of fabricating a ProductPlan response.
 
 ## Tool Boundary
 
@@ -150,6 +160,8 @@ This keeps the project resumable and inspectable without loading raw model artif
 - revert: active revision pointer change
 - unsupported flight/mains/drone requests: no unsafe tool execution
 
+`CodexModelAdapter` exists behind `runtimeProvider: "codex"` and dynamically imports `@openai/codex-sdk`. It sends the Forge prompt, current ContextPack summary, allowed tool schemas, recent transcript, and prior tool results into the project-bound Codex thread. Codex must return a JSON tool intent (`assistantMessage`, `toolCalls`) rather than direct file changes. QueryEngine then permission-checks and executes those tool calls through Forge actions.
+
 `OpenAIResponsesAdapter` exists behind `modelProvider: "openai"` and `OPENAI_API_KEY`. It can also use `FORGE_MODEL_NAME` / `OPENAI_MODEL` and `OPENAI_BASE_URL` for relays. The test suite does not require a live API call.
 
 ## UI Payload
@@ -166,5 +178,6 @@ QueryEngine returns:
 - artifact paths
 - pending confirmation, if any
 - updated `productPlan`
+- `codexThreadId` when the Codex runtime provider is active
 
 The current UI renders a compact QueryEngine trace and pending confirmation card in the center thread.

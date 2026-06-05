@@ -65,7 +65,8 @@ Current known local limitation:
 - `src/core/context_pack_builder.mjs`: compact project-folder context builder for future chat/runtime layers; summarizes current state, revisions, proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without loading raw GLB/STL/STEP bytes.
 - `src/core/tool_registry.mjs`: Tool Protocol metadata for existing Forge actions, including schemas, confirmation policy, read/write behavior, side effects, concurrency locks, rollback strategy, and disallowed raw mutation targets.
 - `src/core/forge_query_engine.mjs`: Forge-native Claude Code-style query loop for one chat turn; persists user/assistant messages, builds ContextPack/prompt/tool schemas, calls a model adapter, permission-checks tool calls, executes Forge actions, records events, and returns UI-ready payloads.
-- `src/core/model_adapters.mjs`: deterministic local Forge `MockModelAdapter` for default UI/tool turns and tests plus optional OpenAI Responses adapter behind `OPENAI_API_KEY` and explicit `modelProvider: "openai"` / `FORGE_CHAT_MODEL_PROVIDER=openai`.
+- `src/core/model_adapters.mjs`: deterministic local Forge `MockModelAdapter` for default UI/tool turns and tests plus optional OpenAI Responses and Codex SDK adapters behind explicit provider configuration.
+- `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks; creates/resumes one Codex thread per Forge project, stores `codexThreadId` in `project_manifest.json`, injects ContextPack/tool boundaries, parses JSON tool intent, and reports SDK/thread errors without fabricating ProductPlan state.
 - `src/core/tool_schema_exporter.mjs`: exports Tool Protocol metadata into model-callable tool schemas.
 - `src/core/tool_executor.mjs`: validates and dispatches model tool calls to `forge_actions.mjs`; never executes shell or arbitrary file edits.
 - `src/core/permission_gate.mjs`: enforces read/proposal/mutation confirmation rules and blocks raw GeometrySpec, GLB/STL/STEP, mesh, and arbitrary file mutation targets.
@@ -197,7 +198,9 @@ Enclosure-specific rule:
 
 The current frontend should use backend ProductPlan APIs for real plans and should not synthesize a fake complete ProductPlan when the backend fails. If the server or API is unavailable, show a clear bilingual error and keep the draft input so the user can retry.
 
-The default local chat runtime is the deterministic Forge tool adapter (`modelProvider: "mock"` in code), because it exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifacts without depending on external API keys. OpenAI-backed turns must be explicitly requested/configured and should not break the default UI if the external key or relay is invalid.
+The default local chat runtime is the deterministic Forge tool adapter (`modelProvider: "mock"` / `runtimeProvider: "mock"` in code), because it exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifacts without depending on external API keys. OpenAI-backed turns must be explicitly requested/configured and should not break the default UI if the external key or relay is invalid.
+
+Codex-backed product turns must be explicitly requested with `runtimeProvider: "codex"` or `FORGE_CHAT_RUNTIME_PROVIDER=codex`. Codex owns project-thread conversation context and tool-intent decisions only; Forge still owns ProductPlan persistence, revisions, events, GeometrySpec, artifacts, permissions, and confirmation gates. Do not use Codex runtime as a mode for editing Forge source code from within the product.
 
 ## Verification
 

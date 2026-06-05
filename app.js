@@ -4,7 +4,15 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const SUPPORTED_LANGUAGES = ["zh", "en"];
 const threePreviewInstances = new Map();
-const FORGE_LOCAL_CHAT_PROVIDER = "mock";
+const FORGE_LOCAL_CHAT_PROVIDER = localChatProvider();
+
+function localChatProvider() {
+  try {
+    return window.FORGE_RUNTIME_PROVIDER || window.localStorage.getItem("forgeRuntimeProvider") || "mock";
+  } catch {
+    return "mock";
+  }
+}
 
 const copy = {
   zh: {
@@ -39,7 +47,6 @@ const copy = {
     newDraftTitle: "未命名硬件项目",
     newDraftDetail: "输入第一条需求后生成 ProductPlan",
     newProjectReady: "已准备新项目",
-    benchAgent: "原型助手",
     fallbackNotice: "后端暂不可用，无法创建真实 ProductPlan",
     sendFailed: "发送失败，已保留输入内容",
     emptyComposer: "请先输入硬件需求",
@@ -224,7 +231,6 @@ const copy = {
     newDraftTitle: "Untitled hardware project",
     newDraftDetail: "Send the first request to create a ProductPlan",
     newProjectReady: "New project ready",
-    benchAgent: "Prototype assistant",
     fallbackNotice: "Backend unavailable; cannot create a real ProductPlan",
     sendFailed: "Send failed; the input was kept",
     emptyComposer: "Enter a hardware request first",
@@ -456,7 +462,9 @@ async function createInitialPlan() {
     const turns = demoConversationTurns();
     const response = await apiPost("/api/plans", {
       initialMessage: turns[0],
-      language: state.lang
+      language: state.lang,
+      modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
+      runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
     });
     let productPlan = response.productPlan;
     for (const message of turns.slice(1)) {
@@ -600,9 +608,15 @@ async function sendTurn(message) {
       ? await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/turn`, {
         sessionId: state.chatSessionId,
         userMessage: message,
-        modelProvider: FORGE_LOCAL_CHAT_PROVIDER
+        modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
+        runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
       })
-      : await apiPost("/api/plans", { initialMessage: message, language: state.lang });
+      : await apiPost("/api/plans", {
+        initialMessage: message,
+        language: state.lang,
+        modelProvider: FORGE_LOCAL_CHAT_PROVIDER,
+        runtimeProvider: FORGE_LOCAL_CHAT_PROVIDER
+      });
     if (token !== state.workspaceToken) return;
     if (!response.productPlan) throw new Error("ProductPlan was not returned.");
     upsertProjectFromPlan(response.productPlan, {
@@ -964,11 +978,9 @@ function renderReviewWorkspace() {
 
 function renderMessage(turn) {
   const role = turn.role === "assistant" ? "ai" : "user";
-  const title = turn.role === "assistant" ? `<strong>${escapeHtml(t("benchAgent"))}</strong>` : "";
   return `
     <article class="message ${role}">
       <div class="bubble">
-        ${title}
         <p>${escapeHtml(turn.text)}</p>
       </div>
     </article>
