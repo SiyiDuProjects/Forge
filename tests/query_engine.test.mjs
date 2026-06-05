@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import { loadChatSession } from "../src/core/chat_session_store.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
-import { ensureCodexProjectThread, parseCodexToolIntent } from "../src/core/codex_runtime.mjs";
+import { ensureCodexProjectThread, parseCodexToolIntent, runCodexProductTurn } from "../src/core/codex_runtime.mjs";
 import { runForgeChatTurn, confirmForgeChatTool, resolveChatRuntime } from "../src/core/forge_query_engine.mjs";
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
 import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
@@ -556,6 +556,51 @@ test("Codex runtime streams SDK progress into Forge trace events", async () => {
   const commandTrace = traceEvents.find((event) => event.type === "codex_item_completed" && event.itemType === "command_execution");
   assert.equal(commandTrace.summary.command, "node scripts/forge-tool.mjs apply --message streamed");
   assert.equal(commandTrace.summary.aggregated_output, undefined);
+});
+
+test("Codex runtime forwards abort signals to streamed SDK turns", async () => {
+  const controller = new AbortController();
+  let observedSignal = null;
+  const thread = {
+    id: "signal-thread",
+    async runStreamed(_prompt, options = {}) {
+      observedSignal = options.signal;
+      return {
+        events: (async function* events() {
+          yield {
+            type: "item.completed",
+            item: {
+              id: "msg_1",
+              type: "agent_message",
+              text: JSON.stringify({
+                assistantMessage: "Signal observed.",
+                toolCalls: []
+              })
+            }
+          };
+          yield {
+            type: "turn.completed",
+            usage: {
+              input_tokens: 1,
+              cached_input_tokens: 0,
+              output_tokens: 1,
+              reasoning_output_tokens: 0
+            }
+          };
+        })()
+      };
+    }
+  };
+
+  const result = await runCodexProductTurn({
+    thread,
+    prompt: "hello",
+    signal: controller.signal
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(observedSignal, controller.signal);
+  assert.match(result.text, /Signal observed/);
 });
 
 test("Codex runtime reports guarded direct file writes instead of accepting them", async () => {

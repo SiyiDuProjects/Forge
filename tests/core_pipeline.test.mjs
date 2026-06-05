@@ -344,8 +344,15 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /codex_item_started/);
   assert.match(app, /codex_item_completed/);
   assert.match(app, /formatCodexUsage/);
+  assert.match(app, /new AbortController/);
+  assert.match(app, /cancelActiveTurn/);
+  assert.match(app, /cancelRunAria/);
+  assert.match(app, /sendCancelled/);
+  assert.match(app, /dataset\.running/);
   assert.match(styles, /\.trace-timeline/);
   assert.match(styles, /\.trace-row\.running strong/);
+  assert.match(styles, /\.send-button\[data-running="true"\]/);
+  assert.match(styles, /\.trace-row\.cancelled strong/);
   assert.match(app, /function submitComposer/);
   assert.match(app, /dom\.runChain\.addEventListener\("click", submitComposer\)/);
   assert.match(app, /emptyComposer: "请先输入硬件需求"/);

@@ -146,7 +146,7 @@ export class OpenAIResponsesAdapter {
     this.responsesUrl = openAIResponsesUrl(baseUrl);
   }
 
-  async runTurn({ prompt, tools = [], userMessage = "" } = {}) {
+  async runTurn({ prompt, tools = [], userMessage = "", signal = null } = {}) {
     if (!this.apiKey) {
       return {
         ok: false,
@@ -177,7 +177,8 @@ export class OpenAIResponsesAdapter {
             }
           ],
           tools
-        })
+        }),
+        signal
       });
     } catch (error) {
       return {
@@ -224,7 +225,8 @@ export class CodexSdkRuntimeAdapter {
     prompt = "",
     userMessage = "",
     toolResults = [],
-    onCodexEvent = null
+    onCodexEvent = null,
+    signal = null
   } = {}) {
     const thread = await ensureCodexProjectThread({
       workspaceId: this.workspaceId,
@@ -243,7 +245,8 @@ export class CodexSdkRuntimeAdapter {
         toolResults,
         userMessage
       }),
-      onCodexEvent
+      onCodexEvent,
+      signal
     });
     if (!run.ok) return run;
     hydrateProductPlanFromWorkspace({

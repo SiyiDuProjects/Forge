@@ -39,6 +39,7 @@ const copy = {
     composerDefault: "描述硬件需求，发送后更新 ProductPlan 和 3D 生成状态",
     composerPlaceholder: "说出你想做的硬件，例如：我想做一个小型木纹桌面屏，显示天气和照片，3.5 英寸，USB-C 供电。",
     runChainAria: "发送需求并更新方案",
+    cancelRunAria: "停止本轮执行",
     inspectorAria: "实时方案包",
     settingsTitle: "Forge 设置",
     language: "语言",
@@ -59,6 +60,7 @@ const copy = {
     newProjectReady: "已准备新项目",
     fallbackNotice: "后端暂不可用，无法创建真实 ProductPlan",
     sendFailed: "发送失败，已保留输入内容",
+    sendCancelled: "已停止本轮，输入内容已保留",
     emptyComposer: "请先输入硬件需求",
     rerunNotice: "已更新 ProductPlan revision",
     chatRuntimeNotice: "Forge 工具链已更新项目",
@@ -254,6 +256,7 @@ const copy = {
     composerDefault: "Describe the hardware request; sending updates the ProductPlan and 3D generation state",
     composerPlaceholder: "Describe the hardware you want, e.g. a small woodgrain desktop display for weather and photos, 3.5 in, USB-C powered.",
     runChainAria: "Send request and update plan",
+    cancelRunAria: "Stop this turn",
     inspectorAria: "Live plan packet",
     settingsTitle: "Workbench settings",
     language: "Language",
@@ -274,6 +277,7 @@ const copy = {
     newProjectReady: "New project ready",
     fallbackNotice: "Backend unavailable; cannot create a real ProductPlan",
     sendFailed: "Send failed; the input was kept",
+    sendCancelled: "Turn stopped; the input was kept",
     emptyComposer: "Enter a hardware request first",
     rerunNotice: "ProductPlan revision updated",
     chatRuntimeNotice: "Forge tool runtime updated the project",
@@ -486,6 +490,7 @@ const state = {
   runtimeError: "",
   runtimeProvider: INITIAL_RUNTIME_PROVIDER,
   workspaceToken: 0,
+  activeRequestController: null,
   contactInfo: { name: "", email: "" }
 };
 
@@ -716,6 +721,30 @@ function createFailedTrace({ message = "", error = "" } = {}) {
   };
 }
 
+function createCancelledTrace({ message = "" } = {}) {
+  const existing = state.activeTrace || {};
+  return {
+    ...existing,
+    ok: false,
+    traceState: "cancelled",
+    traceKind: existing.traceKind || "chat_turn",
+    userMessage: message || existing.userMessage || "",
+    runtimeProvider: existing.runtimeProvider || currentRuntimeProvider(),
+    modelProvider: existing.modelProvider || currentRuntimeProvider(),
+    assistantMessage: t("sendCancelled"),
+    toolCalls: existing.toolCalls || [],
+    toolResults: existing.toolResults || [],
+    modelResponses: existing.modelResponses || [],
+    traceEvents: existing.traceEvents || [],
+    eventsAppended: existing.eventsAppended || [],
+    cancelledAt: new Date().toISOString()
+  };
+}
+
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
 function planCreationTrace(response = {}, message = "") {
   return {
     ok: true,
@@ -770,7 +799,9 @@ function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
 async function sendTurn(message) {
   const token = ++state.workspaceToken;
   const hasRealPlan = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback");
+  const controller = new AbortController();
   state.loading = true;
+  state.activeRequestController = controller;
   state.runtimeError = "";
   state.activeTrace = createRunningTrace({ message, hasRealPlan });
   state.lastChatTurn = null;
@@ -784,14 +815,14 @@ async function sendTurn(message) {
         runtime: currentRuntimeProvider(),
         modelProvider: currentRuntimeProvider(),
         runtimeProvider: currentRuntimeProvider()
-      }, (event) => applyStreamTraceEvent(event, token))
+      }, (event) => applyStreamTraceEvent(event, token), { signal: controller.signal })
       : await apiPostStream("/api/plans/stream", {
         initialMessage: message,
         language: state.lang,
         runtime: currentRuntimeProvider(),
         modelProvider: currentRuntimeProvider(),
         runtimeProvider: currentRuntimeProvider()
-      }, (event) => applyStreamTraceEvent(event, token));
+      }, (event) => applyStreamTraceEvent(event, token), { signal: controller.signal });
     if (token !== state.workspaceToken) return;
     if (!response.productPlan) throw new Error("ProductPlan was not returned.");
     const streamTraceEvents = state.activeTrace?.traceEvents || [];
@@ -811,6 +842,15 @@ async function sendTurn(message) {
     return true;
   } catch (error) {
     if (token !== state.workspaceToken) return;
+    if (isAbortError(error)) {
+      state.runtimeError = "";
+      state.activeTrace = createCancelledTrace({ message });
+      state.pendingConfirmation = null;
+      syncActiveProject({ runtimeError: "", activeTrace: state.activeTrace, pendingConfirmation: null });
+      state.activeSidebar = "chat";
+      setNotice(t("sendCancelled"));
+      return false;
+    }
     state.runtimeError = userFacingError(error);
     state.activeTrace = createFailedTrace({ message, error: state.runtimeError });
     state.pendingConfirmation = null;
@@ -819,10 +859,20 @@ async function sendTurn(message) {
     setNotice(t("sendFailed"));
     return false;
   } finally {
-    if (token !== state.workspaceToken) return;
+    if (token !== state.workspaceToken) {
+      if (state.activeRequestController === controller) state.activeRequestController = null;
+      return;
+    }
     state.loading = false;
+    state.activeRequestController = null;
     render();
   }
+}
+
+function cancelActiveTurn() {
+  if (!state.loading || !state.activeRequestController) return false;
+  state.activeRequestController.abort();
+  return true;
 }
 
 async function resolveChatConfirmation(approved) {
@@ -943,14 +993,15 @@ async function apiPost(path, body) {
   return payload;
 }
 
-async function apiPostStream(path, body, onTraceEvent = () => {}) {
+async function apiPostStream(path, body, onTraceEvent = () => {}, { signal = null } = {}) {
   const response = await fetch(path, {
     method: "POST",
     headers: {
       accept: "text/event-stream",
       "content-type": "application/json"
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
   if (!response.ok || !response.body) {
     const message = await response.text().catch(() => "");
@@ -1049,7 +1100,10 @@ function renderStaticText() {
   setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
   setAttr(".thread-list", "aria-label", t("projectListAria"));
   setAttr(".inspector", "aria-label", t("inspectorAria"));
-  setAttr("#runChain", "aria-label", t("runChainAria"));
+  setAttr("#runChain", "aria-label", state.loading ? t("cancelRunAria") : t("runChainAria"));
+  setAttr("#runChain", "title", state.loading ? t("cancelRunAria") : t("runChainAria"));
+  setAttr("#runChain", "aria-busy", state.loading ? "true" : "false");
+  if (dom.runChain) dom.runChain.dataset.running = state.loading ? "true" : "false";
   setAttr("#openThreadMenu", "aria-label", t("threadMenuAria"));
   setAttr("#languageSelect", "aria-label", t("languageSelectAria"));
   setAttr(".review-contact-dialog", "aria-label", t("reviewContactTitle"));
@@ -1329,6 +1383,13 @@ function traceRows(turn = {}, pending = null) {
     return [
       { status: "blocked", label: t("traceRuntime"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
       { status: "blocked", label: t("traceFailed"), value: turn.assistantMessage || t("sendFailed") }
+    ];
+  }
+  if (turn?.traceState === "cancelled") {
+    return [
+      ...eventRows,
+      { status: "cancelled", label: t("traceRuntime"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
+      { status: "cancelled", label: t("traceDone"), value: turn.assistantMessage || t("sendCancelled") }
     ];
   }
 
@@ -2822,7 +2883,10 @@ async function triggerModelGeneration() {
 
 async function submitComposer(event) {
   event?.preventDefault();
-  if (state.loading) return;
+  if (state.loading) {
+    cancelActiveTurn();
+    return;
+  }
   const message = dom.ideaInput?.value.trim() || "";
   if (!message) {
     setNotice(t("emptyComposer"));

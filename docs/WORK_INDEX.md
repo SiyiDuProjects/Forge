@@ -20,6 +20,25 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Stop Current Runtime Turn
+
+- Scope: add a stop-current-turn path for long-running frontend runtime requests so a Codex/Forge turn is not an uninterruptible spinner.
+- Status: implemented and verified in the current working tree.
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/CODEX_RUNTIME_COMPLETION_AUDIT.md`
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+  - `server.mjs`
+  - `src/core/codex_runtime.mjs`
+  - `src/core/model_adapters.mjs`
+  - `src/core/forge_query_engine.mjs`
+  - `src/core/runtime_plan_creation.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: `cancelActiveTurn`, `AbortController`, `cancelRunAria`, `sendCancelled`, `data-running`, `traceState: "cancelled"`, `abortSignal`, `signal`, `streamAbortController`.
+- Verification: `npm run check` passes with 68 tests, including signal forwarding to streamed Codex SDK turns. Local HTTP smoke against `http://127.0.0.1:8771/api/plans/stream` returned `200`, trace events, final SSE, `productPlan`, and `workspaceId`; a client abort smoke returned `AbortError`. Browser pass confirmed the loaded page renders the send button with `data-running="false"` / `aria-busy="false"` and the composer placeholder; Browser plugin text entry was blocked by its virtual clipboard limitation, so full manual send remains a user/browser check rather than claimed automated evidence.
+- Boundary: stopping a turn is a per-request abort and draft-preservation path. It is not a durable job queue, background worker, or provider-level guaranteed cancellation after an external SDK has already completed.
+
 ### 2026-06-05 - Codex SDK Streamed Event Summaries
 
 - Scope: switch the Codex SDK runtime adapter from buffered `thread.run()` only to `runStreamed()` when available, and forward safe SDK thread/turn/item summaries into the existing frontend SSE trace.

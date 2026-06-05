@@ -531,6 +531,10 @@ pre {
   color: var(--warn);
 }
 
+.trace-row.cancelled strong {
+  color: #6f756f;
+}
+
 .workspace-view {
   gap: 18px;
 }
@@ -935,11 +939,26 @@ pre {
   box-shadow: 0 10px 22px rgba(31, 33, 29, 0.16);
 }
 
+.send-button[data-running="true"] {
+  background: #5c625e;
+  border-color: #5c625e;
+}
+
+.send-button[data-running="true"]:hover {
+  background: #3d4340;
+}
+
 .send-button span {
   width: 12px;
   height: 12px;
   border-radius: 3px;
   background: #fff;
+}
+
+.send-button[data-running="true"] span {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
 }
 
 .inspector {

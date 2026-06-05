@@ -85,7 +85,8 @@ export async function runCodexProductTurn({
   workspaceId = "",
   rootDir = defaultProjectWorkspaceRoot(),
   outputSchema = codexOutputSchema(),
-  onCodexEvent = null
+  onCodexEvent = null,
+  signal = null
 } = {}) {
   if (!thread || (typeof thread.run !== "function" && typeof thread.runStreamed !== "function")) {
     return {
@@ -100,8 +101,8 @@ export async function runCodexProductTurn({
     const before = workspaceId ? snapshotGuardedFiles({ workspaceId, rootDir }) : null;
     const beforeEventCount = workspaceId ? guardedEventCount({ workspaceId, rootDir }) : 0;
     const result = typeof thread.runStreamed === "function"
-      ? await runCodexThreadStreamed({ thread, prompt, outputSchema, onCodexEvent })
-      : await runCodexThreadBuffered({ thread, prompt, outputSchema, onCodexEvent });
+      ? await runCodexThreadStreamed({ thread, prompt, outputSchema, onCodexEvent, signal })
+      : await runCodexThreadBuffered({ thread, prompt, outputSchema, onCodexEvent, signal });
     const guardViolations = workspaceId
       ? detectGuardViolations({ workspaceId, rootDir, before, beforeEventCount })
       : [];
@@ -140,13 +141,14 @@ async function runCodexThreadBuffered({
   thread,
   prompt = "",
   outputSchema = null,
-  onCodexEvent = null
+  onCodexEvent = null,
+  signal = null
 } = {}) {
   emitCodexEvent(onCodexEvent, {
     type: "codex_turn_started",
     sdkEventType: "buffered.run"
   });
-  const result = await thread.run(prompt, outputSchema ? { outputSchema } : {});
+  const result = await thread.run(prompt, { ...(outputSchema ? { outputSchema } : {}), ...(signal ? { signal } : {}) });
   emitCodexEvent(onCodexEvent, {
     type: "codex_turn_completed",
     sdkEventType: "buffered.run",
@@ -161,9 +163,10 @@ async function runCodexThreadStreamed({
   thread,
   prompt = "",
   outputSchema = null,
-  onCodexEvent = null
+  onCodexEvent = null,
+  signal = null
 } = {}) {
-  const streamed = await thread.runStreamed(prompt, outputSchema ? { outputSchema } : {});
+  const streamed = await thread.runStreamed(prompt, { ...(outputSchema ? { outputSchema } : {}), ...(signal ? { signal } : {}) });
   const turn = {
     items: [],
     finalResponse: "",

@@ -144,7 +144,7 @@ async function handleApi(request, response, url) {
   if (request.method === "POST" && workspaceChatTurnStreamMatch) {
     const body = await readJsonBody(request);
     const runtime = runtimeForRequest(body);
-    await sendChatTurnStream(response, {
+    await sendChatTurnStream(request, response, {
       workspaceId: workspaceChatTurnStreamMatch[1],
       sessionId: body.sessionId || "session_default",
       userMessage: body.userMessage || body.message || "",
@@ -289,7 +289,7 @@ async function handleApi(request, response, url) {
   if (request.method === "POST" && url.pathname === "/api/plans/stream") {
     const body = await readJsonBody(request);
     const runtime = runtimeForRequest(body);
-    await sendPlanCreateStream(response, {
+    await sendPlanCreateStream(request, response, {
       message: body.message,
       initialMessage: body.initialMessage,
       assets: body.assets || [],
@@ -609,7 +609,8 @@ function runtimeForRequest(body = {}) {
   });
 }
 
-async function sendChatTurnStream(response, options = {}) {
+async function sendChatTurnStream(request, response, options = {}) {
+  const abortController = streamAbortController(request, response);
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-store, no-transform",
@@ -627,6 +628,7 @@ async function sendChatTurnStream(response, options = {}) {
   try {
     const result = await runForgeChatTurn({
       ...options,
+      abortSignal: abortController.signal,
       onTraceEvent: (event) => writeSse(response, "trace", event)
     });
     writeSse(response, result?.ok ? "final" : "error", result);
@@ -639,11 +641,12 @@ async function sendChatTurnStream(response, options = {}) {
       }
     });
   } finally {
-    response.end();
+    if (!response.writableEnded && !response.destroyed) response.end();
   }
 }
 
-async function sendPlanCreateStream(response, options = {}) {
+async function sendPlanCreateStream(request, response, options = {}) {
+  const abortController = streamAbortController(request, response);
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-store, no-transform",
@@ -659,6 +662,7 @@ async function sendPlanCreateStream(response, options = {}) {
   try {
     const result = await createProductPlanForRuntime({
       ...options,
+      abortSignal: abortController.signal,
       onTraceEvent: (event) => writeSse(response, "trace", event)
     });
     writeSse(response, result?.ok === false ? "error" : "final", result);
@@ -671,13 +675,24 @@ async function sendPlanCreateStream(response, options = {}) {
       }
     });
   } finally {
-    response.end();
+    if (!response.writableEnded && !response.destroyed) response.end();
   }
 }
 
 function writeSse(response, event, data = {}) {
+  if (response.writableEnded || response.destroyed) return;
   response.write(`event: ${event}\n`);
   response.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function streamAbortController(request, response) {
+  const controller = new AbortController();
+  const abort = () => {
+    if (!response.writableEnded) controller.abort();
+  };
+  request.on("aborted", abort);
+  response.on("close", abort);
+  return controller;
 }
 
 function sendJson(response, status, payload) {

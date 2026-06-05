@@ -25,7 +25,8 @@ export async function runForgeChatTurn({
   rootDir = defaultProjectWorkspaceRoot(),
   codexFactory = null,
   modelAdapterFactory = createModelAdapter,
-  onTraceEvent = null
+  onTraceEvent = null,
+  abortSignal = null
 } = {}) {
   const text = String(userMessage || "").trim();
   if (!workspaceId) return fail("UNKNOWN_WORKSPACE", "workspaceId is required.");
@@ -192,6 +193,7 @@ export async function runForgeChatTurn({
       contextPack: currentContextPack,
       toolResults: loopToolResults,
       messages: session.messages || [],
+      signal: abortSignal,
       onCodexEvent: (event) => emitTraceEvent(onTraceEvent, {
         turnId,
         sessionId,

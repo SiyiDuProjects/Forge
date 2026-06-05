@@ -10,7 +10,8 @@ export async function createProductPlanForRuntime({
   runtime = { runtimeProvider: "mock", modelProvider: "mock" },
   rootDir = defaultProjectWorkspaceRoot(),
   codexFactory = null,
-  onTraceEvent = null
+  onTraceEvent = null,
+  abortSignal = null
 } = {}) {
   const text = initialMessage || message || "";
   emitPlanTraceEvent(onTraceEvent, {
@@ -71,7 +72,8 @@ export async function createProductPlanForRuntime({
         result,
         userMessage: text
       }),
-      onCodexEvent: (event) => emitPlanTraceEvent(onTraceEvent, event)
+      onCodexEvent: (event) => emitPlanTraceEvent(onTraceEvent, event),
+      signal: abortSignal
     });
     if (!initialized.ok) {
       emitPlanTraceEvent(onTraceEvent, {

@@ -77,7 +77,7 @@ Test coverage:
 
 ## What Is Not Done
 
-Execution trace streaming is now exposed as a bounded SSE milestone feature. Forge records model/tool events in `events.jsonl`, and the current UI has a runtime selector plus live trace rows for ProductPlan creation, ContextPack preparation, model request/response, bounded Codex SDK thread/turn/item summaries, Forge tool selection/execution/result, proposal/revision state, pending confirmations, Codex thread id when available, and artifact generation status. It is still not a token-level or full internal Codex transcript; the UI streams safe product-task milestones and summarized SDK events, then receives the authoritative ProductPlan payload at the end.
+Execution trace streaming is now exposed as a bounded SSE milestone feature. Forge records model/tool events in `events.jsonl`, and the current UI has a runtime selector plus live trace rows for ProductPlan creation, ContextPack preparation, model request/response, bounded Codex SDK thread/turn/item summaries, Forge tool selection/execution/result, proposal/revision state, pending confirmations, Codex thread id when available, and artifact generation status. It is still not a token-level or full internal Codex transcript; the UI streams safe product-task milestones and summarized SDK events, then receives the authoritative ProductPlan payload at the end. The current UI can also stop an in-flight turn and preserve the draft input; this is a per-turn abort path, not a durable background job manager.
 
 ## How To Run The Live Smoke
 
