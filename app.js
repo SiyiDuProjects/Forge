@@ -777,8 +777,11 @@ function renderStaticText() {
   setText("#openSettings span:last-child", t("settingsButton"));
   setText("#copySpec", t("previewSnapshot"));
   setText("#submitReview", t("submitOrder"));
-  setText("#topbarTitle", t("appTitle"));
-  setText("#draftStatus", t("topbarStatus"));
+  setText("#topbarTitle", currentTopbarTitle());
+  if (dom.draftStatus) {
+    dom.draftStatus.textContent = "";
+    dom.draftStatus.hidden = true;
+  }
   setText("#composerSummary", state.loading ? "..." : t("composerDefault"));
   setText("#scopeLevel", planStatusText());
   setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
@@ -1559,6 +1562,14 @@ function planStatusText() {
   if (status === "submitted_for_review") return t("planSubmitted");
   if (status === "manual_expansion_draft") return t("planManual");
   return t("planReady");
+}
+
+function currentTopbarTitle() {
+  const project = activeProject();
+  if (project) return projectTitle(project);
+  const revision = currentRevision();
+  if (revision) return planTitle(revision);
+  return t("newDraftTitle");
 }
 
 function openFloating(name) {
