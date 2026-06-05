@@ -38,6 +38,10 @@ const copy = {
     submitOrder: "提交审核下单",
     previewSnapshot: "预览原型快照",
     composerDefault: "描述硬件需求，发送后更新 ProductPlan 和 3D 生成状态",
+    composerCodexReady: "下一条由 Codex 接管，并通过 Forge 工具落盘",
+    composerQueryReady: "下一条由 Forge QueryEngine 调用 Forge 工具",
+    composerCodexRunning: "Codex 正在处理本次任务",
+    composerQueryRunning: "Forge QueryEngine 正在处理本次任务",
     composerPlaceholder: "说出你想做的硬件，例如：我想做一个小型木纹桌面屏，显示天气和照片，3.5 英寸，USB-C 供电。",
     runChainAria: "发送需求并更新方案",
     cancelRunAria: "停止本轮执行",
@@ -264,6 +268,10 @@ const copy = {
     submitOrder: "Submit for review/order",
     previewSnapshot: "Preview prototype snapshot",
     composerDefault: "Describe the hardware request; sending updates the ProductPlan and 3D generation state",
+    composerCodexReady: "Next turn will run through Codex and Forge tools",
+    composerQueryReady: "Next turn will run through Forge QueryEngine tools",
+    composerCodexRunning: "Codex is handling this task",
+    composerQueryRunning: "Forge QueryEngine is handling this task",
     composerPlaceholder: "Describe the hardware you want, e.g. a small woodgrain desktop display for weather and photos, 3.5 in, USB-C powered.",
     runChainAria: "Send request and update plan",
     cancelRunAria: "Stop this turn",
@@ -1197,8 +1205,9 @@ function renderStaticText() {
     dom.draftStatus.textContent = "";
     dom.draftStatus.hidden = true;
   }
-  setText("#composerSummary", state.loading ? t("chatTraceRunning") : t("composerDefault"));
-  setText("#scopeLevel", planStatusText());
+  setText("#composerSummary", composerSummaryText());
+  setText("#scopeLevel", composerMetaText());
+  dom.scopeLevel?.classList.toggle("active", currentRuntimeProvider() === "codex" || state.loading);
   setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
   setAttr(".thread-list", "aria-label", t("projectListAria"));
   setAttr(".inspector", "aria-label", t("inspectorAria"));
@@ -2298,6 +2307,20 @@ function planStatusText() {
   if (status === "submitted_for_review") return t("planSubmitted");
   if (status === "manual_expansion_draft") return t("planManual");
   return t("planReady");
+}
+
+function composerSummaryText() {
+  const runtime = currentRuntimeProvider();
+  if (state.loading && runtime === "codex") return t("composerCodexRunning");
+  if (state.loading && runtime === "forge-query-engine") return t("composerQueryRunning");
+  if (state.loading) return t("chatTraceRunning");
+  if (runtime === "codex") return t("composerCodexReady");
+  if (runtime === "forge-query-engine") return t("composerQueryReady");
+  return t("composerDefault");
+}
+
+function composerMetaText() {
+  return `${planStatusText()} · ${runtimeDisplayName(currentRuntimeProvider())}`;
 }
 
 function currentTopbarTitle() {

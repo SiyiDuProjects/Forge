@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-05 - Composer Runtime Visibility
+
+- Scope: show the selected runtime directly in the composer so users can see before sending whether the next turn will run through local Forge, Forge QueryEngine, or Codex.
+- Status: implemented in the current working tree.
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `composerSummaryText`, `composerMetaText`, `composerCodexReady`, `composerQueryReady`, `Codex 正在处理本次任务`, `Next turn will run through Codex and Forge tools`.
+- Verification: `npm run check` passes with 69 tests. Browser verification on `http://127.0.0.1:8776/?cacheBust=composer-runtime-visibility` confirmed the default composer shows `标准桌面屏 · 本地 Forge`, selecting `Codex` changes it to `下一条由 Codex 接管，并通过 Forge 工具落盘` / `标准桌面屏 · Codex`, and selecting `Forge QueryEngine` changes it to the QueryEngine-specific line.
+- Boundary: this is visible runtime state only. It does not change runtime provider selection, Forge action behavior, Codex thread creation, ProductPlan writes, or artifact generation.
+
 ### 2026-06-05 - Startup Demo Runtime Isolation
 
 - Scope: keep automatic startup sample creation on the deterministic local mock runtime even when the user previously selected `Codex`, so page load does not create a Codex thread before the user sends a real request.

@@ -371,6 +371,11 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /dom\.runChain\.addEventListener\("click", submitComposer\)/);
   assert.match(app, /emptyComposer: "请先输入硬件需求"/);
   assert.match(app, /emptyComposer: "Enter a hardware request first"/);
+  assert.match(app, /composerCodexReady: "下一条由 Codex 接管，并通过 Forge 工具落盘"/);
+  assert.match(app, /composerCodexReady: "Next turn will run through Codex and Forge tools"/);
+  assert.match(app, /function composerSummaryText/);
+  assert.match(app, /function composerMetaText/);
+  assert.match(app, /dom\.scopeLevel\?\.classList\.toggle\("active"/);
   assert.match(app, /dom\.inspectorContent\.hidden = true/);
   assert.match(app, /dom\.inspectorContent\.hidden = false/);
   assert.match(styles, /\.inspector-content\[hidden\]\s*{\s*display: none;\s*}/);
