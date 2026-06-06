@@ -17,7 +17,7 @@ struct ForgeRootView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    Task { await state.refreshWorkspaces(selectFirst: false) }
+                    Task { await state.reconnect() }
                 } label: {
                     Label("刷新", systemImage: "arrow.clockwise")
                 }
@@ -74,7 +74,7 @@ struct ForgeSidebarView: View {
             VStack(alignment: .leading, spacing: ForgeSpacing.xs) {
                 Label(state.connectionMessage, systemImage: "server.rack")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(state.isConnected ? Color.secondary : Color.red)
                 Text(state.endpointString)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -183,16 +183,26 @@ private struct ForgeThreadHeader: View {
 }
 
 private struct ForgeDraftEmptyState: View {
+    @EnvironmentObject private var state: ForgeAppState
+
     var body: some View {
         VStack(alignment: .leading, spacing: ForgeSpacing.md) {
-            Image(systemName: "sparkles.rectangle.stack")
+            Image(systemName: state.isConnected ? "sparkles.rectangle.stack" : "exclamationmark.triangle")
                 .font(.system(size: 34))
-                .foregroundStyle(.secondary)
-            Text("描述一个硬件想法")
+                .foregroundStyle(state.isConnected ? Color.secondary : Color.orange)
+            Text(state.isConnected ? "描述一个硬件想法" : "本地 Forge API 未连接")
                 .font(.title3.weight(.semibold))
-            Text("Forge Mac 会通过本地 Forge API 创建 ProductPlan，并把范围、零件清单、风险限制、报价区间和 3D 模型状态保留在现有工作区。")
+            Text(state.isConnected ? "Forge Mac 会通过本地 Forge API 创建 ProductPlan，并把范围、零件清单、风险限制、报价区间和 3D 模型状态保留在现有工作区。" : state.offlineGuidance)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if !state.isConnected {
+                Button {
+                    Task { await state.reconnect() }
+                } label: {
+                    Label("重新连接", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
         .padding(ForgeSpacing.xl)
         .frame(maxWidth: 480, alignment: .leading)
@@ -257,7 +267,7 @@ private struct ForgeComposerView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(state.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.isLoading)
+                .disabled(state.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.isLoading || !state.isConnected)
             }
         }
         .padding(ForgeSpacing.lg)
@@ -467,12 +477,12 @@ struct ForgeSettingsView: View {
 
             HStack {
                 Button {
-                    Task { await state.checkConnection() }
+                    Task { await state.reconnect() }
                 } label: {
                     Label("测试连接", systemImage: "network")
                 }
                 Button {
-                    Task { await state.refreshWorkspaces(selectFirst: false) }
+                    Task { await state.reconnect() }
                 } label: {
                     Label("刷新项目", systemImage: "arrow.clockwise")
                 }

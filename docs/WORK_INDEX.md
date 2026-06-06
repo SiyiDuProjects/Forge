@@ -23,10 +23,11 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 ### 2026-06-06 - Forge Mac Client Native Shell
 
 - Scope: add the first macOS client pass for Forge under `apps/forge-mac`, using SwiftUI native components for the three-column app shell, sidebar, toolbar, settings, composer, thread, inspector, spacing/radius tokens, Liquid Glass-compatible material panels, local Forge API calls, and a `WKWebView` bridge to the existing web/Three.js preview.
-- Status: implemented in the current working tree.
-- Source note: `docs/source-materials/2026-06-06-forge-mac-client-port-request.md`
+- Status: implemented in the current working tree. Follow-up launch-log cleanup added a real Xcode app project and offline server handling.
+- Source notes: `docs/source-materials/2026-06-06-forge-mac-client-port-request.md`, `docs/source-materials/2026-06-06-forge-mac-launch-log.md`
 - Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
 - Key code handles:
+  - `apps/forge-mac/ForgeMac.xcodeproj`
   - `apps/forge-mac/Package.swift`
   - `apps/forge-mac/Sources/ForgeMac/ForgeMacApp.swift`
   - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
@@ -34,8 +35,8 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `apps/forge-mac/Sources/ForgeMac/ForgeAppState.swift`
   - `apps/forge-mac/Sources/ForgeMac/ForgeDesign.swift`
   - `apps/forge-mac/Sources/ForgeMac/WebPreview.swift`
-- Retrieval handles: Forge Mac, SwiftUI, NavigationSplitView, Liquid Glass, glassEffect, ForgeRuntimeProvider, ForgeClient, ForgeAppState, WKWebView, ProductPlan API, apps/forge-mac.
-- Verification: `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. Xcode is installed at `/Applications/Xcode.app/Contents/Developer` and reports `Xcode 26.5`. `npm run check` remains the required web/core regression gate.
+- Retrieval handles: Forge Mac, SwiftUI, NavigationSplitView, Liquid Glass, glassEffect, ForgeRuntimeProvider, ForgeClient, ForgeAppState, WKWebView, ProductPlan API, Xcode project, PRODUCT_BUNDLE_IDENTIFIER, connection refused, apps/forge-mac.
+- Verification: `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac` and produces a `ForgeMac.app` with `CFBundleIdentifier = studio.forge.mac`. `npm run check` passes with 77 tests. Xcode is installed at `/Applications/Xcode.app/Contents/Developer` and reports `Xcode 26.5`.
 - Boundary: the Mac client is a native app shell and API client. It does not own ProductPlan, GeometrySpec, Codex runtime state, GLB/STL/STEP artifacts, manufacturing, checkout, or a native CAD/modeling editor.
 
 ### 2026-06-06 - Conversation Bottom Gap Tightening

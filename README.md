@@ -39,13 +39,13 @@ If the managed Codex sandbox reports `listen EPERM`, rerun in a normal local ter
 
 ## Run The Mac Client
 
-Start the Forge server first, then open the Swift package in Xcode:
+Start the Forge server first, then open the Xcode app project:
 
 ```bash
-open apps/forge-mac/Package.swift
+open apps/forge-mac/ForgeMac.xcodeproj
 ```
 
-Select the `ForgeMac` scheme and run. The Mac client defaults to `http://127.0.0.1:8765`, uses native SwiftUI/AppKit surfaces for the shell, and keeps ProductPlan, GeometrySpec, Codex runtime state, and generated model artifacts in the existing Forge backend.
+Select the `ForgeMac` scheme and run. The Xcode project sets the app bundle identifier, which avoids Swift-package executable launch warnings around missing bundle identity. The Mac client defaults to `http://127.0.0.1:8765`, uses native SwiftUI/AppKit surfaces for the shell, and keeps ProductPlan, GeometrySpec, Codex runtime state, and generated model artifacts in the existing Forge backend.
 
 ## Verify
 
@@ -60,6 +60,7 @@ For the Mac client:
 ```bash
 cd apps/forge-mac
 swift build
+xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build
 ```
 
 ## Product Boundary

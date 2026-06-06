@@ -17,6 +17,7 @@ final class ForgeAppState: ObservableObject {
     @Published var productPlan: ForgeProductPlan?
     @Published var prompt: String = ""
     @Published var isLoading = false
+    @Published var isConnected = false
     @Published var connectionMessage = "未连接"
     @Published var errorMessage = ""
     @Published var showingSettings = false
@@ -42,6 +43,14 @@ final class ForgeAppState: ObservableObject {
         "session_\(productPlan?.planId ?? selectedWorkspaceId ?? "draft")"
     }
 
+    var serverStartCommand: String {
+        "npm start"
+    }
+
+    var offlineGuidance: String {
+        "先在 Forge 仓库根目录启动本地服务：\(serverStartCommand)"
+    }
+
     var previewURL: URL? {
         guard let root = URL(string: endpointString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return nil
@@ -55,25 +64,48 @@ final class ForgeAppState: ObservableObject {
     }
 
     func bootstrap() async {
-        await checkConnection()
-        await refreshWorkspaces(selectFirst: true)
+        if await checkConnection() {
+            await refreshWorkspaces(selectFirst: true)
+        }
     }
 
-    func checkConnection() async {
+    @discardableResult
+    func checkConnection() async -> Bool {
         guard let client else {
+            isConnected = false
             connectionMessage = "API 地址无效"
-            return
+            errorMessage = "Forge API 地址无效。"
+            return false
         }
         do {
             let health = try await client.health()
+            isConnected = health.ok
             connectionMessage = health.ok ? "已连接 Forge API" : "Forge API 未就绪"
+            if health.ok {
+                errorMessage = ""
+            }
+            return health.ok
         } catch {
+            isConnected = false
             connectionMessage = "未连接本地 Forge API"
-            errorMessage = error.localizedDescription
+            errorMessage = "\(offlineGuidance)。\(error.localizedDescription)"
+            return false
+        }
+    }
+
+    func reconnect() async {
+        if await checkConnection() {
+            await refreshWorkspaces(selectFirst: selectedWorkspaceId == nil && productPlan == nil)
         }
     }
 
     func refreshWorkspaces(selectFirst: Bool = false) async {
+        guard isConnected else {
+            if errorMessage.isEmpty {
+                errorMessage = offlineGuidance
+            }
+            return
+        }
         guard let client else {
             errorMessage = "API 地址无效"
             return
@@ -90,6 +122,10 @@ final class ForgeAppState: ObservableObject {
     }
 
     func selectWorkspace(_ workspace: ForgeWorkspaceSummary) async {
+        guard isConnected else {
+            errorMessage = offlineGuidance
+            return
+        }
         guard let client else { return }
         selectedWorkspaceId = workspace.id
         isLoading = true
@@ -113,6 +149,10 @@ final class ForgeAppState: ObservableObject {
     func sendPrompt() async {
         let message = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty, let client else { return }
+        guard isConnected else {
+            errorMessage = offlineGuidance
+            return
+        }
         isLoading = true
         errorMessage = ""
         defer { isLoading = false }

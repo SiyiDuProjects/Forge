@@ -4,6 +4,7 @@ coverage/
 npm-debug.log*
 external/
 **/.build/
+**/.swiftpm/
 DerivedData/
 *.xcuserdata/
 data/reviews/*.json

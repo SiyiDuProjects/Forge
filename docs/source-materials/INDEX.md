@@ -27,6 +27,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
 - Key handles: Forge Mac, SwiftUI, NavigationSplitView, Liquid Glass, Xcode, WKWebView, ProductPlan API, native macOS components.
 
+### Forge Mac Launch Log
+
+- File: `docs/source-materials/2026-06-06-forge-mac-launch-log.md`
+- Status: implemented by adding a real Xcode app project with bundle id and clearer offline server handling.
+- Related docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac launch logs, missing bundle identifier, connection refused, api health, Xcode project, PRODUCT_BUNDLE_IDENTIFIER, npm start.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`
