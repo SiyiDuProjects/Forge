@@ -55,6 +55,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
 - Key handles: Forge Mac, center thread, ForgeThreadHeader, top header removal, native toolbar, Liquid Glass.
 
+### Forge Mac Top Toolbar Removal Feedback
+
+- File: `docs/source-materials/2026-06-06-forge-mac-top-toolbar-removal-feedback.md`
+- Status: implemented by removing app-specific conversation-side top controls, preserving native top-left macOS controls, and moving settings/runtime selection into lower-left settings.
+- Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, conversation-side top toolbar removal, native top-left controls preserved, lower-left settings bubble, runtime picker in settings, no refresh button, hidden title text.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`

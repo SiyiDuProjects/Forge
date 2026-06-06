@@ -14,30 +14,6 @@ struct ForgeRootView: View {
             ForgeInspectorView()
                 .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 460)
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    Task { await state.reconnect() }
-                } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
-                }
-                .disabled(state.isLoading)
-
-                Picker("运行模式", selection: $state.runtimeProvider) {
-                    ForEach(ForgeRuntimeProvider.allCases) { provider in
-                        Text(provider.title).tag(provider)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 170)
-
-                Button {
-                    state.showingSettings = true
-                } label: {
-                    Label("Forge 设置", systemImage: "gearshape")
-                }
-            }
-        }
         .sheet(isPresented: $state.showingSettings) {
             ForgeSettingsView()
                 .environmentObject(state)
@@ -93,16 +69,26 @@ struct ForgeSidebarView: View {
             }
             .listStyle(.sidebar)
 
-            VStack(alignment: .leading, spacing: ForgeSpacing.xs) {
-                Label(state.connectionMessage, systemImage: "server.rack")
-                    .font(.caption)
-                    .foregroundStyle(state.isConnected ? Color.secondary : Color.red)
-                Text(state.endpointString)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+            Button {
+                state.showingSettings = true
+            } label: {
+                VStack(alignment: .leading, spacing: ForgeSpacing.xs) {
+                    Label("Forge 设置", systemImage: "gearshape")
+                        .font(.callout.weight(.medium))
+                    Label(state.connectionMessage, systemImage: "server.rack")
+                        .font(.caption)
+                        .foregroundStyle(state.isConnected ? Color.secondary : Color.red)
+                    Text(state.endpointString)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
+            .padding(.horizontal, ForgeSpacing.md)
+            .padding(.vertical, ForgeSpacing.sm)
+            .forgeGlassPanel(radius: ForgeRadius.popover)
             .padding(.horizontal, ForgeSpacing.md)
             .padding(.bottom, ForgeSpacing.md)
         }
@@ -264,12 +250,11 @@ private struct ForgeDraftEmptyState: View {
 
 struct ForgeInspectorView: View {
     @EnvironmentObject private var state: ForgeAppState
-    @State private var showingWebPreview = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ForgeSpacing.lg) {
-                ForgePreviewSection(showingWebPreview: $showingWebPreview)
+                ForgePreviewSection()
                 ForgePlanFactsSection()
                 ForgeModulesSection()
                 ForgeRiskSection()
@@ -282,7 +267,6 @@ struct ForgeInspectorView: View {
 
 private struct ForgePreviewSection: View {
     @EnvironmentObject private var state: ForgeAppState
-    @Binding var showingWebPreview: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: ForgeSpacing.md) {
@@ -290,13 +274,14 @@ private struct ForgePreviewSection: View {
                 Label("原型结构预览（3D）", systemImage: "cube")
                     .font(.headline)
                 Spacer()
-                Toggle("网页预览", isOn: $showingWebPreview)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
+                Text(state.productPlan?.currentRevision?.modelStatusTitle ?? "等待 ProductPlan")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            if showingWebPreview, let url = state.previewURL {
-                ForgeWebPreview(url: url)
+            if let modelURL = state.previewModelURL,
+               let serverURL = state.endpointURL {
+                ForgeWebPreview(modelURL: modelURL, serverURL: serverURL)
                     .frame(height: 260)
                     .clipShape(RoundedRectangle(cornerRadius: ForgeRadius.preview, style: .continuous))
             } else {
@@ -306,7 +291,7 @@ private struct ForgePreviewSection: View {
                         .foregroundStyle(.secondary)
                     Text(state.productPlan?.currentRevision?.modelStatusTitle ?? "等待 ProductPlan")
                         .font(.headline)
-                    Text("第一版 Mac 客户端用原生 inspector 展示状态；需要查看完整 Three.js 预览时打开网页预览。")
+                    Text("生成确认完成后，这里会直接加载当前版本的 3D 模型。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -468,11 +453,6 @@ struct ForgeSettingsView: View {
                     Task { await state.reconnect() }
                 } label: {
                     Label("测试连接", systemImage: "network")
-                }
-                Button {
-                    Task { await state.reconnect() }
-                } label: {
-                    Label("刷新项目", systemImage: "arrow.clockwise")
                 }
                 Spacer()
             }

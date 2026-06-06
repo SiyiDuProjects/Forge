@@ -20,16 +20,29 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Forge Mac Top Toolbar Removal
+
+- Scope: remove the Mac client's app-specific top refresh/runtime/settings controls and title text from the conversation side while preserving the native macOS top-left window/sidebar controls. Settings now opens from the lower-left sidebar glass bubble, runtime/model selection stays inside `Forge 设置`, and the Mac settings panel no longer exposes `刷新项目`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-top-toolbar-removal-feedback.md`
+- Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeMacApp.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+- Retrieval handles: conversation-side top toolbar removal, native top-left controls preserved, hidden title text, lower-left settings bubble, runtime picker in settings, no refresh button.
+- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests. Visual check reopened the built `ForgeMac.app` and confirmed the native macOS top-left traffic-light/sidebar controls are present, while the conversation side no longer shows the custom `Forge` title, refresh button, runtime/model picker, or settings gear.
+- Boundary: Mac client chrome/settings placement only; no ProductPlan, GeometrySpec, API, runtime provider behavior, artifact generation, right inspector, or web UI behavior changed.
+
 ### 2026-06-06 - Forge Mac Center Thread Header Removal
 
-- Scope: remove the Mac center-thread custom title/status header so the middle column no longer shows a separate `Forge`/project-title/runtime/model-status band above the conversation. The system toolbar and split view keep the top chrome; conversation content starts directly below it.
+- Scope: remove the Mac center-thread custom title/status header so the middle column no longer shows a separate `Forge`/project-title/runtime/model-status band above the conversation.
 - Status: implemented in the current working tree.
 - Source note: `docs/source-materials/2026-06-06-forge-mac-thread-header-removal-feedback.md`
 - Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
 - Key code handles:
   - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
 - Retrieval handles: `ForgeThreadHeader`, center thread header removal, native toolbar, top chrome, Liquid Glass.
-- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests. Visual check reopened the built `ForgeMac.app` and confirmed the center column no longer has the custom `Forge`/project-title/runtime/model-status header above the conversation; only the system toolbar remains at the top.
+- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests. Visual check reopened the built `ForgeMac.app` and confirmed the center column no longer has the custom `Forge`/project-title/runtime/model-status header above the conversation.
 - Boundary: Mac client center-thread layout only; no ProductPlan, GeometrySpec, API, runtime provider, artifact generation, right inspector, or web UI behavior changed.
 
 ### 2026-06-06 - Forge Mac Native Sidebar And Composer Polish

@@ -13,15 +13,10 @@ struct ForgeMacApp: App {
                     await state.bootstrap()
                 }
         }
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             SidebarCommands()
             CommandMenu("Forge") {
-                Button("刷新项目") {
-                    Task { await state.refreshWorkspaces(selectFirst: false) }
-                }
-                .keyboardShortcut("r", modifiers: [.command])
-
                 Button("新项目") {
                     state.startDraft()
                 }

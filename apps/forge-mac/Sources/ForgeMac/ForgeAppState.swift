@@ -29,10 +29,14 @@ final class ForgeAppState: ObservableObject {
     }
 
     var client: ForgeClient? {
-        guard let url = URL(string: endpointString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        guard let url = endpointURL else {
             return nil
         }
         return ForgeClient(baseURL: url)
+    }
+
+    var endpointURL: URL? {
+        URL(string: endpointString.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     var selectedWorkspace: ForgeWorkspaceSummary? {
@@ -51,16 +55,9 @@ final class ForgeAppState: ObservableObject {
         "先在 Forge 仓库根目录启动本地服务：\(serverStartCommand)"
     }
 
-    var previewURL: URL? {
-        guard let root = URL(string: endpointString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return nil
-        }
-        var components = URLComponents(url: root, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "macClient", value: "1"),
-            URLQueryItem(name: "workspaceId", value: productPlan?.planId ?? selectedWorkspaceId ?? "")
-        ]
-        return components?.url
+    var previewModelURL: URL? {
+        guard let root = endpointURL else { return nil }
+        return productPlan?.currentRevision?.modelGlbURL(baseURL: root)
     }
 
     func bootstrap() async {

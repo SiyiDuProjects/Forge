@@ -187,6 +187,20 @@ struct ForgeRevision: Decodable, Identifiable, Hashable {
         }
     }
 
+    var modelGlbPath: String? {
+        let artifacts = modelArtifacts?["artifacts"]?["glb"] ?? modelPreview?["assets"]?["glb"]
+        let path = artifacts?["url"]?.stringValue ?? artifacts?["localPath"]?.stringValue
+        return path?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    func modelGlbURL(baseURL: URL) -> URL? {
+        guard let path = modelGlbPath else { return nil }
+        if let absolute = URL(string: path), absolute.scheme != nil {
+            return absolute
+        }
+        return URL(string: path, relativeTo: baseURL)?.absoluteURL
+    }
+
     var quoteRange: String {
         quote?["quote_estimate_usd"]?["range"]?.stringValue
             ?? quote?["range"]?.stringValue
@@ -254,4 +268,10 @@ struct ForgePendingConfirmation: Decodable, Hashable {
     let confirmationId: String?
     let summary: String?
     let message: String?
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
 }
