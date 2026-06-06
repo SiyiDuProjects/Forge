@@ -214,8 +214,6 @@ struct ForgeThreadView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ForgeThreadHeader()
-            Divider()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: ForgeSpacing.md) {
                     if let plan = state.productPlan {
@@ -233,30 +231,6 @@ struct ForgeThreadView: View {
             ForgeComposerView()
         }
         .background(.background)
-    }
-}
-
-private struct ForgeThreadHeader: View {
-    @EnvironmentObject private var state: ForgeAppState
-
-    var body: some View {
-        HStack(spacing: ForgeSpacing.md) {
-            VStack(alignment: .leading, spacing: ForgeSpacing.xxs) {
-                Text(state.productPlan?.title ?? "新硬件原型")
-                    .font(.headline)
-                    .lineLimit(1)
-                Text("\(state.runtimeProvider.title) · \(state.productPlan?.currentRevision?.modelStatusTitle ?? "等待输入")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if state.isLoading {
-                ProgressView()
-                    .controlSize(.small)
-            }
-        }
-        .padding(.horizontal, ForgeSpacing.lg)
-        .padding(.vertical, ForgeSpacing.md)
     }
 }
 

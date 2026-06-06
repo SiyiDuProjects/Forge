@@ -48,6 +48,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
 - Key handles: Forge Mac, native sidebar, List(selection:), context menu, chat bubble, composer bubble, no ellipsis, no unimplemented composer icons.
 
+### Forge Mac Thread Header Removal Feedback
+
+- File: `docs/source-materials/2026-06-06-forge-mac-thread-header-removal-feedback.md`
+- Status: implemented by removing the Mac center-thread `ForgeThreadHeader` title/status band.
+- Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, center thread, ForgeThreadHeader, top header removal, native toolbar, Liquid Glass.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`

@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Forge Mac Center Thread Header Removal
+
+- Scope: remove the Mac center-thread custom title/status header so the middle column no longer shows a separate `Forge`/project-title/runtime/model-status band above the conversation. The system toolbar and split view keep the top chrome; conversation content starts directly below it.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-thread-header-removal-feedback.md`
+- Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+- Retrieval handles: `ForgeThreadHeader`, center thread header removal, native toolbar, top chrome, Liquid Glass.
+- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests. Visual check reopened the built `ForgeMac.app` and confirmed the center column no longer has the custom `Forge`/project-title/runtime/model-status header above the conversation; only the system toolbar remains at the top.
+- Boundary: Mac client center-thread layout only; no ProductPlan, GeometrySpec, API, runtime provider, artifact generation, right inspector, or web UI behavior changed.
+
 ### 2026-06-06 - Forge Mac Native Sidebar And Composer Polish
 
 - Scope: align the Mac client with native source-list and chat-composer behavior: project rows use `List(selection:)` and right-click context menus, row inline `...` actions are removed, user messages use subtle gray bubbles, assistant messages render without colored bubble backgrounds, and the bottom composer becomes one large rounded native glass input bubble with native `TextField(axis: .vertical)` and one system send button. The small selected-row/user-message gray bubble treatment stays separate from the large composer glass treatment.
