@@ -34,6 +34,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
 - Key handles: Forge Mac launch logs, missing bundle identifier, connection refused, api health, Xcode project, PRODUCT_BUNDLE_IDENTIFIER, npm start.
 
+### Forge Mac Sidebar New Project Spacing
+
+- File: `docs/source-materials/2026-06-06-forge-mac-sidebar-new-project-spacing.md`
+- Status: implemented by tightening the `新项目` sidebar row height and inset.
+- Related docs: `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, sidebar, 新项目, spacing, row height, NavigationSplitView, macOS sidebar.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`

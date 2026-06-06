@@ -16,6 +16,12 @@ enum ForgeRadius {
     static let preview: CGFloat = 12
 }
 
+enum ForgeSidebarMetric {
+    static let horizontalInset: CGFloat = 14
+    static let topInset: CGFloat = 10
+    static let primaryRowHeight: CGFloat = 36
+}
+
 enum ForgeRuntimeProvider: String, CaseIterable, Identifiable {
     case codex
     case queryEngine = "forge-query-engine"

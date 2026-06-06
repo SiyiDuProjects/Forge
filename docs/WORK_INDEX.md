@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Forge Mac Sidebar New Project Spacing
+
+- Scope: tighten the Mac sidebar `新项目` control so it reads as a standard sidebar row rather than a large rounded card colliding with the sidebar edges.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-sidebar-new-project-spacing.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeDesign.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+- Retrieval handles: `ForgeSidebarMetric`, `primaryRowHeight`, `horizontalInset`, `新项目`, sidebar spacing.
+- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests.
+- Boundary: Mac client visual spacing only; no ProductPlan, API, runtime, or web UI behavior changed.
+
 ### 2026-06-06 - Forge Mac Client Native Shell
 
 - Scope: add the first macOS client pass for Forge under `apps/forge-mac`, using SwiftUI native components for the three-column app shell, sidebar, toolbar, settings, composer, thread, inspector, spacing/radius tokens, Liquid Glass-compatible material panels, local Forge API calls, and a `WKWebView` bridge to the existing web/Three.js preview.

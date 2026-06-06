@@ -50,17 +50,21 @@ struct ForgeSidebarView: View {
     @EnvironmentObject private var state: ForgeAppState
 
     var body: some View {
-        VStack(spacing: ForgeSpacing.md) {
+        VStack(spacing: ForgeSpacing.sm) {
             Button {
                 state.startDraft()
             } label: {
                 Label("新项目", systemImage: "plus")
+                    .font(.callout)
+                    .labelStyle(.titleAndIcon)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: ForgeSidebarMetric.primaryRowHeight)
             }
             .buttonStyle(.plain)
             .padding(.horizontal, ForgeSpacing.md)
-            .padding(.vertical, ForgeSpacing.sm)
             .background(.quaternary.opacity(state.productPlan == nil ? 0.55 : 0), in: RoundedRectangle(cornerRadius: ForgeRadius.control, style: .continuous))
+            .padding(.horizontal, ForgeSidebarMetric.horizontalInset)
+            .padding(.top, ForgeSidebarMetric.topInset)
 
             List {
                 Section("项目") {
@@ -84,7 +88,6 @@ struct ForgeSidebarView: View {
             .padding(.horizontal, ForgeSpacing.md)
             .padding(.bottom, ForgeSpacing.md)
         }
-        .padding(.top, ForgeSpacing.md)
     }
 }
 
