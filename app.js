@@ -437,6 +437,7 @@ const state = {
 };
 
 const dom = {
+  conversation: document.querySelector(".conversation"),
   workspaceView: document.querySelector("#workspaceView"),
   inspectorContent: document.querySelector("#inspectorContent"),
   form: document.querySelector("#promptForm"),
@@ -476,7 +477,7 @@ async function bootstrap() {
   renderStaticText();
   const restored = await restorePersistedProjects();
   if (!restored) createDraftProject();
-  render();
+  render({ scrollConversationToBottom: true });
   refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
 }
 
@@ -507,7 +508,7 @@ async function restorePersistedProjects() {
   }
 }
 
-async function restoreActiveChatSession({ renderAfter = true } = {}) {
+async function restoreActiveChatSession({ renderAfter = true, scrollConversationToBottom = true } = {}) {
   const project = activeProject();
   const planId = project?.productPlan?.planId;
   if (!project || project.isDraft || !planId) return false;
@@ -538,12 +539,12 @@ async function restoreActiveChatSession({ renderAfter = true } = {}) {
       state.pendingConfirmation = pendingConfirmation;
       state.runtimeError = "";
     }
-    if (renderAfter) render();
+    if (renderAfter) render({ scrollConversationToBottom });
     return true;
   } catch (error) {
     if (requestToken !== state.workspaceToken || state.activeProjectId !== projectId) return false;
     project.chatSessionError = userFacingError(error);
-    if (renderAfter) render();
+    if (renderAfter) render({ scrollConversationToBottom });
     return false;
   }
 }
@@ -985,7 +986,7 @@ function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
     ];
   }
   syncActiveProject({ activeTrace: state.activeTrace, runtimeProvider: state.runtimeProvider });
-  render();
+  render({ scrollConversationToBottom: true });
 }
 
 async function sendTurn(message) {
@@ -998,7 +999,7 @@ async function sendTurn(message) {
   state.activeTrace = createRunningTrace({ message, hasRealPlan });
   state.lastChatTurn = null;
   syncActiveProject({ runtimeError: "", activeTrace: state.activeTrace, lastChatTurn: null, runtimeProvider: state.runtimeProvider });
-  render();
+  render({ scrollConversationToBottom: true });
   try {
     const response = hasRealPlan
       ? await apiPostStream(`/api/workspaces/${state.productPlan.planId}/chat/turn/stream`, {
@@ -1064,7 +1065,7 @@ async function sendTurn(message) {
     }
     state.loading = false;
     state.activeRequestController = null;
-    render();
+    render({ scrollConversationToBottom: true });
   }
 }
 
@@ -1078,7 +1079,7 @@ async function resolveChatConfirmation(approved) {
   if (!state.productPlan || !state.pendingConfirmation || state.loading) return;
   const token = ++state.workspaceToken;
   state.loading = true;
-  render();
+  render({ scrollConversationToBottom: true });
   try {
     const response = await apiPost(`/api/workspaces/${state.productPlan.planId}/chat/confirm`, {
       sessionId: state.chatSessionId,
@@ -1107,7 +1108,7 @@ async function resolveChatConfirmation(approved) {
   } finally {
     if (token !== state.workspaceToken) return;
     state.loading = false;
-    render();
+    render({ scrollConversationToBottom: true });
   }
 }
 
@@ -1162,7 +1163,7 @@ async function revertToRevision(revisionId) {
     setNotice(t("sendFailed"));
   } finally {
     state.loading = false;
-    render();
+    render({ scrollConversationToBottom: true });
   }
 }
 
@@ -1353,7 +1354,7 @@ function userFacingError(error) {
   return error instanceof Error ? error.message : String(error || t("fallbackNotice"));
 }
 
-function render() {
+function render({ scrollConversationToBottom = false } = {}) {
   renderStaticText();
   renderActiveStates();
   renderProjectList();
@@ -1361,7 +1362,18 @@ function render() {
   renderInspector();
   renderModelFullscreen();
   renderPopovers();
+  if (scrollConversationToBottom) scheduleConversationScrollToBottom();
   window.requestAnimationFrame(drawPreview);
+}
+
+function scheduleConversationScrollToBottom() {
+  if (state.activeSidebar !== "chat" || !dom.conversation) return;
+  window.requestAnimationFrame(() => {
+    dom.conversation.scrollTop = dom.conversation.scrollHeight;
+    window.requestAnimationFrame(() => {
+      dom.conversation.scrollTop = dom.conversation.scrollHeight;
+    });
+  });
 }
 
 function renderStaticText() {
@@ -2684,7 +2696,7 @@ function startNewProject() {
     runtimeProvider: state.runtimeProvider
   });
   if (dom.ideaInput) dom.ideaInput.value = "";
-  render();
+  render({ scrollConversationToBottom: true });
   setNotice(t("newProjectReady"));
   refreshRuntimeStatusForProjectBoundary();
   dom.ideaInput?.focus();
@@ -3221,7 +3233,7 @@ document.querySelector(".thread-list")?.addEventListener("click", (event) => {
   if (!projectButton) return;
   if (!activateProject(projectButton.dataset.sidebarProject)) return;
   setNotice(projectTitle(activeProject()));
-  render();
+  render({ scrollConversationToBottom: true });
   restoreActiveChatSession().catch(() => {});
   refreshRuntimeStatusForProjectBoundary();
 });
@@ -3249,7 +3261,7 @@ dom.workspaceView.addEventListener("click", (event) => {
     syncActiveProject({ productPlan: state.productPlan });
     state.activeSidebar = "chat";
     setNotice(`${t("currentRevision")}: ${historyRevision.dataset.historyRevision}`);
-    render();
+    render({ scrollConversationToBottom: true });
     return;
   }
   const revertRevision = event.target.closest("[data-revert-revision]");
@@ -3461,7 +3473,7 @@ dom.floatingLayer.addEventListener("click", (event) => {
       const removed = removeProjectFromList(targetProjectId);
       closeFloating();
       if (removed) setNotice(t("projectRemoved", removed.title));
-      render();
+      render({ scrollConversationToBottom: true });
       if (removed?.wasActive) {
         restoreActiveChatSession().catch(() => {});
         refreshRuntimeStatusForProjectBoundary();

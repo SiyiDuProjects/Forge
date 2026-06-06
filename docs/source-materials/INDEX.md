@@ -41,6 +41,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `AGENTS.md`
 - Key handles: right inspector, 3D 模型状态, proxy-notice, ComponentDescriptor, component asset source, generated evidence, 生成证据.
 
+### Conversation Auto-Scroll Comment
+
+- File: `docs/source-materials/2026-06-06-conversation-autoscroll-comment.md`
+- Status: implemented as bottom-scroll behavior for restored/opened project conversations and streamed turns.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: center thread, conversation scroll, auto-scroll bottom, project switch restore, processed transcript, 已处理.
+
 ## 2026-06-05
 
 ### Architecture Hardening Sprint Goal

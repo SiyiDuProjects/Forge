@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Center Conversation Auto-Scroll To Latest
+
+- Scope: make the center `.conversation` scroll container land on the latest message when a project conversation is opened/restored, a project row is selected, a chat session is restored, or a streamed turn updates. Processed transcript expand/collapse keeps the current reading position.
+- Status: implemented and Browser-verified in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-conversation-autoscroll-comment.md`
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `scheduleConversationScrollToBottom`, `scrollConversationToBottom`, `.conversation`, `restoreActiveChatSession`, `render({ scrollConversationToBottom: true })`.
+- Verification: `npm run check` passes with 77 tests. Browser validation on `http://127.0.0.1:8782/?cacheBust=conversation-autoscroll-latest` confirmed startup/restored project conversation lands at the bottom (`distanceFromBottom: 0`), manually scrolling up to `distanceFromBottom: 1200` then switching to another project and back returns both conversations to the bottom, and expanding a processed transcript section does not force a bottom jump. Console warnings/errors were empty.
+- Boundary: this changes only the center conversation scroll position after project/turn restore and live turn updates. It does not change transcript projection, ProductPlan persistence, GeometrySpec/artifact generation, or right-inspector behavior.
+
 ### 2026-06-06 - Compact Right Inspector Below 3D Model Status
 
 - Scope: remove the default right-inspector text below the `3D 模型状态` row: proxy ComponentDescriptor disclaimer, component asset source list, generated evidence links, and instruction paragraphs. Keep the compact 3D preview, layer controls, shell path, dimensions, structure checks, model status, and fullscreen affordance.

@@ -367,6 +367,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /function compactRestoredProjectList/);
   assert.match(app, /function normalizeProjectTitle/);
   assert.match(app, /async function restoreActiveChatSession/);
+  assert.match(app, /async function restoreActiveChatSession\(\{ renderAfter = true, scrollConversationToBottom = true \} = \{\}\)/);
   assert.match(app, /mergeConversationFromSession/);
   assert.match(app, /restoredTurnFromChatSession/);
   assert.match(app, /traceEventFromWorkspaceEvent/);
@@ -377,6 +378,12 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /"\/api\/workspaces\?limit=12"/);
   assert.match(app, /\/api\/workspaces\/\$\{encodeURIComponent\(planId\)\}\/chat\/\$\{encodeURIComponent\(sessionId\)\}\?limit=80/);
   assert.match(app, /if \(!restored\) createDraftProject\(\);/);
+  assert.match(app, /conversation: document\.querySelector/);
+  assert.match(app, /"\.conversation"/);
+  assert.match(app, /function scheduleConversationScrollToBottom/);
+  assert.match(app, /if \(scrollConversationToBottom\) scheduleConversationScrollToBottom\(\);/);
+  assert.match(app, /dom\.conversation\.scrollTop = dom\.conversation\.scrollHeight/);
+  assert.match(app, /render\(\{ scrollConversationToBottom: true \}\)/);
   assert.match(app, /wasDraft \? createSessionId\(productPlan\.planId\)/);
   assert.match(app, /restoreActiveChatSession\(\)\.catch\(\(\) => \{\}\);/);
   assert.match(app, /\/api\/runtime\/status/);
