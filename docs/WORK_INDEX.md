@@ -20,6 +20,21 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Composer Summary Strip Removal
+
+- Scope: remove the composer header/status strip so the bottom composer is just the hardware request text box plus send/stop control. Runtime mode copy and the compact runtime meta button are no longer shown in the composer.
+- Status: implemented and Browser-verified in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-composer-summary-removal-comment.md`
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `index.html`
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `composerSummary`, `scopeLevel`, `goal-strip`, `composerSummaryText`, `composerMetaText`, `composerCodexReady`, `runtimeQuickAria`, `promptForm`, `ideaInput`.
+- Verification: `npm run check` passes with 77 tests. Browser validation on `http://127.0.0.1:8782/?cacheBust=composer-summary-removal-latest` confirmed the composer renders with `#ideaInput` and `#runChain`, while `#composerSummary`, `#scopeLevel`, `.goal-strip`, `.goal-dot`, and the old `下一条由 Codex 接管，并通过 Forge 工具落盘` copy are absent. Opening `Forge 设置` still exposes `#runtimeProviderSelect` with `codex` selected, and console warnings/errors were empty.
+- Boundary: runtime selection and preflight status remain available in `Forge 设置`. This does not change runtime provider behavior, Codex session restore, ProductPlan persistence, or send/stop semantics.
+
 ### 2026-06-06 - Center Conversation Auto-Scroll To Latest
 
 - Scope: make the center `.conversation` scroll container land on the latest message when a project conversation is opened/restored, a project row is selected, a chat session is restored, or a streamed turn updates. Processed transcript expand/collapse keeps the current reading position.

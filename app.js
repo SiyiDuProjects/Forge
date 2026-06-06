@@ -45,11 +45,6 @@ const copy = {
     topbarStatus: "ProductPlan 实时方案",
     submitOrder: "提交审核下单",
     previewSnapshot: "预览原型快照",
-    composerDefault: "描述硬件需求，发送后更新 ProductPlan 和 3D 生成状态",
-    composerCodexReady: "下一条由 Codex 接管，并通过 Forge 工具落盘",
-    composerQueryReady: "下一条由 Forge QueryEngine 调用 Forge 工具",
-    composerCodexRunning: "Codex 正在处理本次任务",
-    composerQueryRunning: "Forge QueryEngine 正在处理本次任务",
     composerPlaceholder: "说出你想做的硬件，例如：我想做一个小型木纹桌面屏，显示天气和照片，3.5 英寸，USB-C 供电。",
     runChainAria: "发送需求并更新方案",
     cancelRunAria: "停止本轮执行",
@@ -113,7 +108,6 @@ const copy = {
     runtimeStatusCodexThread: (threadId) => `项目 thread：${threadId}`,
     runtimeStatusCodexNoThread: "本项目尚未创建 Codex thread，首次 Codex 运行会创建",
     runtimeStatusNoWorkspace: "新项目将在首条需求后创建项目 thread",
-    runtimeQuickAria: "打开运行模式设置",
     approveChange: "确认执行",
     rejectChange: "取消",
     submitNeedContact: "请先填写姓名和邮箱",
@@ -225,11 +219,6 @@ const copy = {
     topbarStatus: "Live ProductPlan",
     submitOrder: "Submit for review/order",
     previewSnapshot: "Preview prototype snapshot",
-    composerDefault: "Describe the hardware request; sending updates the ProductPlan and 3D generation state",
-    composerCodexReady: "Next turn will run through Codex and Forge tools",
-    composerQueryReady: "Next turn will run through Forge QueryEngine tools",
-    composerCodexRunning: "Codex is handling this task",
-    composerQueryRunning: "Forge QueryEngine is handling this task",
     composerPlaceholder: "Describe the hardware you want, e.g. a small woodgrain desktop display for weather and photos, 3.5 in, USB-C powered.",
     runChainAria: "Send request and update plan",
     cancelRunAria: "Stop this turn",
@@ -293,7 +282,6 @@ const copy = {
     runtimeStatusCodexThread: (threadId) => `Project thread: ${threadId}`,
     runtimeStatusCodexNoThread: "This project has not created a Codex thread yet; the first Codex run will create one",
     runtimeStatusNoWorkspace: "A new project thread will be created after the first request",
-    runtimeQuickAria: "Open runtime mode settings",
     approveChange: "Confirm",
     rejectChange: "Cancel",
     submitNeedContact: "Enter name and email first",
@@ -443,8 +431,6 @@ const dom = {
   form: document.querySelector("#promptForm"),
   ideaInput: document.querySelector("#ideaInput"),
   runChain: document.querySelector("#runChain"),
-  composerSummary: document.querySelector("#composerSummary"),
-  scopeLevel: document.querySelector("#scopeLevel"),
   draftStatus: document.querySelector("#draftStatus"),
   apiStatus: document.querySelector("#apiStatus"),
   topbarTitle: document.querySelector("#topbarTitle"),
@@ -1389,11 +1375,6 @@ function renderStaticText() {
     dom.draftStatus.textContent = "";
     dom.draftStatus.hidden = true;
   }
-  setText("#composerSummary", composerSummaryText());
-  setText("#scopeLevel", composerMetaText());
-  dom.scopeLevel?.classList.toggle("active", currentRuntimeProvider() === "codex" || state.loading);
-  setAttr("#scopeLevel", "aria-label", t("runtimeQuickAria"));
-  setAttr("#scopeLevel", "title", t("runtimeQuickAria"));
   setAttr(".primary-nav", "aria-label", t("projectActionsAria"));
   setAttr(".thread-list", "aria-label", t("projectListAria"));
   setAttr(".inspector", "aria-label", t("inspectorAria"));
@@ -2175,13 +2156,6 @@ function codexDisplayText(text = "") {
   return raw;
 }
 
-function runtimeDisplayName(value = "") {
-  const normalized = normalizeRuntimeProvider(value || DEFAULT_RUNTIME_PROVIDER);
-  if (normalized === "codex") return t("runtimeCodex");
-  if (normalized === "forge-query-engine") return "Forge QueryEngine";
-  return t("runtimeLocal");
-}
-
 function compactId(value = "") {
   const text = String(value || "");
   if (text.length <= 16) return text;
@@ -2553,20 +2527,6 @@ function planStatusText() {
   if (status === "submitted_for_review") return t("planSubmitted");
   if (status === "manual_expansion_draft") return t("planManual");
   return t("planReady");
-}
-
-function composerSummaryText() {
-  const runtime = currentRuntimeProvider();
-  if (state.loading && runtime === "codex") return t("composerCodexRunning");
-  if (state.loading && runtime === "forge-query-engine") return t("composerQueryRunning");
-  if (state.loading) return t("chatTraceRunning");
-  if (runtime === "codex") return t("composerCodexReady");
-  if (runtime === "forge-query-engine") return t("composerQueryReady");
-  return t("composerDefault");
-}
-
-function composerMetaText() {
-  return `${planStatusText()} · ${runtimeDisplayName(currentRuntimeProvider())}`;
 }
 
 function currentTopbarTitle() {
@@ -3418,7 +3378,6 @@ dom.submitReview.addEventListener("click", () => openFloating("reviewContact"));
 window.yWorkbenchSubmitForReview = submitForReview;
 dom.newProject.addEventListener("click", startNewProject);
 dom.openSettings.addEventListener("click", openRuntimeSettings);
-dom.scopeLevel?.addEventListener("click", openRuntimeSettings);
 
 dom.languageSelect.addEventListener("change", async () => {
   state.lang = dom.languageSelect.value === "en" ? "en" : "zh";

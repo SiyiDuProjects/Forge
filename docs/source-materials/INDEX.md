@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-06
 
+### Composer Summary Removal Comment
+
+- File: `docs/source-materials/2026-06-06-composer-summary-removal-comment.md`
+- Status: implemented as a composer without the runtime summary/header strip.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: composer, composerSummary, scopeLevel, goal-strip, runtime summary, 下一条由 Codex 接管, text box only.
+
 ### Codex-Style Processed Transcript P4
 
 - File: `docs/source-materials/2026-06-06-codex-style-processed-transcript-p4.md`

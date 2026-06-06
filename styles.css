@@ -1100,58 +1100,6 @@ button.processed-action-row:hover strong {
   overflow: hidden;
 }
 
-.goal-strip {
-  min-height: 38px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid rgba(232, 230, 223, 0.72);
-  padding: 0 17px;
-  color: #606660;
-  font-size: 13px;
-}
-
-.goal-dot {
-  width: 15px;
-  height: 15px;
-  border: 1px solid #d7d7d1;
-  border-radius: 999px;
-  background: #fff;
-}
-
-.goal-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.goal-meta {
-  border: 0;
-  background: transparent;
-  color: var(--muted-2);
-  cursor: pointer;
-  font: inherit;
-  justify-self: end;
-  padding: 2px 0;
-  white-space: nowrap;
-}
-
-.goal-meta.active {
-  color: var(--green);
-}
-
-.goal-meta:hover,
-.goal-meta:focus-visible {
-  color: var(--text);
-}
-
-.goal-meta:focus-visible {
-  outline: 2px solid rgba(31, 111, 88, 0.26);
-  outline-offset: 3px;
-}
-
 .composer textarea {
   width: 100%;
   min-height: 78px;
@@ -2334,14 +2282,6 @@ button.processed-action-row:hover strong {
   .composer {
     width: calc(100% - 20px);
     margin-bottom: 12px;
-  }
-
-  .goal-strip {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .goal-meta {
-    grid-column: 2;
   }
 
   .composer-toolbar {
