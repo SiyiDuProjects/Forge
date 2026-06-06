@@ -49,6 +49,24 @@ struct ForgeRootView: View {
 struct ForgeSidebarView: View {
     @EnvironmentObject private var state: ForgeAppState
 
+    private var workspaceSelection: Binding<String?> {
+        Binding {
+            state.selectedWorkspaceId
+        } set: { selectedId in
+            guard state.selectedWorkspaceId != selectedId else {
+                return
+            }
+            state.selectedWorkspaceId = selectedId
+            guard
+                let selectedId,
+                let workspace = state.workspaces.first(where: { $0.id == selectedId })
+            else {
+                return
+            }
+            Task { await state.selectWorkspace(workspace) }
+        }
+    }
+
     var body: some View {
         VStack(spacing: ForgeSpacing.sm) {
             Button {
@@ -62,11 +80,11 @@ struct ForgeSidebarView: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, ForgeSpacing.md)
-            .background(.quaternary.opacity(state.productPlan == nil ? 0.55 : 0), in: RoundedRectangle(cornerRadius: ForgeRadius.control, style: .continuous))
+            .forgeSystemBubble(isActive: state.productPlan == nil)
             .padding(.horizontal, ForgeSidebarMetric.horizontalInset)
             .padding(.top, ForgeSidebarMetric.topInset)
 
-            List {
+            List(selection: workspaceSelection) {
                 Section("项目") {
                     ForEach(state.workspaces) { workspace in
                         ForgeWorkspaceRow(workspace: workspace)
@@ -95,42 +113,99 @@ private struct ForgeWorkspaceRow: View {
     @EnvironmentObject private var state: ForgeAppState
     let workspace: ForgeWorkspaceSummary
 
-    var isSelected: Bool {
-        state.selectedWorkspaceId == workspace.id
-    }
-
     var body: some View {
-        HStack(spacing: ForgeSpacing.sm) {
-            Button {
-                Task { await state.selectWorkspace(workspace) }
-            } label: {
-                Label {
-                    Text(workspace.displayTitle)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "cube.transparent")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            Menu {
-                Button("刷新计划") {
-                    Task { await state.selectWorkspace(workspace) }
-                }
+        Text(workspace.displayTitle)
+            .lineLimit(1)
+            .tag(workspace.id)
+            .contextMenu {
                 Button("打开为当前项目") {
                     Task { await state.selectWorkspace(workspace) }
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.secondary)
+                Button("刷新计划") {
+                    Task { await state.selectWorkspace(workspace) }
+                }
             }
-            .menuStyle(.button)
-            .buttonStyle(.borderless)
+    }
+}
+
+private struct ForgeTurnBubble: View {
+    let turn: ForgeTurn
+
+    var body: some View {
+        HStack {
+            if turn.isUser { Spacer(minLength: 56) }
+            Text(turn.text)
+                .font(.body)
+                .textSelection(.enabled)
+                .padding(.horizontal, turn.isUser ? ForgeSpacing.md : 0)
+                .padding(.vertical, turn.isUser ? ForgeSpacing.sm : ForgeSpacing.xxs)
+                .foregroundStyle(.primary)
+                .forgeSystemBubble(isActive: turn.isUser)
+                .frame(maxWidth: 560, alignment: turn.isUser ? .trailing : .leading)
+            if !turn.isUser { Spacer(minLength: 56) }
         }
-        .padding(.vertical, ForgeSpacing.xxs)
-        .padding(.horizontal, ForgeSpacing.xs)
-        .background(isSelected ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: ForgeRadius.control, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: turn.isUser ? .trailing : .leading)
+    }
+}
+
+private struct ForgeComposerView: View {
+    @EnvironmentObject private var state: ForgeAppState
+
+    private var canSend: Bool {
+        !state.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && state.isConnected && !state.isLoading
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ForgeSpacing.sm) {
+            if !state.errorMessage.isEmpty {
+                Label(state.errorMessage, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                    .padding(.horizontal, ForgeSpacing.md)
+            }
+
+            ZStack(alignment: .topLeading) {
+                TextField("输入硬件需求或修改，例如：加两个右侧按钮，生成模型", text: $state.prompt, axis: .vertical)
+                    .font(.body)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...5)
+                    .submitLabel(.send)
+                    .padding(.trailing, 48)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .onSubmit {
+                        guard canSend else {
+                            return
+                        }
+                        Task { await state.sendPrompt() }
+                    }
+
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            Task { await state.sendPrompt() }
+                        } label: {
+                            Image(systemName: "paperplane.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.circle)
+                        .controlSize(.large)
+                        .disabled(!canSend)
+                        .accessibilityLabel("发送")
+                    }
+                }
+            }
+            .frame(height: 74, alignment: .topLeading)
+            .padding(.horizontal, ForgeSpacing.lg)
+            .padding(.top, ForgeSpacing.lg)
+            .padding(.bottom, ForgeSpacing.md)
+            .forgeGlassPanel(radius: ForgeRadius.glassBubble, shadow: true)
+        }
+        .padding(.horizontal, ForgeSpacing.lg)
+        .padding(.top, ForgeSpacing.md)
+        .padding(.bottom, ForgeSpacing.sm)
     }
 }
 
@@ -210,70 +285,6 @@ private struct ForgeDraftEmptyState: View {
         .padding(ForgeSpacing.xl)
         .frame(maxWidth: 480, alignment: .leading)
         .forgeGlassPanel(radius: ForgeRadius.popover, shadow: true)
-    }
-}
-
-private struct ForgeTurnBubble: View {
-    let turn: ForgeTurn
-
-    var body: some View {
-        HStack {
-            if turn.isUser { Spacer(minLength: 56) }
-            Text(turn.text)
-                .font(.body)
-                .textSelection(.enabled)
-                .padding(.horizontal, ForgeSpacing.md)
-                .padding(.vertical, ForgeSpacing.sm)
-                .foregroundStyle(turn.isUser ? .white : .primary)
-                .background(turn.isUser ? Color.accentColor : Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: ForgeRadius.popover, style: .continuous))
-                .frame(maxWidth: 560, alignment: turn.isUser ? .trailing : .leading)
-            if !turn.isUser { Spacer(minLength: 56) }
-        }
-        .frame(maxWidth: .infinity, alignment: turn.isUser ? .trailing : .leading)
-    }
-}
-
-private struct ForgeComposerView: View {
-    @EnvironmentObject private var state: ForgeAppState
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: ForgeSpacing.sm) {
-            if !state.errorMessage.isEmpty {
-                Label(state.errorMessage, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-            }
-
-            HStack(alignment: .bottom, spacing: ForgeSpacing.md) {
-                TextEditor(text: $state.prompt)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 58, idealHeight: 72, maxHeight: 110)
-                    .padding(ForgeSpacing.xs)
-                    .background(.background.opacity(0.65), in: RoundedRectangle(cornerRadius: ForgeRadius.control, style: .continuous))
-                    .overlay(alignment: .topLeading) {
-                        if state.prompt.isEmpty {
-                            Text("输入硬件需求或修改，例如：加两个右侧按钮，生成模型")
-                                .foregroundStyle(.tertiary)
-                                .padding(.horizontal, ForgeSpacing.md)
-                                .padding(.vertical, ForgeSpacing.sm)
-                                .allowsHitTesting(false)
-                        }
-                    }
-
-                Button {
-                    Task { await state.sendPrompt() }
-                } label: {
-                    Image(systemName: state.isLoading ? "stop.fill" : "paperplane.fill")
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(state.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || state.isLoading || !state.isConnected)
-            }
-        }
-        .padding(ForgeSpacing.lg)
     }
 }
 

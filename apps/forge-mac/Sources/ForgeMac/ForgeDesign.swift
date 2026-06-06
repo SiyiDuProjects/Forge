@@ -10,10 +10,17 @@ enum ForgeSpacing {
 }
 
 enum ForgeRadius {
-    static let control: CGFloat = 8
+    static let bubble: CGFloat = 8
+    static let control: CGFloat = bubble
     static let panel: CGFloat = 10
     static let popover: CGFloat = 14
+    static let composer: CGFloat = bubble
+    static let glassBubble: CGFloat = 20
     static let preview: CGFloat = 12
+}
+
+enum ForgeFill {
+    static let systemBubble = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
 }
 
 enum ForgeSidebarMetric {
@@ -62,6 +69,14 @@ struct ForgeGlassPanel: ViewModifier {
     }
 }
 
+struct ForgeSystemBubble: ViewModifier {
+    var isActive: Bool = true
+
+    func body(content: Content) -> some View {
+        content.background(isActive ? ForgeFill.systemBubble : Color.clear, in: RoundedRectangle(cornerRadius: ForgeRadius.bubble, style: .continuous))
+    }
+}
+
 private struct ForgePanelShadow: ViewModifier {
     let enabled: Bool
 
@@ -77,5 +92,9 @@ private struct ForgePanelShadow: ViewModifier {
 extension View {
     func forgeGlassPanel(radius: CGFloat = ForgeRadius.panel, shadow: Bool = false) -> some View {
         modifier(ForgeGlassPanel(radius: radius, shadow: shadow))
+    }
+
+    func forgeSystemBubble(isActive: Bool = true) -> some View {
+        modifier(ForgeSystemBubble(isActive: isActive))
     }
 }

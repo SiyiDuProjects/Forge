@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Forge Mac Native Sidebar And Composer Polish
+
+- Scope: align the Mac client with native source-list and chat-composer behavior: project rows use `List(selection:)` and right-click context menus, row inline `...` actions are removed, user messages use subtle gray bubbles, assistant messages render without colored bubble backgrounds, and the bottom composer becomes one large rounded native glass input bubble with native `TextField(axis: .vertical)` and one system send button. The small selected-row/user-message gray bubble treatment stays separate from the large composer glass treatment.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-native-sidebar-composer-feedback.md`
+- Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeDesign.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+- Retrieval handles: `List(selection:)`, `contextMenu`, `ForgeTurnBubble`, `ForgeComposerView`, `ForgeSystemBubble`, `ForgeFill.systemBubble`, `ForgeRadius.glassBubble`, no ellipsis, composer bubble.
+- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests. Visual check reopened the built `ForgeMac.app` and confirmed the running window has no inline project-row menu trigger and the composer exposes a native text field plus the system `发送` button inside one large rounded native glass input bubble.
+- Boundary: Mac client UI polish only; no ProductPlan, GeometrySpec, API, runtime provider, artifact generation, or web UI behavior changed.
+
 ### 2026-06-06 - Forge Mac Sidebar New Project Spacing
 
 - Scope: tighten the Mac sidebar `新项目` control so it reads as a standard sidebar row rather than a large rounded card colliding with the sidebar edges.

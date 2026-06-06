@@ -160,7 +160,7 @@ Required UI-only views:
 - `新项目`: left-side entry that clears the current workbench into a blank ProductPlan input state.
 - New project button visual state: default should be transparent/no filled background; use subtle color only for hover/focus feedback.
 - Compact project list: left-side selection is for ProductPlan projects/conversations. Revision history stays inside the project history view, not as the primary project list. Visible rows should show only the project name, without status/model/quote subtitle explanations.
-- Project actions menu: the `...` / `方案菜单` trigger belongs to each individual project row, stays hidden by default, and appears only when that row is hovered or focused. It should not be a global menu next to the `项目` header and should not appear in the center thread topbar.
+- Project actions menu: Mac client project rows should use native `List(selection:)` row selection and right-click context menus. Do not add inline `...`, disclosure arrows, or custom row action buttons for project-row actions.
 - Conversation flow: central continuous conversation and ProductPlan revision updates.
 - SDK-native transcript flow: project Codex SDK streamed `ThreadEvent` / `ThreadItem` content into a Codex-style processed transcript rather than inventing fake steps or moving the main execution narrative into the right inspector. Live stream updates, reload replay from `events.jsonl`, and project-switch restoration should pass through the same transcript projection so a completed turn reads consistently across those states. Running turns stay expanded; completed turns default to a collapsed `已处理 <duration>` / `Processed <duration>` header; final `agent_message` text remains visible as normal conversation text. Expanded work details may show SDK natural-language text from `agent_message` / `reasoning`, todo progress, and safe aggregate counts such as `已探索`, `已运行`, and `已编辑`. Command/file/tool specifics should sit behind a second-level expansion from those `已...` rows. Do not render runtime binding, model request/response, command output, file contents, raw tool input/output, model provider details, or internal bridge events in the main UI.
 - Internal review material: keep the local human review submission capability in the plan/review flow, but do not expose `审核包` as a left-sidebar primary entry while the current priority is conversation-driven 3D generation.
@@ -180,6 +180,7 @@ Composer guidance:
 
 - The composer should stay focused on hardware request text plus one send/update action.
 - The send button creates or updates a ProductPlan revision through the backend API when available.
+- In the Mac client, the composer should read as one large native glass input bubble with native `TextField(axis: .vertical)` text input and one system send button only. Keep its bottom inset and large corner radius aligned with the surrounding Mac glass surfaces. Do not style the composer as the small gray selected-row bubble; that smaller system-bubble treatment is only for selected rows and user chat bubbles.
 - Do not keep `+`, `范围`, `零件`, `风险`, `3D预览`, voice, generic goal, or vague guard buttons unless they map to a real implemented workflow. Scope, parts, risk, and 3D state should be shown in the ProductPlan thread and right inspector, not as placeholder composer chips.
 
 ## MVP Workflow

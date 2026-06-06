@@ -41,6 +41,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `docs/WORK_INDEX.md`
 - Key handles: Forge Mac, sidebar, 新项目, spacing, row height, NavigationSplitView, macOS sidebar.
 
+### Forge Mac Native Sidebar And Composer Feedback
+
+- File: `docs/source-materials/2026-06-06-forge-mac-native-sidebar-composer-feedback.md`
+- Status: implemented by switching Mac project rows to native selection/context menus and rebuilding chat/composer bubbles.
+- Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, native sidebar, List(selection:), context menu, chat bubble, composer bubble, no ellipsis, no unimplemented composer icons.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`
