@@ -20,6 +20,24 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Forge Mac Client Native Shell
+
+- Scope: add the first macOS client pass for Forge under `apps/forge-mac`, using SwiftUI native components for the three-column app shell, sidebar, toolbar, settings, composer, thread, inspector, spacing/radius tokens, Liquid Glass-compatible material panels, local Forge API calls, and a `WKWebView` bridge to the existing web/Three.js preview.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-client-port-request.md`
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `apps/forge-mac/Package.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeMacApp.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeClient.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeAppState.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeDesign.swift`
+  - `apps/forge-mac/Sources/ForgeMac/WebPreview.swift`
+- Retrieval handles: Forge Mac, SwiftUI, NavigationSplitView, Liquid Glass, glassEffect, ForgeRuntimeProvider, ForgeClient, ForgeAppState, WKWebView, ProductPlan API, apps/forge-mac.
+- Verification: `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. Xcode is installed at `/Applications/Xcode.app/Contents/Developer` and reports `Xcode 26.5`. `npm run check` remains the required web/core regression gate.
+- Boundary: the Mac client is a native app shell and API client. It does not own ProductPlan, GeometrySpec, Codex runtime state, GLB/STL/STEP artifacts, manufacturing, checkout, or a native CAD/modeling editor.
+
 ### 2026-06-06 - Conversation Bottom Gap Tightening
 
 - Scope: reduce the desktop bottom padding inside `.conversation` so scrolling to the bottom leaves the latest conversation content close to the bottom composer instead of a large blank band.

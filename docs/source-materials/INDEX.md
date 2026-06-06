@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-06
 
+### Forge Mac Client Port Request
+
+- File: `docs/source-materials/2026-06-06-forge-mac-client-port-request.md`
+- Status: implemented as the first native SwiftUI Mac client package under `apps/forge-mac`.
+- Related docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, SwiftUI, NavigationSplitView, Liquid Glass, Xcode, WKWebView, ProductPlan API, native macOS components.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`

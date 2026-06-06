@@ -3,6 +3,9 @@ node_modules/
 coverage/
 npm-debug.log*
 external/
+**/.build/
+DerivedData/
+*.xcuserdata/
 data/reviews/*.json
 data/models/*
 !data/models/.gitkeep

@@ -162,11 +162,28 @@ Settings sections:
 - 设备行为
 - 语言
 
+### Native Mac Client
+
+The Mac version should use native macOS components for the application shell instead of recreating basic controls by hand:
+
+- `NavigationSplitView` for the left project sidebar, center thread, and right inspector.
+- Native `List`, `Toolbar`, `Menu`, `Sheet`, `Form`, `Picker`, `Toggle`, and `TextEditor` controls for standard Mac interactions.
+- SwiftUI material and Liquid Glass-compatible panel styling for custom Forge surfaces, with a restrained spacing/radius token layer.
+- `WKWebView` may bridge the existing web/Three.js 3D preview until a dedicated native 3D preview is explicitly prioritized.
+
+Boundary:
+
+- The Mac client is an API client and native shell, not a rewrite of Forge core state.
+- ProductPlan, GeometrySpec, Codex runtime binding, revision artifacts, GLB/STL/STEP files, guarded-file policy, and review packets remain owned by the existing Forge backend and project workspace.
+- Do not make the Mac client a CAD editor, direct geometry mutator, manufacturing system, checkout surface, or supplier-ordering app.
+- Do not add fake macOS chrome to the web prototype. Native window controls and system materials belong in the actual Mac client.
+
 ## 5. Current Implementation Status
 
 Implemented:
 
 - Static HTML/CSS/JS single-page app
+- First native SwiftUI macOS client package under `apps/forge-mac`
 - Local Node server
 - Core hardware pipeline modules
 - Natural-language interpretation
@@ -221,6 +238,7 @@ Implemented:
 - Optional live Codex smoke script: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite. The acknowledged V1 live smoke passed on 2026-06-05.
 - API routes for `/api/workspaces`, `/api/workspaces/:workspaceId/plan`, `/api/plans/stream`, `/api/workspaces/:workspaceId/chat/turn/stream`, `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
 - Frontend runtime selector in `Forge 设置` for `Codex`, `Forge QueryEngine`, and `本地 Forge（降级）`, with a read-only runtime preflight status for Codex SDK availability and current project runtime binding state; Codex is selected by default, and legacy browser state that only stored the old `mock` default is ignored unless the user explicitly reselects the fallback mode. The preflight refreshes when the frontend starts a new project or switches projects so stale runtime binding values are not shown across project boundaries. The composer does not show runtime summary text or a runtime meta strip; runtime visibility and switching stay in `Forge 设置` so the composer remains just the hardware request text box plus send/stop control. On startup, the frontend restores recent persisted ProductPlan projects from `data/workspaces` through the backend workspace APIs, then collapses duplicate visible project names to the latest project because the sidebar intentionally shows only project names. If there is no restorable project or the backend is unavailable, it opens a blank draft and keeps the input path retryable instead of synthesizing a demo ProductPlan. Restored projects with a ready Codex `runtimeBinding` reopen in Codex runtime mode so continuing the project resumes the same project thread instead of silently falling back to local Forge; failed bindings surface as runtime initialization failures instead of successful projects. Restored and switched projects also load their persisted chat session, recover session messages when they are newer than the ProductPlan conversation, restore pending confirmation controls so a refresh does not lose `确认执行` / `取消` decisions, and rebuild recent runtime events from bounded session-scoped `events.jsonl`. Live streamed trace events, final response events, confirmation response events, and restored `events.jsonl` entries are normalized through the same frontend transcript merge path before being projected into the processed transcript. The center thread renders ProductPlan conversation, processed Codex work state, secondary details for safe command/file/tool fields, pending confirmations, and stop-current-turn behavior; it does not render runtime/model request rows, command output, file contents, raw tool input/output, or model provider details. The right inspector is reserved for the compact 3D prototype result surface; detailed generated evidence stays in revision artifacts and explicit engineering/review surfaces. The composer send button must show an idle send arrow and only switch to the stop square while a turn is actively running.
+- Mac client v1 uses SwiftUI `NavigationSplitView`, native project list/menu/toolbar/settings/composer surfaces, spacing/radius tokens, Liquid Glass-compatible panel styling with material fallback, non-streaming Forge API calls for workspace restore / plan creation / chat turns, and a `WKWebView` bridge for the existing web preview. It defaults to the same local Forge API and Codex runtime setting, but can switch to the deterministic local Forge fallback.
 
 Implementation boundary:
 
@@ -234,10 +252,12 @@ Implementation boundary:
 - Conversation turns can update `GeometrySpec` and validation without writing GLB/STL/STEP; a clear confirmation such as "生成模型", "现在造一下", or "build it" is required before model artifacts are written.
 - Future chatbot, agent, or tool-calling layers must use the Forge action contract instead of directly mutating files, meshes, `GeometrySpec`, GLB, STL, STEP, or ProductPlan internals.
 - QueryEngine currently supports a controlled subset of chat actions: discuss/propose, search components, apply structured patches, commit proposals, regenerate, revert, validate, and retrieve artifact metadata. Codex runtime can choose among those Forge product actions and can call the bounded `forge-tool` CLI, but it does not expose arbitrary shell state mutation, arbitrary file edits, direct model artifact edits, external plugins, or long-term memory/RAG.
+- The Mac client must stay a native shell and API client unless the product direction changes. It should not duplicate or bypass backend ProductPlan persistence, GeometrySpec validation, Codex runtime binding, guarded-file detection, artifact generation, or review packet writing.
 
 Known local verification limits:
 
 - Managed Codex sandbox runs can still block local server binding with `listen EPERM`, and sandboxed localhost requests may fail even when the server is running. Treat these as environment limits before treating them as app bugs.
+- SwiftPM/Xcode builds may need normal user cache writes under `~/Library` and `~/.cache/clang`; sandboxed runs can fail on cache permissions even when the Swift code is valid.
 - `npm test` and `npm run check` import `tests/setup_test_environment.mjs`, which points `FORGE_WORKSPACE_ROOT` at a temporary directory so automated tests do not keep polluting the real frontend restoration source under `data/workspaces`.
 - The latest consistency pass was verified against an unrestricted local server on `http://127.0.0.1:8766` using Browser interaction checks and live API checks.
 - Browser screenshot capture timed out during this pass. Future visual polish should still capture a stable screenshot in an unrestricted browser session.

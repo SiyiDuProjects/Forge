@@ -45,6 +45,8 @@ Current product boundary:
 - Start local server: `npm start`
 - Dev alias: `npm run dev`
 - Syntax check: `npm run check`
+- Build Mac client package: `cd apps/forge-mac && swift build`
+- Open Mac client in Xcode: `open apps/forge-mac/Package.swift`
 - Optional live Codex SDK smoke: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` (sends the isolated smoke project context through Codex SDK; requires a working Codex CLI/SDK environment and is not part of default checks)
 
 Current known local limitation:
@@ -59,6 +61,7 @@ Current known local limitation:
 - `styles.css`: Codex-inspired desktop UI styling, button states, inspector layout, responsive behavior.
 - `app.js`: browser-side state, rendering, read-only canvas/model preview interactions, and UI interactions.
 - `server.mjs`: static server and JSON API routes.
+- `apps/forge-mac`: native SwiftUI macOS client package. It uses `NavigationSplitView`, native lists/toolbars/menus/settings, SwiftUI material/Liquid Glass-compatible panels, local Forge API calls, and a `WKWebView` bridge for the existing web/Three.js preview while keeping ProductPlan, GeometrySpec, Codex runtime state, and generated artifacts owned by the Node/Forge backend.
 - `src/contracts/workbench_contract.mjs`: shared contract constants for chain steps, API routes, statuses, and supported languages.
 - `src/core/product_plan.mjs`: ProductPlan creation, turn handling, revision creation, and local review submission orchestration.
 - `src/core/forge_actions.mjs`: stable backend action contract for future chat/tool-calling layers; supports summaries, component search, proposals, staged patches, committed revision creation, regeneration, validation, revert, artifact retrieval, and local review submission without direct mesh/file mutation.

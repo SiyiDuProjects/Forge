@@ -11,6 +11,7 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 ## What Exists
 
 - Single-page UI prototype in `index.html`, `styles.css`, and `app.js`
+- Native macOS client package under `apps/forge-mac`, using SwiftUI for the three-column Mac shell and the existing Forge API as the source of truth
 - Core planning pipeline under `src/core`
 - ProductPlan, asset, job, GeometrySpec, generated model artifact, electronics layout preview, quote assumption, and local review APIs
 - Forge action contract under `src/core/forge_actions.mjs` for future chat/tool-calling layers to inspect summaries, stage proposals, apply patches, validate designs, regenerate revisions, revert revisions, and retrieve artifacts without direct mesh or file mutation
@@ -36,6 +37,16 @@ The server defaults to `http://127.0.0.1:8765`.
 
 If the managed Codex sandbox reports `listen EPERM`, rerun in a normal local terminal/browser session before treating it as an app bug.
 
+## Run The Mac Client
+
+Start the Forge server first, then open the Swift package in Xcode:
+
+```bash
+open apps/forge-mac/Package.swift
+```
+
+Select the `ForgeMac` scheme and run. The Mac client defaults to `http://127.0.0.1:8765`, uses native SwiftUI/AppKit surfaces for the shell, and keeps ProductPlan, GeometrySpec, Codex runtime state, and generated model artifacts in the existing Forge backend.
+
 ## Verify
 
 ```bash
@@ -43,6 +54,13 @@ npm run check
 ```
 
 This runs syntax checks for `server.mjs` and `app.js`, then executes the Node test suite.
+
+For the Mac client:
+
+```bash
+cd apps/forge-mac
+swift build
+```
 
 ## Product Boundary
 
