@@ -542,7 +542,6 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /isShellFeatureNode/);
   assert.match(app, /syncPreviewModeUi/);
   assert.match(app, /applyPreviewModeToInstances/);
-  assert.match(app, /the components layer makes the shell transparent/);
   assert.match(app, /生成模型/);
   assert.match(app, /waiting for generation/);
   assert.match(app, /placed parts/);

@@ -31,7 +31,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
   - `styles.css`
   - `tests/core_pipeline.test.mjs`
 - Retrieval handles: `renderModelSection`, `modelArtifacts`, `proxy-notice`, `componentAssetsTitle`, `renderComponentAssetList`, `renderArtifactLinks`, `artifact-link`.
-- Verification: pending current-turn `npm run check` and Browser verification on the local preview.
+- Verification: `npm run check` passes with 77 tests. Browser validation on `http://127.0.0.1:8782/?cacheBust=compact-inspector-latest` at a 1204 x 666 desktop viewport confirmed the right inspector keeps only preview, layer controls, shell path, dimensions, structure checks, and `3D 模型状态`; no `.proxy-notice`, `.component-assets`, `.artifact-links`, `ComponentDescriptor`, `组件资产来源`, `生成证据`, `资产质量`, or `验证状态` text remains in the default model card. Console warnings/errors were empty.
 - Boundary: ComponentDescriptor evidence, component asset manifest, validation reports, GLB/STL/STEP, and design summaries are still generated and persisted as revision artifacts. They are no longer listed as default right-inspector text.
 
 ### 2026-06-06 - Codex-Style Processed Transcript P4
