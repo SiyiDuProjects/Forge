@@ -9,9 +9,11 @@ import {
   revertRevision,
   searchComponentLibrary,
   stageDesignPatch,
+  submitReviewPacket,
   validateDesign
 } from "./forge_actions.mjs";
 import { appendWorkspaceEvent } from "./project_workspace.mjs";
+import { checkToolPermission } from "./permission_gate.mjs";
 import { getToolMetadata } from "./tool_registry.mjs";
 import { clone } from "./workspace_state.mjs";
 
@@ -26,10 +28,111 @@ const ACTIONS = {
   validateDesign,
   revertRevision,
   getRevisionArtifacts,
-  rejectStagedChange
+  rejectStagedChange,
+  submitReviewPacket
 };
 
+const workspaceWriteLocks = new Map();
+
 export async function executeForgeTool({
+  workspaceId,
+  sessionId = "session_default",
+  turnId = "",
+  toolCall,
+  toolMetadata = getToolMetadata(toolCall?.name),
+  rootDir
+} = {}) {
+  const normalizedCall = normalizeToolCall(toolCall);
+  const metadata = toolMetadata || getToolMetadata(normalizedCall.name);
+  const resolvedWorkspaceId = normalizedCall.input.workspaceId || workspaceId;
+  return withWorkspaceWriteLock({
+    workspaceId: resolvedWorkspaceId,
+    toolMetadata: metadata
+  }, () => executeForgeToolUnlocked({
+    workspaceId,
+    sessionId,
+    turnId,
+    toolCall: normalizedCall,
+    toolMetadata: metadata,
+    rootDir
+  }));
+}
+
+export async function executeForgeToolWithPolicy({
+  workspaceId,
+  sessionId = "session_default",
+  turnId = "",
+  toolCall,
+  toolMetadata = getToolMetadata(toolCall?.name),
+  rootDir,
+  userMessage = "",
+  mode = "normal",
+  confirmation = null
+} = {}) {
+  const normalizedCall = normalizeToolCall(toolCall);
+  const metadata = toolMetadata || getToolMetadata(normalizedCall.name);
+  const permission = checkToolPermission({
+    toolName: normalizedCall.name,
+    toolInput: normalizedCall.input,
+    toolMetadata: metadata,
+    userMessage,
+    mode,
+    confirmation
+  });
+  if (!permission.allowed) {
+    const error = permission.error || {
+      code: permission.requiresConfirmation ? "CONFIRMATION_REQUIRED" : "PERMISSION_DENIED",
+      message: permission.reason || "This Forge tool call is not allowed without confirmation."
+    };
+    return {
+      ok: false,
+      toolCall: normalizedCall,
+      permission: clone(permission),
+      result: failResult(error.code, error.message),
+      events: []
+    };
+  }
+  const execution = await executeForgeTool({
+    workspaceId,
+    sessionId,
+    turnId,
+    toolCall: normalizedCall,
+    toolMetadata: metadata,
+    rootDir
+  });
+  return {
+    ...execution,
+    permission: clone(permission)
+  };
+}
+
+export async function withWorkspaceWriteLock({
+  workspaceId = "",
+  toolMetadata = null
+} = {}, operation = async () => null) {
+  if (toolMetadata?.concurrency?.lock !== "workspace-write") {
+    return operation();
+  }
+  const key = String(workspaceId || "unknown_workspace");
+  const previous = workspaceWriteLocks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.catch(() => {}).then(() => current);
+  workspaceWriteLocks.set(key, queued);
+  await previous.catch(() => {});
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (workspaceWriteLocks.get(key) === queued) {
+      workspaceWriteLocks.delete(key);
+    }
+  }
+}
+
+async function executeForgeToolUnlocked({
   workspaceId,
   sessionId = "session_default",
   turnId = "",

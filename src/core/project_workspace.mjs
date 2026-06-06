@@ -15,6 +15,7 @@ import { clone } from "./workspace_state.mjs";
 import { listToolMetadata } from "./tool_registry.mjs";
 
 export const PROJECT_WORKSPACE_VERSION = "forge_project_workspace_v1";
+export const RUNTIME_BINDING_VERSION = "forge_runtime_binding_v1";
 
 const defaultWorkspaceRootUrl = new URL("../../data/workspaces/", import.meta.url);
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -36,6 +37,63 @@ export function readRuntimePlan({ workspaceId, rootDir = defaultProjectWorkspace
   if (!workspaceId) return null;
   const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
   return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), manifest.runtimePlanPath || "runtime_plan.json"));
+}
+
+export function readRuntimeBinding({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  if (!workspaceId) return null;
+  const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
+  const productPlan = readRuntimePlanIfReadable({ workspaceId, rootDir });
+  return runtimeBindingFromSources({ manifest, productPlan });
+}
+
+export function runtimeBindingFromSources({ manifest = {}, productPlan = {} } = {}) {
+  const explicit = normalizeRuntimeBinding(manifest?.runtimeBinding || productPlan?.workspaceState?.runtimeBinding || null);
+  if (explicit) return explicit;
+
+  const legacyThreadId = manifest?.codexThreadId || productPlan?.workspaceState?.codexThreadId || "";
+  if (!legacyThreadId) return null;
+  return normalizeRuntimeBinding({
+    provider: "codex",
+    status: "ready",
+    bindingId: legacyThreadId,
+    providerState: {
+      threadId: legacyThreadId
+    },
+    migratedFrom: "codexThreadId",
+    updatedAt: manifest?.updatedAt || productPlan?.updatedAt || ""
+  });
+}
+
+export function updateRuntimeBinding({
+  workspaceId,
+  provider = "",
+  status = "",
+  bindingId = "",
+  providerState = {},
+  error = null,
+  rootDir = defaultProjectWorkspaceRoot()
+} = {}) {
+  if (!workspaceId) throw new Error("updateRuntimeBinding requires workspaceId.");
+  const previous = readRuntimeBinding({ workspaceId, rootDir }) || {};
+  const next = normalizeRuntimeBinding({
+    ...previous,
+    provider: provider || previous.provider,
+    status: status || previous.status,
+    bindingId: bindingId || previous.bindingId,
+    providerState: {
+      ...(previous.providerState || {}),
+      ...(providerState || {})
+    },
+    error,
+    updatedAt: new Date().toISOString()
+  });
+  return updateProjectManifest({
+    workspaceId,
+    rootDir,
+    patch: {
+      runtimeBinding: next
+    }
+  }).runtimeBinding || next;
 }
 
 export function readProjectWorkspacePlan({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
@@ -65,15 +123,20 @@ export function updateProjectManifest({ workspaceId, patch = {}, rootDir = defau
   if (!workspaceId) throw new Error("updateProjectManifest requires workspaceId.");
   const workspacePath = projectWorkspacePath(workspaceId, { rootDir });
   ensureWorkspaceDirs(workspacePath);
+  const previous = readProjectManifest({ workspaceId, rootDir }) || {
+    version: PROJECT_WORKSPACE_VERSION,
+    projectId: workspaceId,
+    workspaceId
+  };
+  const runtimeBinding = normalizeRuntimeBinding(patch.runtimeBinding)
+    || runtimeBindingFromSources({ manifest: previous });
   const manifest = {
-    ...(readProjectManifest({ workspaceId, rootDir }) || {
-      version: PROJECT_WORKSPACE_VERSION,
-      projectId: workspaceId,
-      workspaceId
-    }),
+    ...previous,
     ...clone(patch || {}),
+    ...(runtimeBinding ? { runtimeBinding } : {}),
     updatedAt: new Date().toISOString()
   };
+  delete manifest.codexThreadId;
   writeJson(join(workspacePath, "project_manifest.json"), manifest);
   return manifest;
 }
@@ -89,6 +152,7 @@ export function ensureProjectWorkspace({ plan, rootDir = defaultProjectWorkspace
 
   const previousManifest = readJsonIfExists(manifestPath) || {};
   const manifest = projectManifestFor(plan, previousManifest);
+  scrubLegacyRuntimeFields(plan);
   writeJson(join(workspacePath, "project_manifest.json"), manifest);
   writeJson(join(workspacePath, manifest.runtimePlanPath || "runtime_plan.json"), plan);
   writeJson(join(workspacePath, "product_plan.json"), plan.workspaceState?.productPlan || {});
@@ -384,6 +448,7 @@ function ensureWorkspaceDirs(workspacePath) {
 
 function projectManifestFor(plan, previous = {}) {
   const now = new Date().toISOString();
+  const runtimeBinding = runtimeBindingFromSources({ manifest: previous, productPlan: plan });
   return {
     version: PROJECT_WORKSPACE_VERSION,
     projectId: plan.planId,
@@ -398,7 +463,7 @@ function projectManifestFor(plan, previous = {}) {
     revisionsPath: "revisions/",
     sourceMaterialsPath: "source-materials/",
     reviewPath: "review/",
-    codexThreadId: previous.codexThreadId || plan.workspaceState?.codexThreadId || "",
+    ...(runtimeBinding ? { runtimeBinding } : {}),
     createdAt: previous.createdAt || plan.createdAt || now,
     updatedAt: plan.updatedAt || now
   };
@@ -410,6 +475,7 @@ function workspaceSummaryFromDir(workspaceId, { rootDir = defaultProjectWorkspac
   if (!manifest?.workspaceId && !manifest?.projectId) return null;
   const resolvedWorkspaceId = manifest.workspaceId || manifest.projectId || workspaceId;
   const productPlan = includeProductPlan ? readRuntimePlanIfReadable({ workspaceId: resolvedWorkspaceId, rootDir }) : null;
+  const runtimeBinding = runtimeBindingFromSources({ manifest, productPlan });
   const updatedAt = manifest.updatedAt
     || productPlan?.updatedAt
     || statMtimeIso(join(workspacePath, "project_manifest.json"))
@@ -420,7 +486,8 @@ function workspaceSummaryFromDir(workspaceId, { rootDir = defaultProjectWorkspac
     title: manifest.title || productPlan?.workspaceState?.title || "Forge hardware prototype",
     status: manifest.status || productPlan?.status || "",
     currentRevisionId: manifest.currentRevisionId || productPlan?.currentRevisionId || "",
-    codexThreadId: manifest.codexThreadId || productPlan?.workspaceState?.codexThreadId || "",
+    runtimeBinding,
+    runtimeInitializationFailed: runtimeBinding?.status === "failed",
     createdAt: manifest.createdAt || productPlan?.createdAt || "",
     updatedAt,
     manifest,
@@ -439,6 +506,35 @@ function readRuntimePlanIfReadable({ workspaceId, rootDir = defaultProjectWorksp
   } catch {
     return null;
   }
+}
+
+function normalizeRuntimeBinding(binding = null) {
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return null;
+  const provider = String(binding.provider || "").trim();
+  const bindingId = String(binding.bindingId || binding.providerState?.threadId || "").trim();
+  if (!provider && !bindingId) return null;
+  const status = String(binding.status || (bindingId ? "ready" : "pending")).trim() || "pending";
+  const normalized = {
+    version: binding.version || RUNTIME_BINDING_VERSION,
+    provider,
+    status,
+    bindingId,
+    providerState: clone(binding.providerState || {}),
+    updatedAt: binding.updatedAt || ""
+  };
+  if (provider === "codex" && bindingId && !normalized.providerState.threadId) {
+    normalized.providerState.threadId = bindingId;
+  }
+  if (binding.createdAt) normalized.createdAt = binding.createdAt;
+  if (binding.error) normalized.error = clone(binding.error);
+  if (binding.migratedFrom) normalized.migratedFrom = binding.migratedFrom;
+  return normalized;
+}
+
+function scrubLegacyRuntimeFields(plan) {
+  if (!plan?.workspaceState || typeof plan.workspaceState !== "object") return;
+  delete plan.workspaceState.codexThreadId;
+  delete plan.workspaceState.runtimeBinding;
 }
 
 function statMtimeIso(path) {
@@ -695,20 +791,6 @@ Rules:
 ## Commands
 
 ${tools}
-
-### review
-
-- Forge action: \`submitProductPlanReview\`
-- Requires confirmation: true
-- Read-only: false
-- Creates revision: false
-- Writes artifacts: false
-- Side effects:
-    - write review/review_request.json
-    - write review/human_review_notes.md
-    - append events.jsonl review_submitted or review_submission_failed
-
-Use this only for local human-review material. It is not supplier ordering, payment, or manufacturing start.
 `;
 }
 
@@ -781,7 +863,8 @@ function cliNameForTool(actionName) {
     regenerateRevision: "generate",
     revertRevision: "revert",
     getRevisionArtifacts: "artifacts",
-    rejectStagedChange: "reject"
+    rejectStagedChange: "reject",
+    submitReviewPacket: "review"
   };
   return mapping[actionName] || actionName;
 }

@@ -18,7 +18,37 @@ key_handles: comma-separated search handles
 
 Source notes should preserve reusable raw or semi-raw context. Durable decisions should be summarized into `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, or another task doc so future work starts from indexes rather than raw material.
 
+## 2026-06-06
+
+### Codex-Style Processed Transcript P4
+
+- File: `docs/source-materials/2026-06-06-codex-style-processed-transcript-p4.md`
+- Status: implemented as the P4 processed transcript UI.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `AGENTS.md`, `README.md`
+- Key handles: P4, processed transcript, 已处理, 处理中, 已探索, 已运行, 已编辑, second-level details, data-processed-detail-toggle, no internal trace, no command output, no file contents.
+
+### Project Row Hover Menu Comment
+
+- File: `docs/source-materials/2026-06-06-project-row-hover-menu-comment.md`
+- Status: implemented as row-scoped hover/focus project menus and a concrete prototype snapshot popover action.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `AGENTS.md`
+- Key handles: 方案菜单, project row menu, data-project-menu, openProjectMenu, hover menu, 从列表移除, previewSnapshot, prototypeSnapshot.
+
+### Inspector Below 3D Model Comment
+
+- File: `docs/source-materials/2026-06-06-inspector-below-3d-model-comment.md`
+- Status: implemented as a compact default right inspector that stops at the 3D model status row.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `AGENTS.md`
+- Key handles: right inspector, 3D 模型状态, proxy-notice, ComponentDescriptor, component asset source, generated evidence, 生成证据.
+
 ## 2026-06-05
+
+### Architecture Hardening Sprint Goal
+
+- File: `docs/source-materials/2026-06-05-architecture-hardening-sprint-goal.md`
+- Status: implemented as the P1 runtime/policy/lock/guard/tool-registry hardening sprint.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `AGENTS.md`
+- Key handles: Architecture Hardening Sprint, runtimeBinding, codexThreadId migration, runtimeInitializationFailed, permission policy, workspace-write lock, guarded-file detector, submitReviewPacket, forge-tool review.
 
 ### Codex SDK Project Secretary Runtime Direction
 

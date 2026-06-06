@@ -7,6 +7,7 @@ const RUNTIME_PROVIDER_VALUES = ["mock", "forge-query-engine", "codex"];
 const DEFAULT_RUNTIME_PROVIDER = "codex";
 const LEGACY_RUNTIME_PROVIDER_KEY = "forgeRuntimeProvider";
 const EXPLICIT_RUNTIME_PROVIDER_KEY = "forgeRuntimeProviderExplicit";
+const TRANSCRIPT_EVENT_LIMIT = 96;
 const threePreviewInstances = new Map();
 const INITIAL_RUNTIME_PROVIDER = localChatProvider();
 
@@ -58,12 +59,14 @@ const copy = {
     langZh: "简体中文",
     langEn: "English",
     languageSelectAria: "界面语言",
-    threadMenuAria: "方案菜单",
+    threadMenuAria: "项目菜单",
+    projectMenuAria: (title) => `${title} 项目菜单`,
     threadRename: "重命名方案",
     threadHistory: "查看版本记录",
     threadDuplicate: "复制草稿",
     threadExport: "导出方案快照",
-    threadArchive: "归档草稿",
+    threadRemove: "从列表移除",
+    projectRemoved: (title) => `已从列表移除：${title}`,
     planReady: "标准桌面屏",
     planManual: "人工扩展草案",
     planSubmitted: "已提交人工审核",
@@ -77,31 +80,22 @@ const copy = {
     rerunNotice: "已更新 ProductPlan revision",
     chatRuntimeNotice: "Forge 工具链已更新项目",
     chatConfirmationRequired: "需要确认后执行",
-    chatTraceTitle: "执行状态",
+    chatTraceTitle: "Codex 工作流",
     chatTraceRunning: "正在执行",
-    chatTraceEmpty: "本轮没有执行工具",
-    traceReceived: "收到请求",
-    tracePrepare: "准备项目上下文",
-    traceWaiting: "等待运行结果",
-    traceStream: "实时连接",
-    tracePlanCreate: "创建 ProductPlan",
-    traceRuntime: "运行模式",
-    traceCodexTurn: "Codex 运行",
-    traceCodexItem: "Codex 步骤",
-    traceCodexCommand: "Codex 命令",
-    traceCodexFileChange: "Codex 文件变更",
-    traceCodexMcp: "Codex 工具",
-    traceCodexUsage: "Token 用量",
-    traceModelRequest: "请求模型",
-    traceModel: "模型响应",
-    traceToolSelected: "选择工具",
-    traceToolRunning: "执行工具",
-    traceToolResult: "工具结果",
-    traceToolDenied: "工具被拦截，已回流修正",
-    traceProposal: "方案变更",
-    traceRevision: "版本更新",
-    traceArtifacts: "3D 生成",
-    traceConfirmation: "等待确认",
+    chatTraceEmpty: "本轮没有收到 Codex 步骤",
+    chatTraceSource: "来自 Codex SDK streamed events",
+    processedRunning: "处理中",
+    processedDone: "已处理",
+    processedFailed: "处理失败",
+    processedCancelled: "已停止",
+    processedExpand: "展开工作过程",
+    processedCollapse: "收起工作过程",
+    processedNoWork: "没有可展示的工作过程",
+    processedExplored: "已探索",
+    processedRan: "已运行",
+    processedEdited: "已编辑",
+    processedTodo: "已推进任务",
+    processedTool: "已调用工具",
     traceFailed: "执行失败",
     traceDone: "完成",
     runtimeMode: "运行模式",
@@ -115,6 +109,7 @@ const copy = {
     runtimeStatusQueryReady: "Forge QueryEngine 已就绪",
     runtimeStatusCodexReady: "Codex SDK 已就绪",
     runtimeStatusCodexMissing: "Codex SDK 不可用，发送会失败",
+    runtimeStatusCodexFailed: "Codex 初始化失败",
     runtimeStatusCodexThread: (threadId) => `项目 thread：${threadId}`,
     runtimeStatusCodexNoThread: "本项目尚未创建 Codex thread，首次 Codex 运行会创建",
     runtimeStatusNoWorkspace: "新项目将在首条需求后创建项目 thread",
@@ -152,43 +147,8 @@ const copy = {
     modelDimensions: "尺寸",
     modelOpenings: "开孔检查",
     modelReviewReady: "人工审核前预览",
-    modelViewerHint: "拖拽旋转，滚轮缩放，Shift 拖拽平移；外观层看整体外壳，元器件层会把外壳变透明；不能拖动零件或改孔位。",
     modelArtifacts: "3D 模型状态",
     modelArtifactSummary: "3D 模型已生成",
-    componentAssetsTitle: "组件资产来源",
-    assetQuality: "资产质量",
-    validationStatus: "验证状态",
-    resolvedPreview: "预览来源",
-    artifactLinksTitle: "生成证据",
-    proxyComponentNotice: "这个原型使用机械代理组件：尺寸、孔位、接口和避让体积来自 ComponentDescriptor，仍需人工工程验证，不能视为生产就绪。",
-    artifactLabels: {
-      productPlan: "ProductPlan 快照",
-      geometrySpec: "GeometrySpec",
-      componentSelections: "组件选择",
-      componentDescriptors: "组件描述符",
-      componentAssetManifest: "资产清单",
-      validationReport: "验证报告",
-      designSummary: "设计摘要",
-      glb: "3D 模型",
-      stl: "外壳合并文件",
-      shellFront: "前壳文件",
-      shellBack: "后壳文件",
-      step: "内部工程交接"
-    },
-    assetQualityLabels: {
-      mechanical_proxy: "机械代理",
-      procedural_proxy: "程序化代理",
-      vendor_reference: "供应商参考",
-      verified_mechanical: "已验证机械资产",
-      missing: "缺失"
-    },
-    validationStatusLabels: {
-      unverified_proxy: "未验证代理",
-      descriptor_reviewed: "描述符已审核",
-      vendor_supplied: "供应商提供",
-      engineer_verified: "工程师已验证",
-      missing: "缺失"
-    },
     modelFullscreenAria: "3D 预览全屏",
     openModelFullscreen: "全屏查看 3D 预览",
     closeModelFullscreen: "收起全屏预览",
@@ -246,7 +206,7 @@ const copy = {
     standardShell: "标准 3D 打印外壳",
     settingsRows: [
       ["内部原型模式", "提交只生成本地人工审核资料，不付款、不生产、不接供应商。"],
-      ["对话优先", "用户持续聊天，右侧 ProductPlan 实时更新。"],
+      ["对话优先", "用户持续聊天，中间线程展示 Codex 原生步骤，右侧只保留原型结果。"],
       ["标准 3D 打印外壳", "木纹、鼠尾草绿、石墨黑都只是标准外壳的表面效果。"],
       ["结果预览优先", "3D 视图用于理解原型结果，不提供建模编辑工具。"],
       ["运行模式", "默认由 Codex 接管项目对话和任务调度；本地 Forge 只作降级/测试。"],
@@ -279,12 +239,14 @@ const copy = {
     langZh: "Simplified Chinese",
     langEn: "English",
     languageSelectAria: "Interface language",
-    threadMenuAria: "Plan menu",
+    threadMenuAria: "Project menu",
+    projectMenuAria: (title) => `${title} project menu`,
     threadRename: "Rename plan",
     threadHistory: "View revisions",
     threadDuplicate: "Duplicate draft",
     threadExport: "Export plan snapshot",
-    threadArchive: "Archive draft",
+    threadRemove: "Remove from list",
+    projectRemoved: (title) => `Removed from list: ${title}`,
     planReady: "standard desktop display",
     planManual: "manual expansion draft",
     planSubmitted: "submitted for human review",
@@ -298,31 +260,22 @@ const copy = {
     rerunNotice: "ProductPlan revision updated",
     chatRuntimeNotice: "Forge tool runtime updated the project",
     chatConfirmationRequired: "Confirmation required",
-    chatTraceTitle: "Run status",
+    chatTraceTitle: "Codex transcript",
     chatTraceRunning: "Running",
-    chatTraceEmpty: "No tool executed in this turn",
-    traceReceived: "Request received",
-    tracePrepare: "Preparing project context",
-    traceWaiting: "Waiting for runtime result",
-    traceStream: "Live connection",
-    tracePlanCreate: "Creating ProductPlan",
-    traceRuntime: "Runtime",
-    traceCodexTurn: "Codex run",
-    traceCodexItem: "Codex step",
-    traceCodexCommand: "Codex command",
-    traceCodexFileChange: "Codex file change",
-    traceCodexMcp: "Codex tool",
-    traceCodexUsage: "Token usage",
-    traceModelRequest: "Model request",
-    traceModel: "Model response",
-    traceToolSelected: "Tool selected",
-    traceToolRunning: "Running tool",
-    traceToolResult: "Tool result",
-    traceToolDenied: "Tool denied and fed back",
-    traceProposal: "Plan change",
-    traceRevision: "Revision update",
-    traceArtifacts: "3D generation",
-    traceConfirmation: "Waiting for confirmation",
+    chatTraceEmpty: "No Codex steps received in this turn",
+    chatTraceSource: "From Codex SDK streamed events",
+    processedRunning: "Processing",
+    processedDone: "Processed",
+    processedFailed: "Failed",
+    processedCancelled: "Stopped",
+    processedExpand: "Expand work process",
+    processedCollapse: "Collapse work process",
+    processedNoWork: "No visible work process",
+    processedExplored: "Explored",
+    processedRan: "Ran",
+    processedEdited: "Edited",
+    processedTodo: "Advanced tasks",
+    processedTool: "Called tools",
     traceFailed: "Execution failed",
     traceDone: "Done",
     runtimeMode: "Runtime mode",
@@ -336,6 +289,7 @@ const copy = {
     runtimeStatusQueryReady: "Forge QueryEngine is ready",
     runtimeStatusCodexReady: "Codex SDK is ready",
     runtimeStatusCodexMissing: "Codex SDK is unavailable; sending will fail",
+    runtimeStatusCodexFailed: "Codex initialization failed",
     runtimeStatusCodexThread: (threadId) => `Project thread: ${threadId}`,
     runtimeStatusCodexNoThread: "This project has not created a Codex thread yet; the first Codex run will create one",
     runtimeStatusNoWorkspace: "A new project thread will be created after the first request",
@@ -373,43 +327,8 @@ const copy = {
     modelDimensions: "Dimensions",
     modelOpenings: "Opening check",
     modelReviewReady: "Pre-review preview",
-    modelViewerHint: "Drag to rotate, wheel to zoom, Shift-drag to pan; the appearance layer shows the shell, and the components layer makes the shell transparent; parts and holes are not editable.",
     modelArtifacts: "3D model status",
     modelArtifactSummary: "3D model generated",
-    componentAssetsTitle: "Component asset sources",
-    assetQuality: "Asset quality",
-    validationStatus: "Validation",
-    resolvedPreview: "Preview source",
-    artifactLinksTitle: "Generated evidence",
-    proxyComponentNotice: "This prototype uses mechanical proxy components: dimensions, holes, connectors, and keepout/access volumes come from ComponentDescriptor data and still require human engineering validation before production.",
-    artifactLabels: {
-      productPlan: "ProductPlan snapshot",
-      geometrySpec: "GeometrySpec",
-      componentSelections: "Component selections",
-      componentDescriptors: "Component descriptors",
-      componentAssetManifest: "Asset manifest",
-      validationReport: "Validation report",
-      designSummary: "Design summary",
-      glb: "3D model",
-      stl: "Combined shell file",
-      shellFront: "Front shell file",
-      shellBack: "Back shell file",
-      step: "Internal engineering handoff"
-    },
-    assetQualityLabels: {
-      mechanical_proxy: "mechanical proxy",
-      procedural_proxy: "procedural proxy",
-      vendor_reference: "vendor reference",
-      verified_mechanical: "verified mechanical asset",
-      missing: "missing"
-    },
-    validationStatusLabels: {
-      unverified_proxy: "unverified proxy",
-      descriptor_reviewed: "descriptor reviewed",
-      vendor_supplied: "vendor supplied",
-      engineer_verified: "engineer verified",
-      missing: "missing"
-    },
     modelFullscreenAria: "Fullscreen 3D preview",
     openModelFullscreen: "Open 3D preview fullscreen",
     closeModelFullscreen: "Exit fullscreen preview",
@@ -467,7 +386,7 @@ const copy = {
     standardShell: "Standard 3D printed shell",
     settingsRows: [
       ["Internal prototype mode", "Submission writes local human review material; no payment, production, or supplier order starts."],
-      ["Conversation first", "The user keeps chatting while the right-side ProductPlan updates."],
+      ["Conversation first", "The center thread shows native Codex steps while the right side stays focused on prototype results."],
       ["Standard 3D printed shell", "Woodgrain, sage, and graphite are finish treatments on the same shell path."],
       ["Result preview first", "The 3D view helps users understand the prototype result; it does not expose modeling tools."],
       ["Runtime mode", "Codex handles project conversation and task routing by default; Local Forge is only a fallback/test mode."],
@@ -496,6 +415,8 @@ const state = {
     lastY: 0
   },
   collapsedSections: new Set(["scope", "parts", "layout", "risk"]),
+  expandedProcessedTurns: new Set(),
+  expandedProcessedDetails: new Set(),
   notice: "",
   loading: false,
   submittingReview: false,
@@ -510,6 +431,7 @@ const state = {
   runtimeStatusError: "",
   runtimeStatusRequestId: 0,
   workspaceToken: 0,
+  activeProjectMenuId: "",
   activeRequestController: null,
   contactInfo: { name: "", email: "" }
 };
@@ -525,16 +447,15 @@ const dom = {
   draftStatus: document.querySelector("#draftStatus"),
   apiStatus: document.querySelector("#apiStatus"),
   topbarTitle: document.querySelector("#topbarTitle"),
-  copySpec: document.querySelector("#copySpec"),
+  previewSnapshot: document.querySelector("#previewSnapshot"),
   submitReview: document.querySelector("#submitReview"),
-  openThreadMenu: document.querySelector("#openThreadMenu"),
   newProject: document.querySelector("#newProject"),
   openSettings: document.querySelector("#openSettings"),
   languageSelect: document.querySelector("#languageSelect"),
   runtimeProviderSelect: document.querySelector("#runtimeProviderSelect"),
   runtimeStatus: document.querySelector("#runtimeStatus"),
   floatingLayer: document.querySelector("#floatingLayer"),
-  dfmPopover: document.querySelector("#dfmPopover")
+  snapshotPopover: document.querySelector("#snapshotPopover")
 };
 
 function initialLanguage() {
@@ -570,7 +491,7 @@ async function restorePersistedProjects() {
         productPlan: workspace.productPlan,
         kind: "restored",
         runtimeProvider: runtimeProviderForRestoredWorkspace(workspace),
-        codexThreadId: codexThreadIdForWorkspace(workspace)
+        runtimeBinding: runtimeBindingForWorkspace(workspace)
       })));
     if (!restored.length) return false;
     state.projects = restored;
@@ -631,6 +552,10 @@ function activeProject() {
   return state.projects.find((project) => project.projectId === state.activeProjectId) || null;
 }
 
+function projectById(projectId) {
+  return state.projects.find((project) => project.projectId === projectId) || null;
+}
+
 function makeClientId(prefix) {
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
   const suffix = Math.random().toString(36).slice(2, 8);
@@ -647,7 +572,7 @@ function createProjectRecord({
   kind = "user",
   isDraft = false,
   runtimeProvider = "",
-  codexThreadId = ""
+  runtimeBinding = null
 } = {}) {
   const projectId = productPlan?.planId || makeClientId("draft");
   return {
@@ -662,18 +587,27 @@ function createProjectRecord({
     pendingConfirmation: null,
     runtimeError: "",
     runtimeProvider: runtimeProvider || state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER,
-    codexThreadId: codexThreadId || productPlan?.workspaceState?.codexThreadId || "",
+    runtimeBinding: runtimeBinding || null,
     contactInfo: productPlan?.contactInfo || { name: "", email: "" },
     createdAt: new Date().toISOString()
   };
 }
 
 function runtimeProviderForRestoredWorkspace(workspace = {}) {
-  return codexThreadIdForWorkspace(workspace) ? "codex" : (state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER);
+  return runtimeBindingForWorkspace(workspace)?.provider === "codex" ? "codex" : (state?.runtimeProvider || INITIAL_RUNTIME_PROVIDER);
 }
 
-function codexThreadIdForWorkspace(workspace = {}) {
-  return workspace.codexThreadId || workspace.manifest?.codexThreadId || workspace.productPlan?.workspaceState?.codexThreadId || "";
+function runtimeBindingForWorkspace(workspace = {}) {
+  const binding = workspace.runtimeBinding || workspace.manifest?.runtimeBinding || workspace.productPlan?.workspaceState?.runtimeBinding || null;
+  if (binding?.provider || binding?.bindingId) return binding;
+  const legacyThreadId = workspace.manifest?.codexThreadId || workspace.productPlan?.workspaceState?.codexThreadId || "";
+  return legacyThreadId ? {
+    provider: "codex",
+    status: "ready",
+    bindingId: legacyThreadId,
+    providerState: { threadId: legacyThreadId },
+    migratedFrom: "codexThreadId"
+  } : null;
 }
 
 function compactRestoredProjectList(projects = []) {
@@ -700,7 +634,7 @@ function saveActiveProject() {
   project.pendingConfirmation = state.pendingConfirmation;
   project.runtimeError = state.runtimeError;
   project.runtimeProvider = state.runtimeProvider;
-  project.codexThreadId = state.productPlan?.workspaceState?.codexThreadId || project.codexThreadId || "";
+  project.runtimeBinding = state.activeTrace?.runtimeBinding || project.runtimeBinding || null;
   project.contactInfo = { ...state.contactInfo };
   project.title = state.productPlan ? projectTitleFromPlan(state.productPlan) : (project.title || t("newDraftTitle"));
 }
@@ -744,7 +678,7 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
   project.pendingConfirmation = fields.pendingConfirmation ?? project.pendingConfirmation ?? null;
   project.runtimeError = fields.runtimeError || "";
   project.runtimeProvider = fields.runtimeProvider || state.runtimeProvider || project.runtimeProvider || INITIAL_RUNTIME_PROVIDER;
-  project.codexThreadId = fields.codexThreadId || productPlan.workspaceState?.codexThreadId || project.codexThreadId || "";
+  project.runtimeBinding = fields.runtimeBinding || project.runtimeBinding || null;
   project.contactInfo = productPlan.contactInfo || project.contactInfo || { name: "", email: "" };
   project.kind = fields.kind || project.kind || "user";
   state.activeProjectId = project.projectId;
@@ -776,14 +710,12 @@ function mergeConversationFromSession(productPlan, messages = []) {
 }
 
 function restoredTurnFromChatSession({ payload = {}, project = {}, productPlan = null, pendingConfirmation = null } = {}) {
-  const traceEvents = (payload.recentEvents || [])
-    .map(traceEventFromWorkspaceEvent)
-    .filter(Boolean);
+  const traceEvents = transcriptEventsFromWorkspaceEvents(payload.recentEvents || []);
   if (!traceEvents.length && !pendingConfirmation) return null;
   const messages = payload.messages || [];
   const userMessage = [...messages].reverse().find((message) => message.role === "user")?.content || "";
   const assistantMessage = [...messages].reverse().find((message) => message.role === "assistant")?.content || "";
-  return {
+  return normalizeTranscriptTurn({
     ok: true,
     traceState: "restored",
     traceKind: "chat_session",
@@ -791,14 +723,15 @@ function restoredTurnFromChatSession({ payload = {}, project = {}, productPlan =
     assistantMessage,
     runtimeProvider: project.runtimeProvider || currentRuntimeProvider(),
     modelProvider: project.runtimeProvider || currentRuntimeProvider(),
-    codexThreadId: project.codexThreadId || productPlan?.workspaceState?.codexThreadId || "",
+    runtimeBinding: project.runtimeBinding || null,
+    bindingId: project.runtimeBinding?.bindingId || "",
     toolCalls: [],
     toolResults: [],
     modelResponses: [],
     traceEvents,
     eventsAppended: payload.recentEvents || [],
     messages
-  };
+  });
 }
 
 function traceEventFromWorkspaceEvent(event = {}) {
@@ -811,6 +744,96 @@ function traceEventFromWorkspaceEvent(event = {}) {
   };
 }
 
+function transcriptEventsFromWorkspaceEvents(events = []) {
+  return (events || [])
+    .map(traceEventFromWorkspaceEvent)
+    .filter(Boolean);
+}
+
+function normalizeTranscriptTurn(turn = {}, { traceEvents = [], workspaceEvents = [] } = {}) {
+  if (!turn) return turn;
+  const persistedEvents = workspaceEvents.length ? workspaceEvents : (turn.eventsAppended || []);
+  const mergedEvents = mergeTranscriptEvents(
+    turn.traceEvents || [],
+    traceEvents,
+    transcriptEventsFromWorkspaceEvents(persistedEvents)
+  ).slice(-TRANSCRIPT_EVENT_LIMIT);
+  return {
+    ...turn,
+    traceEvents: mergedEvents,
+    eventsAppended: turn.eventsAppended || workspaceEvents || []
+  };
+}
+
+function mergeTranscriptEvents(...eventGroups) {
+  const merged = [];
+  const byKey = new Map();
+  for (const group of eventGroups) {
+    for (const rawEvent of group || []) {
+      if (!rawEvent?.type) continue;
+      const event = {
+        ...rawEvent,
+        eventId: rawEvent.eventId || ""
+      };
+      const key = transcriptEventKey(event, merged.length);
+      if (byKey.has(key)) {
+        const index = byKey.get(key);
+        merged[index] = mergeTraceEvent(merged[index], event);
+      } else {
+        byKey.set(key, merged.length);
+        merged.push(event);
+      }
+    }
+  }
+  return merged;
+}
+
+function mergeTraceEvent(existing = {}, incoming = {}) {
+  return {
+    ...existing,
+    ...incoming,
+    eventId: existing.eventId || incoming.eventId || "",
+    timestamp: existing.timestamp || incoming.timestamp || "",
+    item: {
+      ...(existing.item || {}),
+      ...(incoming.item || {})
+    },
+    summary: {
+      ...(existing.summary || {}),
+      ...(incoming.summary || {})
+    }
+  };
+}
+
+function transcriptEventKey(event = {}, index = 0) {
+  const turn = event.turnId || "turn";
+  if (["codex_item_started", "codex_item_updated", "codex_item_completed"].includes(event.type)) {
+    const itemId = event.itemId || event.item?.id || `${event.itemType || event.item?.type || "item"}:${index}`;
+    return `codex-item:${turn}:${event.type}:${itemId}`;
+  }
+  if (["codex_turn_started", "codex_turn_completed", "codex_turn_failed"].includes(event.type)) {
+    return `codex-turn:${turn}:${event.type}`;
+  }
+  if (["codex_thread_requested", "codex_thread_initializing", "codex_thread_ready", "codex_thread_started"].includes(event.type)) {
+    const phase = event.type === "codex_thread_started" || event.type === "codex_thread_ready" ? "ready" : event.type;
+    return `codex-thread:${turn}:${phase}:${event.bindingId || event.codexThreadId || event.runtimeBinding?.bindingId || event.workspaceId || ""}`;
+  }
+  if (event.type === "stream_started") return `stream:${event.sessionId || ""}:${event.runtimeProvider || ""}:${event.modelProvider || ""}`;
+  if (event.type === "chat_turn_started") return `chat-start:${turn}:${event.runtimeProvider || ""}:${event.modelProvider || ""}`;
+  if (event.type === "context_pack_built") return `context:${turn}:${event.currentRevisionId || ""}:${event.allowedToolCount || 0}`;
+  if (event.type === "model_request") return `model-request:${turn}:${event.iteration || 0}:${event.modelProvider || ""}`;
+  if (event.type === "model_response") return `model-response:${turn}:${event.iteration || 0}:${event.modelProvider || ""}:${event.toolCallCount || 0}:${event.hasFinalMessage === undefined ? "" : event.hasFinalMessage}:${event.ok}`;
+  if (event.type.startsWith("tool_")) return `tool:${turn}:${event.type}:${event.toolCallId || event.toolName || ""}`;
+  if (event.type === "confirmation_required" || event.type === "confirmation_resolved") {
+    return `confirmation:${event.type}:${event.confirmationId || event.toolCallId || ""}:${event.approved === undefined ? "" : event.approved}`;
+  }
+  if (event.type === "assistant_message") return `assistant:${event.messageId || event.confirmationId || turn}:${event.text || ""}`;
+  if (event.type === "user_message") return `user:${turn}:${event.text || ""}`;
+  if (event.type === "chat_turn_completed" || event.type === "chat_turn_failed") return `chat-turn:${turn}:${event.type}`;
+  if (event.eventId) return `event:${event.eventId}`;
+  return `event:${event.type}:${event.timestamp || ""}:${index}`;
+}
+
 function createDraftProject() {
   const project = createProjectRecord({
     title: t("newDraftTitle"),
@@ -820,6 +843,29 @@ function createDraftProject() {
   state.projects.unshift(project);
   activateProject(project.projectId);
   return project;
+}
+
+function removeProjectFromList(projectId) {
+  const project = projectById(projectId);
+  if (!project) return null;
+  const title = projectTitle(project);
+  const wasActive = project.projectId === state.activeProjectId;
+  state.projects = state.projects.filter((item) => item.projectId !== project.projectId);
+  if (wasActive) {
+    const nextProject = state.projects[0];
+    if (nextProject) {
+      activateProject(nextProject.projectId);
+    } else {
+      state.activeProjectId = "";
+      state.productPlan = null;
+      state.lastChatTurn = null;
+      state.activeTrace = null;
+      state.pendingConfirmation = null;
+      state.runtimeError = "";
+      createDraftProject();
+    }
+  }
+  return { title, wasActive };
 }
 
 function syncActiveProject(fields = {}) {
@@ -895,11 +941,12 @@ function planCreationTrace(response = {}, message = "") {
     userMessage: message,
     runtimeProvider: response.runtimeProvider || currentRuntimeProvider(),
     modelProvider: response.modelProvider || response.runtimeProvider || currentRuntimeProvider(),
-    codexThreadId: response.codexThreadId || response.productPlan?.workspaceState?.codexThreadId || "",
+    runtimeBinding: response.runtimeBinding || null,
+    bindingId: response.bindingId || response.runtimeBinding?.bindingId || "",
     assistantMessage: response.assistantMessage || t("rerunNotice"),
     toolCalls: [],
     toolResults: [],
-    modelResponses: response.codexThreadId ? [{ ok: true, toolCallCount: 0, codexThreadId: response.codexThreadId }] : [],
+    modelResponses: response.runtimeBinding ? [{ ok: true, toolCallCount: 0, runtimeBinding: response.runtimeBinding, bindingId: response.runtimeBinding.bindingId || "" }] : [],
     traceEvents: response.traceEvents || [],
     eventsAppended: [],
     revision: response.revision || response.productPlan?.revisions?.at?.(-1) || null,
@@ -913,14 +960,16 @@ function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
     ...event,
     eventId: event.eventId || makeClientId("trace")
   };
-  state.activeTrace.traceEvents = [
-    ...(state.activeTrace.traceEvents || []),
-    traceEvent
-  ].slice(-36);
+  state.activeTrace.traceEvents = mergeTranscriptEvents(
+    state.activeTrace.traceEvents || [],
+    [traceEvent]
+  ).slice(-TRANSCRIPT_EVENT_LIMIT);
   if (traceEvent.runtimeProvider) state.activeTrace.runtimeProvider = normalizeRuntimeProvider(traceEvent.runtimeProvider);
   if (traceEvent.modelProvider) state.activeTrace.modelProvider = traceEvent.modelProvider;
   if (traceEvent.turnId) state.activeTrace.turnId = traceEvent.turnId;
-  if (traceEvent.codexThreadId) state.activeTrace.codexThreadId = traceEvent.codexThreadId;
+  if (traceEvent.runtimeBinding) state.activeTrace.runtimeBinding = traceEvent.runtimeBinding;
+  if (traceEvent.bindingId) state.activeTrace.bindingId = traceEvent.bindingId;
+  if (traceEvent.codexThreadId) state.activeTrace.bindingId = traceEvent.codexThreadId;
   if (traceEvent.type === "model_response") {
     state.activeTrace.modelResponses = [
       ...(state.activeTrace.modelResponses || []),
@@ -930,7 +979,8 @@ function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
         hasFinalMessage: Boolean(traceEvent.hasFinalMessage),
         errorCode: traceEvent.error?.code || "",
         errorMessage: traceEvent.error?.message || "",
-        codexThreadId: traceEvent.codexThreadId || ""
+        runtimeBinding: traceEvent.runtimeBinding || null,
+        bindingId: traceEvent.bindingId || traceEvent.runtimeBinding?.bindingId || traceEvent.codexThreadId || ""
       }
     ];
   }
@@ -968,13 +1018,19 @@ async function sendTurn(message) {
     if (token !== state.workspaceToken) return;
     if (!response.productPlan) throw new Error("ProductPlan was not returned.");
     const streamTraceEvents = state.activeTrace?.traceEvents || [];
-    const completedTrace = hasRealPlan ? response : planCreationTrace(response, message);
-    completedTrace.traceEvents = streamTraceEvents;
+    const completedTrace = normalizeTranscriptTurn(
+      hasRealPlan ? response : planCreationTrace(response, message),
+      {
+        traceEvents: streamTraceEvents,
+        workspaceEvents: response.eventsAppended || []
+      }
+    );
     upsertProjectFromPlan(response.productPlan, {
       lastChatTurn: completedTrace,
       activeTrace: null,
       pendingConfirmation: response.pendingConfirmation || null,
-      runtimeError: ""
+      runtimeError: "",
+      runtimeBinding: response.runtimeBinding || completedTrace.runtimeBinding || null
     });
     state.lastChatTurn = completedTrace;
     state.activeTrace = null;
@@ -1031,7 +1087,9 @@ async function resolveChatConfirmation(approved) {
     });
     if (token !== state.workspaceToken) return;
     state.productPlan = response.productPlan || state.productPlan;
-    state.lastChatTurn = response;
+    state.lastChatTurn = normalizeTranscriptTurn(response, {
+      workspaceEvents: response.eventsAppended || []
+    });
     state.pendingConfirmation = null;
     state.runtimeError = "";
     syncActiveProject({
@@ -1207,7 +1265,12 @@ function runtimeStatusTone() {
 
 function codexRuntimeStatusLine(codex = {}) {
   if (!codex.available) return codex.message ? `${t("runtimeStatusCodexMissing")} · ${codex.message}` : t("runtimeStatusCodexMissing");
-  if (codex.codexThreadId) return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusCodexThread", compactId(codex.codexThreadId))}`;
+  const binding = codex.runtimeBinding || null;
+  const bindingId = codex.bindingId || binding?.bindingId || "";
+  if (binding?.status === "failed") {
+    return `${t("runtimeStatusCodexFailed")} · ${binding.error?.message || binding.error?.code || ""}`.trim();
+  }
+  if (bindingId) return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusCodexThread", compactId(bindingId))}`;
   if (codex.workspaceId) return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusCodexNoThread")}`;
   return `${t("runtimeStatusCodexReady")} · ${t("runtimeStatusNoWorkspace")}`;
 }
@@ -1307,7 +1370,7 @@ function renderStaticText() {
   setText("#newProject span:last-child", t("newProject"));
   setText(".sidebar-label", t("projectLabel"));
   setText("#openSettings span:last-child", t("settingsButton"));
-  setText("#copySpec", t("previewSnapshot"));
+  setText("#previewSnapshot", t("previewSnapshot"));
   setText("#submitReview", t("submitOrder"));
   setText("#topbarTitle", currentTopbarTitle());
   if (dom.draftStatus) {
@@ -1326,8 +1389,9 @@ function renderStaticText() {
   setAttr("#runChain", "title", state.loading ? t("cancelRunAria") : t("runChainAria"));
   setAttr("#runChain", "aria-busy", state.loading ? "true" : "false");
   if (dom.runChain) dom.runChain.dataset.running = state.loading ? "true" : "false";
-  setAttr("#openThreadMenu", "aria-label", t("threadMenuAria"));
   setAttr("#languageSelect", "aria-label", t("languageSelectAria"));
+  setAttr(".thread-popover", "aria-label", t("threadMenuAria"));
+  setAttr(".detail-popover", "aria-label", t("sections.model"));
   setAttr(".review-contact-dialog", "aria-label", t("reviewContactTitle"));
   setAttr(".model-fullscreen-dialog", "aria-label", t("modelFullscreenAria"));
   setAttr(".model-fullscreen-exit", "aria-label", t("closeModelFullscreen"));
@@ -1339,7 +1403,7 @@ function renderStaticText() {
     history: t("threadHistory"),
     duplicate: t("threadDuplicate"),
     export: t("threadExport"),
-    archive: t("threadArchive")
+    remove: t("threadRemove")
   };
   Object.entries(actionLabels).forEach(([action, label]) => setText(`[data-action="${action}"]`, label));
 
@@ -1393,10 +1457,12 @@ function renderProjectList() {
   const projects = state.projects;
   if (!projects.length) {
     list.innerHTML = `
-      <button class="thread-row active" type="button" data-new-project-row>
-        <span class="project-dot"></span>
-        <strong>${escapeHtml(t("newDraftTitle"))}</strong>
-      </button>
+      <div class="thread-row active">
+        <button class="thread-row-main" type="button" data-new-project-row>
+          <span class="project-dot"></span>
+          <strong>${escapeHtml(t("newDraftTitle"))}</strong>
+        </button>
+      </div>
     `;
     return;
   }
@@ -1404,12 +1470,18 @@ function renderProjectList() {
   const rows = projects;
   list.innerHTML = rows
     .map(
-      (project) => `
-        <button class="thread-row ${project.projectId === state.activeProjectId ? "active" : ""}" type="button" data-sidebar-project="${escapeHtml(project.projectId)}" aria-label="${escapeHtml(projectTitle(project))}">
-          <span class="project-dot"></span>
-          <strong>${escapeHtml(projectTitle(project))}</strong>
-        </button>
-      `
+      (project) => {
+        const title = projectTitle(project);
+        return `
+          <div class="thread-row ${project.projectId === state.activeProjectId ? "active" : ""}" data-project-row="${escapeHtml(project.projectId)}">
+            <button class="thread-row-main" type="button" data-sidebar-project="${escapeHtml(project.projectId)}" aria-label="${escapeHtml(title)}">
+              <span class="project-dot"></span>
+              <strong>${escapeHtml(title)}</strong>
+            </button>
+            <button class="project-row-menu-button" type="button" data-project-menu="${escapeHtml(project.projectId)}" aria-label="${escapeHtml(t("projectMenuAria", title))}" title="${escapeHtml(t("threadMenuAria"))}">...</button>
+          </div>
+        `;
+      }
     )
     .join("");
 }
@@ -1427,20 +1499,23 @@ function renderConversation() {
 }
 
 function renderChatWorkspace() {
+  const processedTranscript = processedTranscriptViewModel(state.activeTrace || state.lastChatTurn, state.pendingConfirmation);
   if (!state.productPlan) {
     dom.workspaceView.innerHTML = `
       <section class="workspace-card">
         <p>${escapeHtml(t("noPlan"))}</p>
         ${state.runtimeError ? `<p class="error-message">${escapeHtml(state.runtimeError)}</p>` : ""}
       </section>
+      ${renderTranscriptSection(processedTranscript)}
     `;
     return;
   }
-  const messages = state.productPlan.conversation || [];
+  const messages = visibleConversationMessages(state.productPlan.conversation || [], processedTranscript);
   dom.workspaceView.innerHTML = `
     <div class="message-stack">
       ${messages.map((turn) => renderMessage(turn)).join("")}
     </div>
+    ${renderTranscriptSection(processedTranscript)}
     ${state.runtimeError ? `<section class="inline-panel runtime-error-panel"><p class="error-message">${escapeHtml(state.runtimeError)}</p></section>` : ""}
   `;
 }
@@ -1527,438 +1602,565 @@ function renderMessage(turn) {
   `;
 }
 
-function renderRuntimeStatusSection() {
-  const pending = state.pendingConfirmation;
-  const turn = state.activeTrace || state.lastChatTurn;
-  if (!pending && !turn) return "";
-  const calls = turn?.toolCalls || [];
-  const results = turn?.toolResults || [];
-  const running = turn?.traceState === "running";
-  return `
-    <div class="runtime-status-panel" aria-label="${escapeHtml(t("chatTraceTitle"))}">
-      <div class="runtime-status-head">
-        <strong>${escapeHtml(pending ? t("chatConfirmationRequired") : running ? t("chatTraceRunning") : t("chatTraceTitle"))}</strong>
-        <span>${escapeHtml(runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()))}</span>
-      </div>
-      ${renderTraceTimeline(turn, pending)}
-      ${pending ? `
-        <div class="packet-status warning">${escapeHtml(pending.toolCall?.name || "")}</div>
-        <p class="section-note">${escapeHtml(pending.permission?.reason || t("chatConfirmationRequired"))}</p>
-        <div class="segmented-row">
-          <button type="button" class="active" data-chat-confirm="approve">${escapeHtml(t("approveChange"))}</button>
-          <button type="button" data-chat-confirm="reject">${escapeHtml(t("rejectChange"))}</button>
-        </div>
-      ` : ""}
-      <div class="queue-list compact">
-        ${calls.length ? calls.map((call, index) => {
-          const result = results[index]?.summary || {};
-          const stateText = call.permission?.decision === "confirm"
-            ? t("chatConfirmationRequired")
-            : result.ok === false
-              ? (result.code || "failed")
-              : (result.newRevisionId || result.proposalId || call.permission?.decision || "ok");
-          return `
-            <div class="queue-item ${result.ok === false ? "blocked" : "queued"}">
-              <button type="button" tabindex="-1">
-                <span>${escapeHtml(call.name)}</span>
-                <strong>${escapeHtml(stateText)}</strong>
-                <p>${escapeHtml(toolCallSummary(call, result))}</p>
-              </button>
-            </div>
-          `;
-        }).join("") : `<p class="section-note">${escapeHtml(running ? t("traceWaiting") : t("chatTraceEmpty"))}</p>`}
-      </div>
-    </div>
-  `;
-}
-
-function renderTraceTimeline(turn = {}, pending = null) {
-  const rows = traceRows(turn, pending);
-  if (!rows.length) return "";
-  return `
-    <div class="trace-timeline">
-      ${rows.map((row) => `
-        <div class="trace-row ${escapeHtml(row.status || "done")}">
-          <span>${escapeHtml(row.label)}</span>
-          <strong>${escapeHtml(row.value || "")}</strong>
-          ${row.detail ? `<p>${escapeHtml(row.detail)}</p>` : ""}
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-function traceRows(turn = {}, pending = null) {
-  const eventRows = traceEventRows(turn?.traceEvents || []);
-  if (turn?.traceState === "running") {
-    if (eventRows.length) {
-      return [
-        ...eventRows,
-        { status: "pending", label: t("traceWaiting"), value: t("chatTraceRunning"), detail: normalizeRuntimeProvider(turn.runtimeProvider) === "codex" ? "Codex thread / Forge tools" : "Forge QueryEngine" }
-      ];
-    }
-    return [
-      { status: "done", label: t("traceReceived"), value: t("traceDone"), detail: turn.userMessage || "" },
-      { status: "running", label: t("tracePrepare"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
-      { status: "pending", label: t("traceWaiting"), value: t("chatTraceRunning"), detail: normalizeRuntimeProvider(turn.runtimeProvider) === "codex" ? "Codex thread / Forge tools" : "Forge QueryEngine" }
-    ];
-  }
-  if (turn?.traceState === "failed") {
-    return [
-      { status: "blocked", label: t("traceRuntime"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
-      { status: "blocked", label: t("traceFailed"), value: turn.assistantMessage || t("sendFailed") }
-    ];
-  }
-  if (turn?.traceState === "cancelled") {
-    return [
-      ...eventRows,
-      { status: "cancelled", label: t("traceRuntime"), value: runtimeDisplayName(turn.runtimeProvider), detail: traceRuntimeDetail(turn) },
-      { status: "cancelled", label: t("traceDone"), value: turn.assistantMessage || t("sendCancelled") }
-    ];
-  }
-
-  const rows = [];
-  if (eventRows.length) {
-    rows.push(...eventRows);
-  } else {
-    rows.push({
-      status: "done",
-      label: t("traceRuntime"),
-      value: runtimeDisplayName(turn?.runtimeProvider || currentRuntimeProvider()),
-      detail: traceRuntimeDetail(turn)
-    });
-  }
-  if (turn?.codexThreadId) {
-    rows.push({
-      status: "done",
-      label: "Codex thread",
-      value: compactId(turn.codexThreadId),
-      detail: turn.codexThreadId
-    });
-  }
-  const modelResponses = turn?.modelResponses || [];
-  if (!eventRows.length && modelResponses.length) {
-    const failed = modelResponses.find((response) => response.ok === false);
-    rows.push({
-      status: failed ? "blocked" : "done",
-      label: t("traceModel"),
-      value: failed ? (failed.errorCode || t("traceFailed")) : `${modelResponses.length}`,
-      detail: failed?.errorMessage || modelResponses.map((response) => {
-        const count = response.toolCallCount || 0;
-        return state.lang === "zh" ? `${count} 个工具意图` : `${count} tool intent${count === 1 ? "" : "s"}`;
-      }).join(" / ")
-    });
-  }
-  if ((turn?.toolResults || []).some((item) => item.summary?.code === "RAW_MUTATION_TARGET")) {
-    rows.push({
-      status: "blocked",
-      label: t("traceToolDenied"),
-      value: "RAW_MUTATION_TARGET",
-      detail: state.lang === "zh" ? "已拒绝直接改 GeometrySpec / artifacts" : "Rejected direct GeometrySpec / artifact mutation"
-    });
-  }
-  if (turn?.proposal?.proposalId) {
-    rows.push({
-      status: "done",
-      label: t("traceProposal"),
-      value: turn.proposal.proposalId,
-      detail: turn.proposal.status || ""
-    });
-  }
-  if (turn?.revision?.revisionId) {
-    rows.push({
-      status: "done",
-      label: t("traceRevision"),
-      value: turn.revision.revisionId,
-      detail: turn.revision.status || turn.revision.modelArtifacts?.status || ""
-    });
-  }
-  const artifacts = turn?.artifactPaths || {};
-  if (Object.values(artifacts).some(Boolean)) {
-    rows.push({
-      status: "done",
-      label: t("traceArtifacts"),
-      value: t("traceDone"),
-      detail: Object.keys(artifacts).filter((key) => artifacts[key]).slice(0, 4).join(", ")
-    });
-  }
-  if (pending) {
-    rows.push({
-      status: "pending",
-      label: t("traceConfirmation"),
-      value: pending.toolCall?.name || "",
-      detail: pending.permission?.reason || ""
-    });
-  }
-  const eventCount = Array.isArray(turn?.eventsAppended) ? turn.eventsAppended.length : 0;
-  if (eventCount && rows.length <= 1) {
-    rows.push({
-      status: "done",
-      label: "events.jsonl",
-      value: String(eventCount),
-      detail: state.lang === "zh" ? "已写入项目事件" : "Project events appended"
-    });
-  }
-  return rows;
-}
-
-function traceEventRows(events = []) {
-  return events.map((event) => {
-    switch (event.type) {
-      case "stream_started":
-        return {
-          status: "running",
-          label: t("traceStream"),
-          value: runtimeDisplayName(event.runtimeProvider || currentRuntimeProvider()),
-          detail: event.modelProvider ? `modelProvider: ${event.modelProvider}` : ""
-        };
-      case "plan_create_started":
-        return {
-          status: "running",
-          label: t("tracePlanCreate"),
-          value: runtimeDisplayName(event.runtimeProvider || currentRuntimeProvider()),
-          detail: event.text || ""
-        };
-      case "product_plan_created":
-        return {
-          status: "done",
-          label: t("tracePlanCreate"),
-          value: event.revisionId || event.planId || t("traceDone"),
-          detail: event.modelStatus || ""
-        };
-      case "codex_thread_requested":
-      case "codex_thread_initializing":
-        return {
-          status: "running",
-          label: "Codex thread",
-          value: event.type === "codex_thread_requested" ? t("tracePrepare") : t("chatTraceRunning"),
-          detail: event.workspaceId || ""
-        };
-      case "codex_thread_ready":
-        return {
-          status: "done",
-          label: "Codex thread",
-          value: compactId(event.codexThreadId || ""),
-          detail: event.codexThreadId || ""
-        };
-      case "codex_thread_started":
-        return {
-          status: "done",
-          label: "Codex thread",
-          value: compactId(event.codexThreadId || ""),
-          detail: event.codexThreadId || ""
-        };
-      case "codex_turn_started":
-        return {
-          status: "running",
-          label: t("traceCodexTurn"),
-          value: t("chatTraceRunning"),
-          detail: event.sdkEventType || ""
-        };
-      case "codex_turn_completed":
-        return {
-          status: "done",
-          label: t("traceCodexTurn"),
-          value: t("traceDone"),
-          detail: formatCodexUsage(event.usage) || (event.itemCount ? `${event.itemCount} items` : "")
-        };
-      case "codex_turn_failed":
-        return {
-          status: "blocked",
-          label: t("traceCodexTurn"),
-          value: event.error?.code || t("traceFailed"),
-          detail: event.error?.message || ""
-        };
-      case "codex_item_started":
-      case "codex_item_updated":
-      case "codex_item_completed":
-        return traceRowForCodexItem(event);
-      case "codex_sdk_event":
-        return {
-          status: "done",
-          label: t("traceCodexItem"),
-          value: event.sdkEventType || t("traceDone"),
-          detail: ""
-        };
-      case "chat_turn_started":
-        return {
-          status: "running",
-          label: t("traceRuntime"),
-          value: runtimeDisplayName(event.runtimeProvider || currentRuntimeProvider()),
-          detail: event.modelProvider ? `modelProvider: ${event.modelProvider}` : ""
-        };
-      case "user_message":
-        return {
-          status: "done",
-          label: t("traceReceived"),
-          value: t("traceDone"),
-          detail: event.text || ""
-        };
-      case "context_pack_built":
-        return {
-          status: "done",
-          label: t("tracePrepare"),
-          value: `${event.allowedToolCount || 0} tools`,
-          detail: state.lang === "zh"
-            ? `${event.openProposalCount || 0} 个待确认方案 / 当前版本 ${event.currentRevisionId || "-"}`
-            : `${event.openProposalCount || 0} open proposals / current ${event.currentRevisionId || "-"}`
-        };
-      case "model_request":
-        return {
-          status: "running",
-          label: t("traceModelRequest"),
-          value: event.modelProvider || "",
-          detail: state.lang === "zh"
-            ? `${event.toolCount || 0} 个可用工具 / 第 ${Number(event.iteration || 0) + 1} 轮`
-            : `${event.toolCount || 0} tools / iteration ${Number(event.iteration || 0) + 1}`
-        };
-      case "model_response":
-        return {
-          status: event.ok ? "done" : "blocked",
-          label: t("traceModel"),
-          value: event.ok ? `${event.toolCallCount || 0}` : (event.error?.code || t("traceFailed")),
-          detail: event.error?.message || (event.codexThreadId ? `Codex thread: ${event.codexThreadId}` : "")
-        };
-      case "tool_call_selected":
-        return {
-          status: "running",
-          label: t("traceToolSelected"),
-          value: event.toolName || "",
-          detail: formatTraceSummary(event.inputSummary)
-        };
-      case "tool_execution_started":
-        return {
-          status: "running",
-          label: t("traceToolRunning"),
-          value: event.toolName || "",
-          detail: event.toolCallId || ""
-        };
-      case "tool_result":
-      case "tool_failed":
-        return {
-          status: event.ok === false || event.type === "tool_failed" ? "blocked" : "done",
-          label: t("traceToolResult"),
-          value: event.summary?.newRevisionId || event.summary?.proposalId || event.toolName || "",
-          detail: event.error?.message || formatTraceSummary(event.summary)
-        };
-      case "tool_denied":
-        return {
-          status: "blocked",
-          label: t("traceToolDenied"),
-          value: event.error?.code || event.toolName || "",
-          detail: event.error?.message || ""
-        };
-      case "confirmation_required":
-        return {
-          status: "pending",
-          label: t("traceConfirmation"),
-          value: event.toolName || "",
-          detail: event.permission?.reason || ""
-        };
-      case "assistant_message":
-        return {
-          status: "done",
-          label: t("traceDone"),
-          value: event.pendingConfirmationId ? t("chatConfirmationRequired") : t("traceDone"),
-          detail: event.text || ""
-        };
-      case "chat_turn_completed":
-        return {
-          status: event.pendingConfirmationId ? "pending" : "done",
-          label: t("traceDone"),
-          value: event.pendingConfirmationId ? t("chatConfirmationRequired") : t("traceDone"),
-          detail: state.lang === "zh"
-            ? `${event.toolCallCount || 0} 个工具 / ${event.toolResultCount || 0} 个结果`
-            : `${event.toolCallCount || 0} tools / ${event.toolResultCount || 0} results`
-        };
-      case "chat_turn_failed":
-      case "plan_create_failed":
-        return {
-          status: "blocked",
-          label: t("traceFailed"),
-          value: event.error?.code || t("traceFailed"),
-          detail: event.error?.message || ""
-        };
-      default:
-        return {
-          status: "done",
-          label: event.type || t("traceDone"),
-          value: t("traceDone"),
-          detail: ""
-        };
-    }
+function visibleConversationMessages(messages = [], processed = null) {
+  if (!processed?.finalText || !Array.isArray(messages) || !messages.length) return messages || [];
+  const finalText = normalizeDisplayText(processed.finalText);
+  if (!finalText) return messages;
+  const lastAssistantIndex = messages.reduce((lastIndex, turn, index) => (
+    turn?.role === "assistant" ? index : lastIndex
+  ), -1);
+  return messages.filter((turn, index) => {
+    if (index !== lastAssistantIndex || turn?.role !== "assistant") return true;
+    return normalizeDisplayText(turn.text) !== finalText;
   });
 }
 
-function traceRowForCodexItem(event = {}) {
-  const summary = event.summary || {};
-  const failed = event.itemStatus === "failed" || summary.status === "failed";
-  const completed = event.type === "codex_item_completed" || event.itemStatus === "completed" || summary.status === "completed";
+function normalizeDisplayText(text = "") {
+  return codexDisplayText(text).replace(/\s+/g, " ").trim();
+}
+
+function renderTranscriptSection(processed = null) {
+  const view = processed || processedTranscriptViewModel(state.activeTrace || state.lastChatTurn, state.pendingConfirmation);
+  if (!view) return "";
+  const expanded = processedTranscriptExpanded(view);
+  return `
+    <section class="transcript-panel processed-transcript" aria-label="${escapeHtml(t("chatTraceTitle"))}">
+      ${renderProcessedTranscriptHeader(view, expanded)}
+      ${renderProcessedWorkDetails(view, expanded)}
+      ${renderProcessedFinalMessage(view)}
+    </section>
+  `;
+}
+
+function renderProcessedTranscriptHeader(view = {}, expanded = false) {
+  const duration = view.durationText ? ` ${view.durationText}` : "";
+  return `
+    <button class="processed-transcript-head" type="button" data-processed-toggle="${escapeHtml(view.key)}" aria-expanded="${expanded ? "true" : "false"}" aria-label="${escapeHtml(expanded ? t("processedCollapse") : t("processedExpand"))}">
+      <span>${escapeHtml(processedStatusLabel(view))}${escapeHtml(duration)}</span>
+      <strong>${expanded ? "v" : ">"}</strong>
+    </button>
+  `;
+}
+
+function renderProcessedFinalMessage(view = {}) {
+  if (!view.finalText) return "";
+  return `
+    <article class="message ai processed-final-message">
+      <div class="bubble">
+        ${renderProcessedTextBlocks(view.finalText)}
+      </div>
+    </article>
+  `;
+}
+
+function renderProcessedWorkDetails(view = {}, expanded = false) {
+  if (!expanded) return "";
+  const content = [
+    ...view.progressTexts.map((text) => renderProcessedTextBlocks(text, "processed-work-text")),
+    view.todoItems.length ? renderProcessedTodoList(view.todoItems) : "",
+    renderProcessedActionRows(view),
+    renderProcessedPending(view)
+  ].filter(Boolean).join("");
+  return `
+    <div class="processed-work-details">
+      ${content || `<p class="processed-empty">${escapeHtml(t("processedNoWork"))}</p>`}
+    </div>
+  `;
+}
+
+function renderProcessedTodoList(items = []) {
+  return `
+    <ul class="processed-todo-list">
+      ${items.map((item) => `
+        <li data-completed="${item.completed ? "true" : "false"}">
+          <span>${item.completed ? "x" : ""}</span>
+          <p>${renderInlineText(item.text || "")}</p>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+function renderProcessedActionRows(view = {}) {
+  const rows = [];
+  if (view.todoTotal) {
+    rows.push({
+      id: "todo",
+      label: t("processedTodo"),
+      value: state.lang === "zh"
+        ? `${view.todoCompleted}/${view.todoTotal} 个任务`
+        : `${view.todoCompleted}/${view.todoTotal} tasks`
+    });
+  }
+  if (view.exploredCount) {
+    rows.push({
+      id: "commands",
+      label: t("processedExplored"),
+      value: localizedCount(view.exploredCount, "个只读动作", "read-only action", "read-only actions"),
+      details: view.commandDetails.filter((item) => item.kind === "explored")
+    });
+  }
+  if (view.runCount) {
+    rows.push({
+      id: "commands",
+      label: t("processedRan"),
+      value: localizedCount(view.runCount, "个动作", "action", "actions"),
+      details: view.commandDetails.filter((item) => item.kind === "ran")
+    });
+  }
+  if (view.fileChangeCount) {
+    rows.push({
+      id: "files",
+      label: t("processedEdited"),
+      value: localizedCount(view.fileChangeCount, "个文件", "file", "files"),
+      details: view.fileDetails
+    });
+  }
+  if (view.toolCount) {
+    rows.push({
+      id: "tools",
+      label: t("processedTool"),
+      value: localizedCount(view.toolCount, "次", "time", "times"),
+      details: view.toolDetails
+    });
+  }
+  if (!rows.length) return "";
+  return `
+    <div class="processed-action-list">
+      ${rows.map((row, index) => renderProcessedActionRow(view, row, index)).join("")}
+    </div>
+  `;
+}
+
+function renderProcessedActionRow(view = {}, row = {}, index = 0) {
+  const detailKey = processedDetailKey(view.key, row.id || row.label, index);
+  const hasDetails = Array.isArray(row.details) && row.details.length > 0;
+  const expanded = hasDetails && state.expandedProcessedDetails.has(detailKey);
+  const content = `
+    <span>${escapeHtml(row.label)}</span>
+    <p>${escapeHtml(row.value)}</p>
+    ${hasDetails ? `<strong>${expanded ? "v" : ">"}</strong>` : ""}
+  `;
+  return `
+    <div class="processed-action-group">
+      ${hasDetails ? `
+        <button class="processed-action-row" type="button" data-processed-detail-toggle="${escapeHtml(detailKey)}" aria-expanded="${expanded ? "true" : "false"}">
+          ${content}
+        </button>
+      ` : `
+        <div class="processed-action-row">
+          ${content}
+        </div>
+      `}
+      ${expanded ? renderProcessedDetailList(row.id, row.details) : ""}
+    </div>
+  `;
+}
+
+function renderProcessedDetailList(kind = "", details = []) {
+  if (!details.length) return "";
+  if (kind === "files") {
+    return `
+      <ul class="processed-detail-list">
+        ${details.map((item) => `
+          <li>
+            <span>${escapeHtml(item.kind || "update")}</span>
+            <code>${escapeHtml(item.path || "")}</code>
+            ${item.status ? `<small>${escapeHtml(item.status)}</small>` : ""}
+          </li>
+        `).join("")}
+      </ul>
+    `;
+  }
+  if (kind === "tools") {
+    return `
+      <ul class="processed-detail-list">
+        ${details.map((item) => `
+          <li>
+            <span>${escapeHtml(item.status || "tool")}</span>
+            <code>${escapeHtml([item.server, item.tool].filter(Boolean).join("/") || "")}</code>
+            ${item.error ? `<small>${escapeHtml(item.error)}</small>` : ""}
+          </li>
+        `).join("")}
+      </ul>
+    `;
+  }
+  return `
+    <ul class="processed-detail-list">
+      ${details.map((item) => `
+        <li>
+          <span>${escapeHtml(item.status || item.kind || "")}</span>
+          <code>${escapeHtml(item.command || "")}</code>
+          ${item.exitCode !== "" ? `<small>exit ${escapeHtml(item.exitCode)}</small>` : ""}
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+function renderProcessedPending(view = {}) {
+  if (!view.pending) return "";
+  return `
+    <div class="processed-confirmation">
+      <p>${escapeHtml(t("chatConfirmationRequired"))}</p>
+      <div class="segmented-row">
+        <button type="button" class="active" data-chat-confirm="approve">${escapeHtml(t("approveChange"))}</button>
+        <button type="button" data-chat-confirm="reject">${escapeHtml(t("rejectChange"))}</button>
+      </div>
+    </div>
+  `;
+}
+
+function processedTranscriptViewModel(turn = null, pending = null) {
+  if (!turn && !pending) return null;
+  const events = compactTraceEvents(turn?.traceEvents || []);
+  const agentTexts = [];
+  const fallbackAssistantTexts = [];
+  const reasoningTexts = [];
+  const todoByText = new Map();
+  const filePaths = new Set();
+  const sensitiveSnippets = [];
+  const commandDetails = [];
+  const fileDetails = [];
+  const toolDetails = [];
+  let anonymousFileChanges = 0;
+  let commandCount = 0;
+  let exploredCount = 0;
+  let toolCount = 0;
+  let webSearchCount = 0;
+  let errorText = "";
+
+  for (const event of events) {
+    if (event.type === "assistant_message") {
+      const text = codexDisplayText(event.text || "");
+      if (text) fallbackAssistantTexts.push(text);
+      continue;
+    }
+    if (!["codex_item_started", "codex_item_updated", "codex_item_completed"].includes(event.type)) continue;
+    const item = event.item || {};
+    const summary = event.summary || {};
+    const itemType = event.itemType || item.type || "";
+    if (itemType === "agent_message") {
+      const text = codexDisplayText(item.text || "");
+      if (text) agentTexts.push(text);
+    } else if (itemType === "reasoning") {
+      const text = String(item.text || "").trim();
+      if (text) reasoningTexts.push(text);
+    } else if (itemType === "todo_list") {
+      for (const todo of item.items || []) {
+        const text = String(todo.text || "").trim();
+        if (text) todoByText.set(text, { text, completed: Boolean(todo.completed) });
+      }
+    } else if (itemType === "command_execution") {
+      const command = item.command || summary.command || "";
+      commandCount += 1;
+      addSensitiveSnippet(sensitiveSnippets, "command", command);
+      const exploration = isExplorationCommand(command);
+      if (exploration) exploredCount += 1;
+      commandDetails.push({
+        kind: exploration ? "explored" : "ran",
+        command,
+        status: item.status || summary.status || "",
+        exitCode: item.exitCode ?? item.exit_code ?? summary.exitCode ?? summary.exit_code ?? ""
+      });
+    } else if (itemType === "file_change") {
+      const changes = Array.isArray(item.changes) ? item.changes : [];
+      if (changes.length) {
+        for (const change of changes) {
+          if (change?.path) {
+            filePaths.add(change.path);
+            addSensitiveSnippet(sensitiveSnippets, "path", change.path);
+            fileDetails.push({
+              kind: change.kind || "update",
+              path: change.path,
+              status: item.status || summary.status || ""
+            });
+          } else {
+            anonymousFileChanges += 1;
+          }
+        }
+      } else if (summary.changeCount) {
+        anonymousFileChanges += Number(summary.changeCount) || 0;
+      }
+    } else if (itemType === "mcp_tool_call") {
+      toolCount += 1;
+      toolDetails.push({
+        server: item.server || summary.server || "",
+        tool: item.tool || summary.tool || "",
+        status: item.status || summary.status || "",
+        error: item.error?.message || summary.error || ""
+      });
+    } else if (itemType === "web_search") {
+      webSearchCount += 1;
+      exploredCount += 1;
+    } else if (itemType === "error") {
+      errorText = String(item.message || summary.message || "").trim();
+    }
+  }
+
+  const rawFinalText = lastNonEmpty(agentTexts) || codexDisplayText(turn?.assistantMessage || "") || lastNonEmpty(fallbackAssistantTexts) || errorText;
+  const finalText = redactProcessedText(rawFinalText, sensitiveSnippets);
+  const progressTexts = [
+    ...agentTexts.filter((text) => normalizeDisplayText(text) !== normalizeDisplayText(rawFinalText)),
+    ...reasoningTexts
+  ].map((text) => redactProcessedText(text, sensitiveSnippets)).filter(Boolean);
+  const todoItems = Array.from(todoByText.values()).map((todo) => ({
+    ...todo,
+    text: redactProcessedText(todo.text, sensitiveSnippets)
+  }));
+  const runCount = Math.max(0, commandCount - exploredCount);
   return {
-    status: failed ? "blocked" : completed ? "done" : "running",
-    label: codexItemLabel(event.itemType),
-    value: codexItemValue(event.itemType, summary, event.itemStatus),
-    detail: formatTraceSummary(summary)
+    key: processedTranscriptKey(turn, events),
+    traceState: turn?.traceState || (pending ? "running" : "done"),
+    pending: Boolean(pending),
+    finalText,
+    progressTexts,
+    todoItems,
+    todoTotal: todoItems.length,
+    todoCompleted: todoItems.filter((item) => item.completed).length,
+    exploredCount,
+    runCount,
+    fileChangeCount: filePaths.size + anonymousFileChanges,
+    toolCount,
+    webSearchCount,
+    commandDetails,
+    fileDetails,
+    toolDetails,
+    durationText: processedDurationText(turn, events)
   };
 }
 
-function codexItemLabel(itemType = "") {
-  if (itemType === "command_execution") return t("traceCodexCommand");
-  if (itemType === "file_change") return t("traceCodexFileChange");
-  if (itemType === "mcp_tool_call") return t("traceCodexMcp");
-  return t("traceCodexItem");
-}
-
-function codexItemValue(itemType = "", summary = {}, status = "") {
-  if (itemType === "command_execution") return summary.command || status || t("chatTraceRunning");
-  if (itemType === "file_change") return summary.changeCount ? `${summary.changeCount}` : (summary.status || status || t("traceDone"));
-  if (itemType === "mcp_tool_call") return [summary.server, summary.tool].filter(Boolean).join("/") || status || t("traceDone");
-  if (itemType === "agent_message") return state.lang === "zh" ? "输出消息" : "assistant message";
-  if (itemType === "reasoning") return state.lang === "zh" ? "推理摘要" : "reasoning summary";
-  if (itemType === "todo_list") {
-    const itemCount = Number(summary.itemCount || 0);
-    const completedCount = Number(summary.completedCount || 0);
-    return itemCount ? `${completedCount}/${itemCount}` : status || t("traceDone");
+function addSensitiveSnippet(snippets = [], type = "value", value = "") {
+  for (const variant of sensitiveSnippetVariants(value, type)) {
+    snippets.push({ type, value: variant });
   }
-  if (itemType === "web_search") return summary.query || status || t("traceDone");
-  if (itemType === "error") return summary.message || t("traceFailed");
-  return status || t("traceDone");
 }
 
-function formatCodexUsage(usage = null) {
-  if (!usage) return "";
-  const parts = [];
-  if (usage.inputTokens !== undefined) parts.push(`in ${usage.inputTokens}`);
-  if (usage.cachedInputTokens !== undefined) parts.push(`cached ${usage.cachedInputTokens}`);
-  if (usage.outputTokens !== undefined) parts.push(`out ${usage.outputTokens}`);
-  if (usage.reasoningOutputTokens !== undefined) parts.push(`reasoning ${usage.reasoningOutputTokens}`);
-  return parts.length ? `${t("traceCodexUsage")}: ${parts.join(" / ")}` : "";
-}
-
-function formatTraceSummary(summary = {}) {
-  const entries = Object.entries(summary || {})
-    .filter(([, value]) => value !== "" && value !== null && value !== undefined && value !== false)
-    .slice(0, 6)
-    .map(([key, value]) => formatTraceValue(key, value))
-    .filter(Boolean);
-  return entries.join(" / ");
-}
-
-function formatTraceValue(key, value) {
-  if (Array.isArray(value)) return `${key}: ${value.join(", ")}`;
-  if (value && typeof value === "object") {
-    if (key === "artifactPaths") {
-      const artifactKeys = Object.keys(value).filter((itemKey) => value[itemKey]);
-      return artifactKeys.length ? `${key}: ${artifactKeys.join(", ")}` : "";
+function sensitiveSnippetVariants(value = "", type = "value") {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  const variants = new Set([raw]);
+  if (type === "command") {
+    const shellMatch = raw.match(/(?:^|\s)(?:\/bin\/)?(?:bash|zsh|sh)\s+-lc\s+(['"])(.*?)\1/);
+    if (shellMatch?.[2]) variants.add(shellMatch[2].trim());
+  }
+  if (type === "path") {
+    const normalized = raw.replaceAll("\\", "/");
+    variants.add(normalized);
+    for (const marker of ["source-materials/", "notes/", "data/workspaces/"]) {
+      const index = normalized.indexOf(marker);
+      if (index >= 0) variants.add(normalized.slice(index));
     }
-    return `${key}: ${JSON.stringify(value).slice(0, 96)}`;
   }
-  return `${key}: ${value}`;
+  return Array.from(variants).filter((item) => item.length >= 3);
 }
 
-function traceRuntimeDetail(turn = {}) {
-  const model = turn?.modelProvider || turn?.runtimeProvider || currentRuntimeProvider();
-  return model ? `modelProvider: ${model}` : "";
+function redactProcessedText(text = "", snippets = []) {
+  let safe = String(text || "");
+  const unique = [];
+  const seen = new Set();
+  for (const snippet of snippets || []) {
+    const value = String(snippet?.value || "").trim();
+    if (value.length < 3 || seen.has(value)) continue;
+    seen.add(value);
+    unique.push({ type: snippet.type || "value", value });
+  }
+  unique.sort((a, b) => b.value.length - a.value.length);
+  for (const snippet of unique) {
+    const label = snippet.type === "path"
+      ? (state.lang === "zh" ? "[已隐藏路径]" : "[path hidden]")
+      : (state.lang === "zh" ? "[已隐藏指令]" : "[command hidden]");
+    safe = safe.split(snippet.value).join(label);
+  }
+  return safe.trim();
+}
+
+function processedTranscriptKey(turn = {}, events = []) {
+  const turnId = turn?.turnId || events.find((event) => event.turnId)?.turnId || "";
+  if (turnId) return `processed:${turnId}`;
+  const eventId = events.find((event) => event.eventId)?.eventId || events.find((event) => event.itemId)?.itemId || "";
+  if (eventId) return `processed:${eventId}`;
+  return `processed:${state.chatSessionId || "current"}`;
+}
+
+function processedTranscriptExpanded(view = {}) {
+  if (view.pending || view.traceState === "running") return true;
+  return state.expandedProcessedTurns.has(view.key);
+}
+
+function toggleProcessedTranscript(key = "") {
+  if (!key) return;
+  if (state.expandedProcessedTurns.has(key)) state.expandedProcessedTurns.delete(key);
+  else state.expandedProcessedTurns.add(key);
+  render();
+}
+
+function processedDetailKey(turnKey = "", group = "", index = 0) {
+  return `processed-detail:${turnKey || "turn"}:${group || "group"}:${index}`;
+}
+
+function toggleProcessedDetail(key = "") {
+  if (!key) return;
+  if (state.expandedProcessedDetails.has(key)) state.expandedProcessedDetails.delete(key);
+  else state.expandedProcessedDetails.add(key);
+  render();
+}
+
+function processedStatusLabel(view = {}) {
+  if (view.pending || view.traceState === "running") return t("processedRunning");
+  if (view.traceState === "failed" || view.traceState === "blocked") return t("processedFailed");
+  if (view.traceState === "cancelled") return t("processedCancelled");
+  return t("processedDone");
+}
+
+function processedDurationText(turn = {}, events = []) {
+  const start = timestampMs(turn?.startedAt) || firstEventTime(events);
+  if (!start) return "";
+  const end = terminalEventTime(events)
+    || timestampMs(turn?.completedAt)
+    || timestampMs(turn?.cancelledAt)
+    || (turn?.traceState === "running" ? Date.now() : lastEventTime(events));
+  if (!end || end < start) return "";
+  return formatProcessedDuration(end - start);
+}
+
+function firstEventTime(events = []) {
+  for (const event of events) {
+    const value = timestampMs(event.at || event.timestamp);
+    if (value) return value;
+  }
+  return 0;
+}
+
+function lastEventTime(events = []) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const value = timestampMs(events[index]?.at || events[index]?.timestamp);
+    if (value) return value;
+  }
+  return 0;
+}
+
+function terminalEventTime(events = []) {
+  const terminalTypes = new Set([
+    "chat_turn_completed",
+    "chat_turn_failed",
+    "codex_turn_completed",
+    "codex_turn_failed",
+    "plan_create_failed"
+  ]);
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (!terminalTypes.has(events[index]?.type)) continue;
+    const value = timestampMs(events[index]?.at || events[index]?.timestamp);
+    if (value) return value;
+  }
+  return 0;
+}
+
+function timestampMs(value = "") {
+  if (!value) return 0;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function formatProcessedDuration(durationMs = 0) {
+  const totalSeconds = Math.max(0, Math.floor(Number(durationMs || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function isExplorationCommand(command = "") {
+  const text = String(command || "").trim();
+  if (!text) return false;
+  return /^(rg|grep|find|ls|cat|sed|awk|nl|wc|head|tail|git\s+(status|diff|show|log)|node\s+--check)\b/.test(text);
+}
+
+function lastNonEmpty(values = []) {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = String(values[index] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function localizedCount(count = 0, zhUnit = "", enSingular = "", enPlural = "") {
+  const value = Number(count || 0);
+  if (state.lang === "zh") return `${value} ${zhUnit}`.trim();
+  return `${value} ${value === 1 ? enSingular : enPlural}`;
+}
+
+function renderProcessedTextBlocks(text = "", className = "processed-text") {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  return value.split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => renderProcessedTextBlock(block, className))
+    .join("");
+}
+
+function renderProcessedTextBlock(block = "", className = "processed-text") {
+  const lines = block.split(/\n/).map((line) => line.trim()).filter(Boolean);
+  const bulletLines = lines.filter((line) => /^[-*]\s+/.test(line));
+  if (bulletLines.length && bulletLines.length === lines.length) {
+    return `
+      <ul class="${escapeHtml(className)} processed-bullets">
+        ${bulletLines.map((line) => `<li>${renderInlineText(line.replace(/^[-*]\s+/, ""))}</li>`).join("")}
+      </ul>
+    `;
+  }
+  return `<p class="${escapeHtml(className)}">${lines.map(renderInlineText).join("<br>")}</p>`;
+}
+
+function renderInlineText(text = "") {
+  return String(text || "")
+    .split(/(`[^`]+`)/g)
+    .map((part) => {
+      if (part.startsWith("`") && part.endsWith("`") && part.length >= 2) {
+        return `<code>${escapeHtml(part.slice(1, -1))}</code>`;
+      }
+      return escapeHtml(part);
+    })
+    .join("");
+}
+
+function compactTraceEvents(events = []) {
+  const turnsWithCodexAgentMessage = new Set(events
+    .filter((event) => ["codex_item_started", "codex_item_updated", "codex_item_completed"].includes(event?.type))
+    .filter((event) => event.itemType === "agent_message" || event.item?.type === "agent_message")
+    .map((event) => event.turnId || "")
+    .filter(Boolean));
+  const laterItemIds = new Set();
+  let laterCodexTurnTerminal = false;
+  const compacted = [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index] || {};
+    if (event.type === "assistant_message" && turnsWithCodexAgentMessage.has(event.turnId || "")) continue;
+    if (["codex_item_started", "codex_item_updated", "codex_item_completed"].includes(event.type)) {
+      const itemKey = event.itemId || event.item?.id || `${event.itemType || "item"}:${index}`;
+      if (laterItemIds.has(itemKey)) continue;
+      laterItemIds.add(itemKey);
+    }
+    if (event.type === "codex_turn_started" && laterCodexTurnTerminal) continue;
+    if (event.type === "codex_turn_completed" || event.type === "codex_turn_failed") laterCodexTurnTerminal = true;
+    compacted.unshift(event);
+  }
+  return compacted;
+}
+
+function codexDisplayText(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.assistantMessage === "string") return parsed.assistantMessage;
+  } catch {
+    // Non-JSON agent messages are already display text.
+  }
+  return raw;
 }
 
 function runtimeDisplayName(value = "") {
@@ -1987,24 +2189,13 @@ function toolCallSummary(call, result = {}) {
 
 function renderInspector() {
   const revision = currentRevision();
-  const runtimeStatus = renderRuntimeStatusSection();
-  if (!revision && !runtimeStatus) {
+  if (!revision) {
     dom.inspectorContent.hidden = true;
     dom.inspectorContent.innerHTML = "";
     return;
   }
   dom.inspectorContent.hidden = false;
-  const sections = [];
-  const runtimeLeads = runtimeStatusShouldLead();
-  if (runtimeStatus && runtimeLeads) {
-    sections.push(["runtime", t("chatTraceTitle"), inspectorSectionSummary("runtime", revision), runtimeStatus]);
-  }
-  if (revision) {
-    sections.push(["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]);
-  }
-  if (runtimeStatus && !runtimeLeads) {
-    sections.push(["runtime", t("chatTraceTitle"), inspectorSectionSummary("runtime", revision), runtimeStatus]);
-  }
+  const sections = [["model", t("sections.model"), inspectorSectionSummary("model", revision), renderModelSection(revision)]];
   dom.inspectorContent.innerHTML = sections
     .map(([key, title, summary, body]) => {
       const collapsed = state.collapsedSections.has(key);
@@ -2022,17 +2213,6 @@ function renderInspector() {
       `;
     })
     .join("");
-}
-
-function runtimeStatusShouldLead() {
-  const turn = state.activeTrace || state.lastChatTurn;
-  return Boolean(
-    state.pendingConfirmation
-    || turn?.traceState === "running"
-    || turn?.traceState === "failed"
-    || turn?.traceState === "cancelled"
-    || turn?.ok === false
-  );
 }
 
 function renderModelFullscreen() {
@@ -2128,67 +2308,7 @@ function renderModelSection(revision) {
       <span>${escapeHtml(t("modelFitChecks"))} <strong>${escapeHtml(fitChecks)}</strong></span>
       <span>${escapeHtml(t("modelArtifacts"))} <strong>${escapeHtml(artifactSummary(revision))}</strong></span>
     </div>
-    ${renderProxyComponentNotice(revision)}
-    ${renderComponentAssetList(revision)}
-    ${renderArtifactLinks(revision)}
-    <p class="section-note">${escapeHtml(t("modelViewerHint"))}</p>
-    <p class="section-note">${escapeHtml(t("modifyThroughChat"))}</p>
   `;
-}
-
-function renderProxyComponentNotice(revision) {
-  return revision?.geometrySpec?.componentAssetManifest
-    ? `<p class="proxy-notice">${escapeHtml(t("proxyComponentNotice"))}</p>`
-    : "";
-}
-
-function renderComponentAssetList(revision) {
-  const components = revision?.geometrySpec?.componentAssetManifest?.components || [];
-  if (!components.length) return "";
-  return `
-    <div class="component-assets">
-      <strong>${escapeHtml(t("componentAssetsTitle"))}</strong>
-      ${components.slice(0, 6).map((component) => `
-        <div class="component-asset-row">
-          <span>
-            <b>${escapeHtml(component.displayName || component.componentId)}</b>
-            <small>${escapeHtml(t("assetQuality"))}: ${escapeHtml(assetQualityLabel(component.assetQuality))} / ${escapeHtml(t("validationStatus"))}: ${escapeHtml(validationStatusLabel(component.validationStatus))}</small>
-          </span>
-          <em>${escapeHtml(t("resolvedPreview"))}: ${escapeHtml(resolvedAssetLabel(component.preview?.resolvedType))}</em>
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-function renderArtifactLinks(revision) {
-  if (generationIsPending(revision) || revision?.modelArtifacts?.status !== "generated") return "";
-  const artifacts = revision.modelArtifacts?.artifacts || revision.modelPreview?.assets || {};
-  const links = [
-    "productPlan",
-    "geometrySpec",
-    "componentSelections",
-    "componentDescriptors",
-    "componentAssetManifest",
-    "validationReport",
-    "designSummary",
-    "glb",
-    "shellFront",
-    "shellBack",
-    "stl",
-    "step"
-  ]
-    .map((key) => [key, artifacts[key]])
-    .filter(([, artifact]) => artifact?.url)
-    .map(([key, artifact]) => `
-      <a class="artifact-link" href="${escapeHtml(artifact.url)}" target="_blank" rel="noreferrer">
-        ${escapeHtml(t(`artifactLabels.${key}`))}
-      </a>
-    `)
-    .join("");
-  return links
-    ? `<div class="artifact-links"><strong>${escapeHtml(t("artifactLinksTitle"))}</strong><span>${links}</span></div>`
-    : "";
 }
 
 function renderPreviewControls() {
@@ -2229,18 +2349,6 @@ function artifactSummary(revision) {
   const ready = ["glb", "shellFront", "shellBack", "stl", "step"].filter((key) => artifacts[key]);
   if (ready.length === 0) return state.lang === "zh" ? "待生成" : "pending";
   return t("modelArtifactSummary");
-}
-
-function assetQualityLabel(value = "missing") {
-  return t(`assetQualityLabels.${value}`) || value;
-}
-
-function validationStatusLabel(value = "missing") {
-  return t(`validationStatusLabels.${value}`) || value;
-}
-
-function resolvedAssetLabel(value = "procedural_visual_proxy") {
-  return String(value || "procedural_visual_proxy").replaceAll("_", " ");
 }
 
 function generationIsPending(revision) {
@@ -2303,11 +2411,11 @@ function renderPopovers() {
   const revision = currentRevision();
   if (!revision) {
     const empty = `<strong>${escapeHtml(t("newDraftTitle"))}</strong><p>${escapeHtml(t("noPlan"))}</p>`;
-    if (dom.dfmPopover) dom.dfmPopover.innerHTML = empty;
+    if (dom.snapshotPopover) dom.snapshotPopover.innerHTML = empty;
     return;
   }
-  if (!dom.dfmPopover) return;
-  dom.dfmPopover.innerHTML = `
+  if (!dom.snapshotPopover) return;
+  dom.snapshotPopover.innerHTML = `
     <strong>${escapeHtml(t("sections.model"))}</strong>
     <p>${escapeHtml(t("prototypePreviewSubtitle"))}</p>
     <div class="popover-row selected">
@@ -2472,17 +2580,56 @@ function closeFloating() {
     dialog.hidden = true;
   });
   disposeThreePreview("fullscreen");
+  state.activeProjectMenuId = "";
+  resetProjectMenuPosition();
   setFloatingTrigger("");
+}
+
+function openProjectMenu(projectId, anchor) {
+  if (!projectById(projectId)) return;
+  state.activeProjectMenuId = projectId;
+  openFloating("thread");
+  positionProjectMenu(anchor);
+}
+
+function positionProjectMenu(anchor) {
+  const popover = document.querySelector(".thread-popover");
+  if (!popover || !anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const width = Math.min(260, Math.max(180, window.innerWidth - 20));
+  const preferRight = rect.right + 8 + width <= window.innerWidth - 10;
+  const left = preferRight
+    ? rect.right + 8
+    : Math.max(10, Math.min(rect.left, window.innerWidth - width - 10));
+  const top = Math.max(10, Math.min(rect.top - 6, window.innerHeight - 210));
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+  popover.style.right = "auto";
+  popover.style.bottom = "auto";
+  popover.style.width = `${width}px`;
+}
+
+function resetProjectMenuPosition() {
+  const popover = document.querySelector(".thread-popover");
+  if (!popover) return;
+  popover.style.left = "";
+  popover.style.top = "";
+  popover.style.right = "";
+  popover.style.bottom = "";
+  popover.style.width = "";
 }
 
 function setFloatingTrigger(activeName) {
   const triggers = {
-    thread: [dom.openThreadMenu],
+    prototypeSnapshot: [dom.previewSnapshot],
     reviewContact: [dom.submitReview],
     settings: [dom.openSettings]
   };
   Object.entries(triggers).forEach(([name, buttons]) => {
     buttons.forEach((button) => button?.classList.toggle("active", name === activeName));
+  });
+  document.querySelectorAll("[data-project-menu]").forEach((button) => {
+    button.classList.toggle("active", activeName === "thread" && button.dataset.projectMenu === state.activeProjectMenuId);
   });
 }
 
@@ -3058,6 +3205,13 @@ function escapeHtml(value) {
 }
 
 document.querySelector(".thread-list")?.addEventListener("click", (event) => {
+  const menuButton = event.target.closest("[data-project-menu]");
+  if (menuButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    openProjectMenu(menuButton.dataset.projectMenu, menuButton);
+    return;
+  }
   const newProjectRow = event.target.closest("[data-new-project-row]");
   if (newProjectRow) {
     startNewProject();
@@ -3074,6 +3228,16 @@ document.querySelector(".thread-list")?.addEventListener("click", (event) => {
 
 dom.workspaceView.addEventListener("click", (event) => {
   if (handlePreviewModeClick(event)) return;
+  const processedDetailToggle = event.target.closest("[data-processed-detail-toggle]");
+  if (processedDetailToggle) {
+    toggleProcessedDetail(processedDetailToggle.dataset.processedDetailToggle);
+    return;
+  }
+  const processedToggle = event.target.closest("[data-processed-toggle]");
+  if (processedToggle) {
+    toggleProcessedTranscript(processedToggle.dataset.processedToggle);
+    return;
+  }
   const dialogTrigger = event.target.closest("[data-open-dialog]");
   if (dialogTrigger) {
     openFloating(dialogTrigger.dataset.openDialog);
@@ -3230,18 +3394,17 @@ document.addEventListener("wheel", (event) => {
 dom.form.addEventListener("submit", submitComposer);
 dom.runChain.addEventListener("click", submitComposer);
 
-dom.copySpec.addEventListener("click", () => {
+dom.previewSnapshot.addEventListener("click", () => {
   if (!currentRevision()) {
     setNotice(t("noPlan"));
     return;
   }
-  openFloating("dfm");
+  openFloating("prototypeSnapshot");
 });
 
 dom.submitReview.addEventListener("click", () => openFloating("reviewContact"));
 window.yWorkbenchSubmitForReview = submitForReview;
 dom.newProject.addEventListener("click", startNewProject);
-dom.openThreadMenu.addEventListener("click", () => openFloating("thread"));
 dom.openSettings.addEventListener("click", openRuntimeSettings);
 dom.scopeLevel?.addEventListener("click", openRuntimeSettings);
 
@@ -3279,13 +3442,34 @@ dom.floatingLayer.addEventListener("click", (event) => {
   }
   const action = event.target.closest("[data-action]");
   if (action) {
+    const targetProjectId = state.activeProjectMenuId;
+    const targetProject = projectById(targetProjectId);
     if (action.dataset.action === "history") {
+      const switchedProject = targetProject && targetProject.projectId !== state.activeProjectId
+        ? activateProject(targetProject.projectId)
+        : false;
       state.activeSidebar = "history";
       closeFloating();
       render();
+      if (switchedProject) {
+        restoreActiveChatSession().catch(() => {});
+        refreshRuntimeStatusForProjectBoundary();
+      }
       return;
     }
-    setNotice(`${t("actionNotice")}${action.textContent.trim()}`);
+    if (action.dataset.action === "remove") {
+      const removed = removeProjectFromList(targetProjectId);
+      closeFloating();
+      if (removed) setNotice(t("projectRemoved", removed.title));
+      render();
+      if (removed?.wasActive) {
+        restoreActiveChatSession().catch(() => {});
+        refreshRuntimeStatusForProjectBoundary();
+      }
+      return;
+    }
+    const suffix = targetProject ? ` · ${projectTitle(targetProject)}` : "";
+    setNotice(`${t("actionNotice")}${action.textContent.trim()}${suffix}`);
     closeFloating();
   }
   const modelAction = event.target.closest("[data-model-action]");

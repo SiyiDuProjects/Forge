@@ -135,11 +135,7 @@ export function checkToolPermission({
     return deny("UNKNOWN_TOOL", `Unknown Forge tool: ${toolName}`);
   }
 
-  const mutatesWorkspace = Boolean(
-    toolMetadata.behavior?.createsRevision
-    || toolMetadata.behavior?.writesArtifacts
-    || toolMetadata.behavior?.mutatesCurrentState
-  );
+  const mutatesWorkspace = toolMetadata.behavior?.readOnly !== true;
 
   if (mutatesWorkspace && containsRawMutationTarget(toolInput)) {
     return deny("RAW_MUTATION_TARGET", "Forge tools cannot directly mutate GeometrySpec, mesh files, artifact files, or arbitrary project paths.");
@@ -161,7 +157,7 @@ export function checkToolPermission({
     return allow("User explicitly confirmed committing the staged change.");
   }
 
-  if (["applyDesignPatch", "revertRevision", "regenerateRevision"].includes(toolName) && hasExplicitMutationIntent(userMessage)) {
+  if (["applyDesignPatch", "revertRevision", "regenerateRevision", "submitReviewPacket"].includes(toolName) && hasExplicitMutationIntent(userMessage)) {
     return allow("User explicitly requested this workspace mutation.");
   }
 

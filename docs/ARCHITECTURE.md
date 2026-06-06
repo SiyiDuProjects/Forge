@@ -27,7 +27,7 @@ Forge is intentionally small: one static UI shell plus a Node core pipeline used
 
 ## Flow
 
-1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace. When `runtimeProvider: "codex"` is active, the project manifest also stores a `codexThreadId` and subsequent turns resume that Codex thread inside the project workspace.
+1. The first user request enters the UI composer and creates a `ProductPlan`; later turns use Forge QueryEngine for the existing workspace. When `runtimeProvider: "codex"` is active, the project manifest stores provider-neutral `runtimeBinding` and subsequent turns resume the bound Codex thread inside the project workspace.
 2. `interpretRequest` extracts product type, screen, standardized 3D printed enclosure finish, sources, functions, and options.
 3. `matchModules` chooses stocked modules, review-required modules, the standard 3D printed shell, and deferred modules from the catalog.
 4. `evaluateRisk` marks review level, warnings, and blocked scope. Camera and battery stay reviewable as human-review risks; motion structures leave the standard path.
@@ -49,9 +49,10 @@ Forge QueryEngine is a narrow adaptation of Claude Code's query loop. It does no
 - Codex SDK turns may own product-task intent, thread context, follow-up decisions, and task splitting for one Forge project.
 - Codex reads generated project workspace files such as `AGENTS.md`, `WORK_INDEX.md`, `CURRENT_STATE.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, and `skills/*.md`.
 - Codex may call `forge-tool` itself or return Forge tool intent JSON. In both cases, Forge actions own the actual state mutation.
-- Tool execution goes through `tool_executor.mjs` and `forge_actions.mjs`.
+- Tool execution goes through `permission_gate.mjs`, `tool_executor.mjs`, and `forge_actions.mjs`; agent tools, API action routes, and the CLI share the same policy executor.
+- `workspace-write` locks are enforced per workspace for mutation tools. Read-only tools and different workspaces do not share the same write queue.
 - Mutations require explicit wording or `/chat/confirm` approval when the permission gate marks them ambiguous.
-- Guarded-file snapshots reject Codex turns that directly edit source-of-truth files without a Forge tool event.
+- Guarded-file snapshots reject Codex turns that directly edit source-of-truth files without a Forge tool event whose payload authorizes the exact proposal, revision, artifact, or append-only event path.
 - Chat transcripts live in `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`.
 - Raw GeometrySpec, GLB, STL, STEP, mesh vertices, arbitrary file writes, arbitrary shell state mutation, MCP, remote sessions, plugins, supplier ordering, and manufacturing actions remain outside V1. The bounded exception is running the generated `forge-tool` CLI from the project workspace.
 
@@ -74,11 +75,11 @@ Project-changing actions append to the workspace `events.jsonl` log and persist 
 
 The local project folder is a durable workspace record, not a user-facing CAD export:
 
-- Source of truth: `project_manifest.json` including optional `codexThreadId`, `product_plan.json`, `events.jsonl`, `proposals/*.json`, `revisions/*/revision_manifest.json`, `revisions/*/product_plan.json`, `revisions/*/geometry-spec.json`, and `revisions/*/component_descriptors.json`.
+- Source of truth: `project_manifest.json` including optional `runtimeBinding`, `product_plan.json`, `events.jsonl`, `proposals/*.json`, `revisions/*/revision_manifest.json`, `revisions/*/product_plan.json`, `revisions/*/geometry-spec.json`, and `revisions/*/component_descriptors.json`.
 - Runtime state: `runtime_plan.json` preserves the full Forge runtime ProductPlan so `forge-tool` can restore the project in a separate process.
 - Derived artifacts: `revisions/*/artifacts/model.glb`, STL shell files, STEP handoff, `validation_report.json`, `component_asset_manifest.json`, and `design_summary.md`.
 - Context aids: generated `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, and `skills/*.md` are summaries/rules for humans and Codex. JSON/events remain authoritative.
-- Chat/runtime layers must call Forge tools/actions. They must not directly edit `GeometrySpec`, GLB, STL, STEP, arbitrary files, or mesh data.
+- Chat/runtime layers must call Forge tools/actions. They must not directly edit `GeometrySpec`, GLB, STL, STEP, arbitrary files, or mesh data. Legacy direct mutation API routes are internal/test-only unless explicitly enabled with the internal mutation guard.
 
 ## UI Boundary
 

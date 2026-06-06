@@ -301,6 +301,44 @@ const TOOL_DEFINITIONS = [
       strategy: "create_new_proposal",
       automatic: false
     }
+  }),
+  tool({
+    name: "submitReviewPacket",
+    description: "Write local human-review material for the current ProductPlan revision without starting payment, supplier ordering, or manufacturing.",
+    inputSchema: objectSchema({
+      workspaceId: stringSchema(),
+      revisionId: stringSchema(),
+      contactInfo: objectSchema({
+        name: stringSchema(),
+        email: stringSchema()
+      })
+    }, ["workspaceId", "contactInfo"]),
+    outputSchema: objectSchema({
+      ok: booleanSchema(),
+      submitted: booleanSchema(),
+      status: stringSchema(),
+      reviewId: stringSchema()
+    }),
+    permission: confirmation("Writes local human-review material and marks the ProductPlan submitted for review."),
+    behavior: {
+      readOnly: false,
+      destructive: false,
+      createsRevision: false,
+      writesArtifacts: false,
+      mutatesCurrentState: true,
+      submitsReview: true
+    },
+    concurrency: workspaceWriteLock(),
+    sideEffects: [
+      "write review/review_request.json",
+      "write review/human_review_notes.md",
+      "append events.jsonl review_submitted or review_submission_failed",
+      "update runtime_plan.json reviewSubmission"
+    ],
+    rollback: {
+      strategy: "create_followup_review_packet",
+      automatic: false
+    }
   })
 ];
 

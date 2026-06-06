@@ -128,7 +128,7 @@ export const API_CONTRACT = [
     method: "POST",
     path: "/api/workspaces/:workspaceId/chat/turn",
     body: ["sessionId", "userMessage", "runtime", "modelProvider", "runtimeProvider", "mode", "confirmation"],
-    response: ["ok", "runtimeProvider", "modelProvider", "assistantMessage", "messages", "toolCalls", "toolResults", "proposal", "revision", "pendingConfirmation", "productPlan", "codexThreadId"]
+    response: ["ok", "runtimeProvider", "modelProvider", "runtimeBinding", "bindingId", "assistantMessage", "messages", "toolCalls", "toolResults", "proposal", "revision", "pendingConfirmation", "productPlan"]
   },
   {
     method: "GET",
@@ -197,13 +197,13 @@ export const API_CONTRACT = [
     method: "POST",
     path: "/api/plans",
     body: ["message", "initialMessage", "assets", "language", "runtime", "modelProvider", "runtimeProvider"],
-    response: ["productPlan", "revision", "runtimeProvider", "modelProvider", "codexThreadId"]
+    response: ["productPlan", "revision", "runtimeProvider", "modelProvider", "runtimeBinding", "bindingId"]
   },
   {
     method: "POST",
     path: "/api/plans/:planId/turns",
     body: ["message", "assetIds", "assets", "overrides"],
-    response: ["productPlan", "revision", "assistantMessage"]
+    response: ["internal/test-only", "productPlan", "revision", "assistantMessage"]
   },
   {
     method: "POST",
@@ -221,7 +221,7 @@ export const API_CONTRACT = [
     method: "POST",
     path: "/api/jobs",
     body: ["planId", "revisionId", "capability", "provider", "input"],
-    response: ["job"]
+    response: ["internal/test-only", "job"]
   },
   {
     method: "GET",
@@ -232,25 +232,25 @@ export const API_CONTRACT = [
     method: "POST",
     path: "/api/model/generate",
     body: ["planId", "revisionId", "spec", "modules", "riskReport", "generateArtifacts"],
-    response: ["job", "modelPreview", "geometrySpec", "modelArtifacts", "geometryValidation"]
+    response: ["internal/test-only", "job", "modelPreview", "geometrySpec", "modelArtifacts", "geometryValidation"]
   },
   {
     method: "POST",
     path: "/api/geometry/generate",
     body: ["planId", "revisionId", "spec", "modules", "riskReport", "generateArtifacts"],
-    response: ["job", "geometrySpec", "modelArtifacts", "geometryValidation"]
+    response: ["internal/test-only", "job", "geometrySpec", "modelArtifacts", "geometryValidation"]
   },
   {
     method: "POST",
     path: "/api/layout/electronics",
     body: ["planId", "revisionId", "spec", "modules", "modelJob"],
-    response: ["job", "electronicsLayout"]
+    response: ["internal/test-only", "job", "electronicsLayout"]
   },
   {
     method: "POST",
     path: "/api/quote/estimate",
     body: ["planId", "revisionId", "draft", "spec", "modules", "riskReport", "quote"],
-    response: ["job", "quoteEstimate"]
+    response: ["internal/test-only", "job", "quoteEstimate"]
   },
   {
     method: "POST",

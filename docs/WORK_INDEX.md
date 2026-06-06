@@ -20,6 +20,109 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Compact Right Inspector Below 3D Model Status
+
+- Scope: remove the default right-inspector text below the `3D 模型状态` row: proxy ComponentDescriptor disclaimer, component asset source list, generated evidence links, and instruction paragraphs. Keep the compact 3D preview, layer controls, shell path, dimensions, structure checks, model status, and fullscreen affordance.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-inspector-below-3d-model-comment.md`
+- Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `renderModelSection`, `modelArtifacts`, `proxy-notice`, `componentAssetsTitle`, `renderComponentAssetList`, `renderArtifactLinks`, `artifact-link`.
+- Verification: pending current-turn `npm run check` and Browser verification on the local preview.
+- Boundary: ComponentDescriptor evidence, component asset manifest, validation reports, GLB/STL/STEP, and design summaries are still generated and persisted as revision artifacts. They are no longer listed as default right-inspector text.
+
+### 2026-06-06 - Codex-Style Processed Transcript P4
+
+- Scope: replace the P3 per-ThreadItem transcript UI with a Codex-client-style processed transcript. Completed turns now default to a collapsed `已处理 <duration>` header, running turns stay expanded, and final assistant text remains visible as normal message text.
+- Status: implemented and Browser-verified in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-codex-style-processed-transcript-p4.md`
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `processedTranscriptViewModel`, `renderProcessedTranscriptHeader`, `renderProcessedWorkDetails`, `formatProcessedDuration`, `expandedProcessedTurns`, `expandedProcessedDetails`, `data-processed-toggle`, `data-processed-detail-toggle`, `processed-detail-list`.
+- Verification: `npm run check` passes with 77 tests. Browser validation on `http://127.0.0.1:8782/?cacheBust=threaditem-p4-final-order` confirmed completed work defaults collapsed, expanding happens in place below the `已处理` header and pushes the final answer downward, final answer text is not duplicated in the work details, command/path strings are redacted from the first-level natural-language text, secondary details under `已运行` expose safe command/status/exitCode fields, no `运行绑定` / `请求模型` / `模型响应` / `modelProvider` / `tool_call` internal trace text appears, and the right inspector remains a 3D prototype result surface.
+- Boundary: this is a frontend projection change over existing sanitized SDK/runtime events. It does not change the backend event source, Codex SDK behavior, ProductPlan persistence, GeometrySpec generation, guarded-file policy, or right-inspector 3D output. Command output, file contents, raw tool input/output, runtime binding, model request/response rows, and model provider details remain hidden from the main UI.
+
+### 2026-06-06 - Project Row Hover Menu And Snapshot Action
+
+- Scope: move `方案菜单` from the left-sidebar `项目` header into each project row, hide the row action trigger until hover/focus, bind menu actions to the selected project id, and make `预览原型快照` open the prototype structure preview popover instead of a legacy copy/DFM-named path.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-project-row-hover-menu-comment.md`
+- Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `index.html`
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `data-project-menu`, `openProjectMenu`, `project-row-menu-button`, `removeProjectFromList`, `previewSnapshot`, `prototypeSnapshot`, `snapshotPopover`.
+- Verification: `npm run check` passes with 77 tests. Browser check on `http://127.0.0.1:8782/?cacheBust=project-row-menu-latest` confirmed no global `#openThreadMenu`, no legacy `#copySpec` or DFM detail dialog, project rows expose `data-project-menu` triggers, the row menu trigger is hidden by default, and the hover/focus CSS rule is present. The user also confirmed the row-hover behavior in the in-app browser.
+- Boundary: project menu removal is a local sidebar-list action only. It does not delete persisted `data/workspaces` folders because there is no backend workspace delete/archive API yet.
+
+### 2026-06-05 - Codex Native ThreadItem Rich Rendering P3
+
+- Scope: render Codex SDK `ThreadItem` events as structured native center-thread blocks instead of flat trace rows. Supported item types are `todo_list`, `reasoning`, `agent_message`, `command_execution`, `file_change`, `mcp_tool_call`, `web_search`, and `error`.
+- Status: implemented and Browser-verified in the current working tree.
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `renderCodexNativeItem`, `renderCodexNativeItemBody`, `codexNativeItemKey`, `codexNativeCopyText`, `collapsedTraceItems`, `data-trace-toggle`, `data-trace-copy`, `codex-native-text`, `codex-native-file-list`, `codex-native-todo-list`.
+- Verification: `npm run check` passes with 77 tests. Browser pass on `http://127.0.0.1:8782/?cacheBust=threaditem-p3` covered a real read-only Codex live turn with six `command_execution` native blocks and one `agent_message` block, collapse/expand on a stable item key, command copy to clipboard without raw output, reload replay, project switch away/back restore, and right-inspector 3D-only behavior. A second constrained P3 validation turn covered a real `file_change` block for an ignored workspace scratch note, a failed `command_execution` block for `cat definitely-missing-p3-file`, file-change copy (`add: path` only), and reload replay of those blocks. Browser screenshots captured the native command blocks and file-change/failed-command blocks; console warnings/errors stayed empty.
+- Boundary: this is a frontend presentation change for sanitized Codex SDK item fields. It does not expose raw command output, raw file contents, unsanitized reasoning, secrets, direct file editing, new Forge tools, ProductPlan mutation semantics, or right-inspector execution narration.
+
+### 2026-06-05 - Transcript Replay Consistency P2
+
+- Scope: normalize frontend transcript state so live stream events, final response events, confirmation response events, reload replay from `events.jsonl`, and project-switch restoration all pass through the same SDK-native transcript merge path before rendering.
+- Status: implemented and Browser-verified in the current working tree.
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `TRANSCRIPT_EVENT_LIMIT`, `normalizeTranscriptTurn`, `mergeTranscriptEvents`, `transcriptEventsFromWorkspaceEvents`, `transcriptEventKey`, live/replay transcript consistency, project-switch transcript restore.
+- Verification: `npm run check` passes with 77 tests. Browser pass on `http://127.0.0.1:8782/?cacheBust=transcript-p2` covered a real Codex live summary turn with running/complete center-thread transcript rows, reload replay without duplicate runtime-binding or duplicate assistant rows, project switch away/back with the same latest Codex segment restored, pending confirmation restore plus cancel/approve, and post-approval `生成模型` replay with generated GLB/STL/STEP evidence still confined to the right 3D inspector. Browser screenshot capture still times out in this environment, so this pass used URL/title, DOM state, console logs, and interaction state as evidence.
+- Boundary: this is a frontend transcript projection and replay consistency change. It does not change Codex SDK thread creation, guarded-file policy, Forge tool execution, ProductPlan revision semantics, or right-inspector 3D output behavior.
+
+### 2026-06-05 - SDK-Native Codex Transcript Frontend
+
+- Scope: move the main execution narrative from the right inspector into the center thread and render Codex SDK streamed `ThreadEvent` / `ThreadItem` data directly: `todo_list`, reasoning summaries, `agent_message`, `command_execution`, `file_change`, `mcp_tool_call`, `web_search`, `error`, and turn usage. Forge domain events for ProductPlan, GeometrySpec, confirmation, and artifacts remain supplemental transcript rows.
+- Status: implemented and multi-flow Browser-verified in the current working tree.
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/codex_runtime.mjs`
+  - `app.js`
+  - `styles.css`
+  - `tests/query_engine.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `safeCodexThreadItem`, `renderTranscriptSection`, `transcript-panel`, `codexDisplayText`, SDK-native transcript, Codex 工作流, right inspector result-only.
+- Verification: `npm run check` passes with 77 tests. Browser verification on `http://127.0.0.1:8782/?cacheBust=sdk-native-persist` and `http://127.0.0.1:8782/?cacheBust=sdk-native-final-qa` confirmed the center thread shows `Codex 工作流`, a real Codex summary turn renders and restores a persisted `Codex 消息` row after refresh, the stale empty-state row is gone, console warnings/errors are empty, and the right inspector no longer shows `执行状态` / `Run status`. Additional Browser DOM checks covered camera/battery human-review risk, manual expansion draft, pending confirmation controls in the center thread, cancel clearing a pending confirmation, approval creating a new revision, and `生成模型` producing GLB/STL/STEP evidence with `data-preview-engine="three"` in the right inspector. Browser screenshot capture still times out in this environment, so this pass used URL/title, DOM snapshots, console logs, and interaction state as evidence.
+- Boundary: this is a frontend transcript and event-projection change. It does not change Codex thread creation, Forge tool permission policy, ProductPlan persistence, GeometrySpec generation rules, or explicit 3D generation confirmation.
+
+### 2026-06-05 - Architecture Hardening Sprint P1
+
+- Scope: harden the current P1 architecture boundaries without broad refactor: provider-neutral runtime state, Codex initialization failure consistency, shared mutation policy, real per-workspace write locks, precise guarded-file authorization, and review tool registry/CLI alignment.
+- Status: implemented in the current working tree.
+- Main docs: `docs/source-materials/2026-06-05-architecture-hardening-sprint-goal.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/FORGE_ACTION_CONTRACT.md`
+- Key code handles:
+  - `src/core/project_workspace.mjs`
+  - `src/core/runtime_plan_creation.mjs`
+  - `src/core/codex_runtime.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/permission_gate.mjs`
+  - `src/core/guarded_files.mjs`
+  - `src/core/tool_registry.mjs`
+  - `server.mjs`
+  - `scripts/forge-tool.mjs`
+  - `app.js`
+- Retrieval handles: `runtimeBinding`, `runtimeInitializationFailed`, legacy `codexThreadId` migration, `executeForgeToolWithPolicy`, `workspace-write`, `withWorkspaceWriteLock`, `submitReviewPacket`, `FORGE_ENABLE_INTERNAL_API_MUTATIONS`, `INTERNAL_ROUTE_ONLY`, guarded event payload authorization.
+- Verification: `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Final `npm run check` passes with 77 tests.
+- Boundary: legacy `codexThreadId` is now a migration input only. New runtime state is `runtimeBinding` in the manifest/runtime binding layer; ProductPlan and WorkspaceState are scrubbed of Codex-specific thread fields. Mutation writes use registered Forge tools through shared policy and per-workspace locks; direct legacy routes are internal/test-only unless explicitly enabled.
+
 ### 2026-06-05 - Codex-First Frontend Runtime Default
 
 - Scope: make Codex the normal frontend product-task runtime instead of leaving new/restored non-threaded projects on the old local Forge default. The browser now defaults to `runtimeProvider: "codex"`, shows `Codex` as the selected runtime option, and labels `mock` as `本地 Forge（降级）`.

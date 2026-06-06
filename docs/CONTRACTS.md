@@ -109,7 +109,7 @@ Runtime modules:
 
 Chat session files live under `data/workspaces/<planId>/chat_sessions/<sessionId>.jsonl`. Pending confirmations live in `chat_sessions/pending_confirmations.json`.
 
-When the Codex runtime is active, `project_manifest.json` stores `codexThreadId`. That thread is only the project-level conversation context; durable Forge state still comes from ProductPlan, revisions, proposals, events, and artifact manifests.
+When the Codex runtime is active, `project_manifest.json` stores provider-neutral `runtimeBinding`. The Codex thread id is provider state inside that binding, not a ProductPlan or WorkspaceState field. Legacy `codexThreadId` fields can be read for migration, but new code must not write them. Durable Forge state still comes from ProductPlan, revisions, proposals, events, and artifact manifests.
 
 Project workspaces also contain `runtime_plan.json`, generated project `AGENTS.md`, `FORGE_TOOLS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, and `skills/*.md` so Codex can read the project like a compact file-backed workbench. The `forge-tool` CLI wraps Forge actions for Codex-side tool calls; it must not be bypassed for ProductPlan, GeometrySpec, revision, artifact, or review state changes.
 
@@ -117,7 +117,7 @@ Important chat/runtime events include `chat_turn_started`, `context_pack_built`,
 
 Codex-specific setup also appends `codex_thread_created` when a project first receives a Codex thread.
 
-Mutation tools such as `applyDesignPatch`, `commitStagedChange`, `regenerateRevision`, and `revertRevision` run only when the user wording is explicit or an approved confirmation is supplied. Raw `GeometrySpec`, GLB/STL/STEP, mesh, artifact-byte, and arbitrary file mutation targets are denied before action execution.
+Mutation tools such as `applyDesignPatch`, `commitStagedChange`, `regenerateRevision`, `revertRevision`, and `submitReviewPacket` run only when the user wording is explicit or an approved confirmation is supplied. API action routes, agent tool calls, and `forge-tool` use the same policy executor. Raw `GeometrySpec`, GLB/STL/STEP, mesh, artifact-byte, and arbitrary file mutation targets are denied before action execution.
 
 ## Forge Action Contract
 
@@ -171,7 +171,7 @@ Every Forge action has:
 - `rollback`
 - `disallowedTargets`
 
-Read-only tools are safe to run in parallel. Revision-writing or current-state-mutating tools use the `workspace-write` lock and require confirmation in future chat runtimes.
+Read-only tools are safe to run in parallel. Revision-writing or current-state-mutating tools use the enforced per-workspace `workspace-write` lock and require explicit wording or confirmation.
 
 ## ComponentDescriptor v2 Contract
 
@@ -225,7 +225,7 @@ Returns the stocked/review/deferred module catalog.
 
 ### `GET /api/runtime/status`
 
-Returns a read-only runtime preflight for the current UI selection: default runtime/model providers, local Forge and QueryEngine readiness, Codex SDK availability, and the current project's saved `codexThreadId` when a `workspaceId` query parameter is provided. This route never creates a Codex thread and never mutates ProductPlan state.
+Returns a read-only runtime preflight for the current UI selection: default runtime/model providers, local Forge and QueryEngine readiness, Codex SDK availability, and the current project's `runtimeBinding` when a `workspaceId` query parameter is provided. This route never creates a Codex thread and never mutates ProductPlan state.
 
 ### `GET /api/workspaces`
 
@@ -283,7 +283,7 @@ Body:
 
 `runtime` / `runtimeProvider` may be `mock`, `forge-query-engine`, or `codex`. `modelProvider: "openai"` is still supported for the OpenAI Responses adapter inside `forge-query-engine`. When `runtimeProvider: "codex"`, the server requires `@openai/codex-sdk`, creates or resumes the project-bound Codex thread, runs it inside the project workspace, injects ContextPack, accepts either `forge-tool` side effects or Forge tool intent JSON, and rejects direct guarded-file edits.
 
-Returns assistant message, runtime/model provider, chat messages, tool call trace, tool results, proposal summary, revision summary, validation warnings, artifact paths, pending confirmation if required, appended events, updated `productPlan`, and `codexThreadId` when available.
+Returns assistant message, runtime/model provider, chat messages, tool call trace, tool results, proposal summary, revision summary, validation warnings, artifact paths, pending confirmation if required, appended events, updated `productPlan`, `runtimeBinding`, and `bindingId` when available.
 
 ### `GET /api/workspaces/:workspaceId/chat/:sessionId`
 
@@ -378,9 +378,9 @@ Creates a ProductPlan from an initial conversation turn.
 }
 ```
 
-When `runtimeProvider: "codex"`, project creation also creates and stores the project-bound Codex thread id before returning. If the SDK is unavailable, the route returns a structured error and the frontend keeps the user's draft input.
+When `runtimeProvider: "codex"`, project creation initializes and stores `runtimeBinding` before returning. If the SDK is unavailable or thread initialization fails, the route returns a structured error with `runtimeBinding.status = "failed"` and the frontend keeps the user's draft input.
 
-Returns `{ "productPlan": ..., "revision": ..., "assistantMessage": ..., "runtimeProvider": ..., "modelProvider": ..., "codexThreadId": ... }`.
+Returns `{ "productPlan": ..., "revision": ..., "assistantMessage": ..., "runtimeProvider": ..., "modelProvider": ..., "runtimeBinding": ..., "bindingId": ... }`.
 
 ### `POST /api/plans/:planId/turns`
 
@@ -488,4 +488,4 @@ ProductPlan submissions use:
 }
 ```
 
-They write a local human review packet to `data/reviews/*.json`. The response explicitly states that no payment was collected and no manufacturing started.
+ProductPlan review submissions with `planId` run through the registered `submitReviewPacket` Forge tool and the shared mutation policy. Legacy draft-only review payloads are internal/test-only unless the internal mutation guard is enabled. Successful submissions write a local human review packet and explicitly state that no payment was collected and no manufacturing started.

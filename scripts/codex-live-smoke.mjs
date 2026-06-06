@@ -135,7 +135,7 @@ try {
   const plan = getProductPlan(workspaceId);
   const events = readWorkspaceEvents({ workspaceId });
   const checks = {
-    hasCodexThread: turns.some((turn) => Boolean(turn.codexThreadId)),
+    hasRuntimeBinding: turns.some((turn) => Boolean(turn.bindingId || turn.runtimeBinding?.bindingId)),
     hasButtonUpdate: Number(plan?.workspaceState?.productPlan?.requirements?.buttons || 0) >= 2,
     hasBuzzerOrSpeaker: Boolean(plan?.workspaceState?.productPlan?.requirements?.buzzer || plan?.workspaceState?.productPlan?.requirements?.speaker),
     hasGeneratedArtifacts: (plan?.revisions || []).some((revision) => (
@@ -188,7 +188,8 @@ function compactTurn(message, turn) {
     ok: Boolean(turn?.ok),
     runtimeProvider: turn?.runtimeProvider || "",
     modelProvider: turn?.modelProvider || "",
-    codexThreadId: turn?.codexThreadId || "",
+    runtimeBinding: turn?.runtimeBinding || null,
+    bindingId: turn?.bindingId || turn?.runtimeBinding?.bindingId || "",
     assistantMessage: String(turn?.assistantMessage || "").slice(0, 500),
     toolCalls: (turn?.toolCalls || []).map((call) => call.name),
     toolResults: (turn?.toolResults || []).map((result) => ({
@@ -211,7 +212,8 @@ function compactForgeAction(message, toolName, result, currentRevisionId = "") {
     ok: Boolean(result?.ok),
     runtimeProvider: "forge-confirmation",
     modelProvider: "",
-    codexThreadId: "",
+    runtimeBinding: null,
+    bindingId: "",
     assistantMessage: result?.ok ? `${toolName} ok` : (result?.error?.message || `${toolName} failed`),
     toolCalls: [toolName],
     toolResults: [

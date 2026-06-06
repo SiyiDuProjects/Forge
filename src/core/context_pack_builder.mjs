@@ -3,7 +3,8 @@ import { join } from "node:path";
 import {
   defaultProjectWorkspaceRoot,
   projectWorkspacePath,
-  readWorkspaceEvents
+  readWorkspaceEvents,
+  runtimeBindingFromSources
 } from "./project_workspace.mjs";
 import { listToolMetadata } from "./tool_registry.mjs";
 
@@ -35,6 +36,7 @@ export function buildContextPack({
   }
 
   const productPlan = readJson(join(workspacePath, manifest.currentProductPlanPath || "product_plan.json")) || {};
+  const runtimeBinding = runtimeBindingFromSources({ manifest, productPlan });
   const currentRevisionId = manifest.currentRevisionId || "";
   const revisionPath = currentRevisionId
     ? join(workspacePath, "revisions", currentRevisionId)
@@ -64,7 +66,7 @@ export function buildContextPack({
       title: manifest.title,
       status: manifest.status,
       currentRevisionId,
-      codexThreadId: manifest.codexThreadId || "",
+      runtimeBinding,
       projectPath: workspacePath,
       updatedAt: manifest.updatedAt,
       eventsPath: manifest.eventsPath || "events.jsonl"

@@ -32,73 +32,6 @@ const TOOL_EVENT_TYPES = new Set([
   "review_submission_failed"
 ]);
 
-const EVENT_ALLOWED_GUARDED_PATTERNS = {
-  workspace_created: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json"
-  ],
-  proposal_created: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json",
-    "proposals/*.json"
-  ],
-  proposal_staged: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json",
-    "proposals/*.json"
-  ],
-  proposal_committed: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json",
-    "proposals/*.json"
-  ],
-  proposal_rejected: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json",
-    "proposals/*.json"
-  ],
-  revision_created: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json",
-    "revisions/*/revision_manifest.json",
-    "revisions/*/product_plan.json",
-    "revisions/*/geometry-spec.json",
-    "revisions/*/component_descriptors.json",
-    "revisions/*/artifacts/*"
-  ],
-  revision_reverted: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json"
-  ],
-  artifacts_generated: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json",
-    "revisions/*/revision_manifest.json",
-    "revisions/*/product_plan.json",
-    "revisions/*/geometry-spec.json",
-    "revisions/*/component_descriptors.json",
-    "revisions/*/artifacts/*"
-  ],
-  review_submitted: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json"
-  ],
-  review_submission_failed: [
-    "project_manifest.json",
-    "product_plan.json",
-    "runtime_plan.json"
-  ]
-};
-
 export function snapshotGuardedFiles({
   workspaceId,
   rootDir
@@ -196,11 +129,81 @@ function guardedPathAllowedByEvents(path, events = []) {
   const normalized = normalizePath(path);
   const knownEvents = events.filter((event) => TOOL_EVENT_TYPES.has(event.type) || event.type === "workspace_created");
   if (normalized === "events.jsonl") return knownEvents.length > 0;
-  const allowedPatterns = new Set();
+  const allowedPatterns = [];
   for (const event of knownEvents) {
-    for (const pattern of EVENT_ALLOWED_GUARDED_PATTERNS[event.type] || []) {
-      allowedPatterns.add(pattern);
-    }
+    allowedPatterns.push(...allowedGuardedPatternsForEvent(event));
   }
-  return [...allowedPatterns].some((pattern) => guardedPatternRegex(pattern).test(normalized));
+  return allowedPatterns.some((pattern) => guardedPatternRegex(pattern).test(normalized));
+}
+
+function allowedGuardedPatternsForEvent(event = {}) {
+  const payload = event.payload || {};
+  switch (event.type) {
+    case "workspace_created":
+      return rootStatePatterns();
+    case "proposal_created":
+    case "proposal_staged":
+    case "proposal_rejected":
+      return [
+        ...rootStatePatterns(),
+        ...proposalPatterns(payload.proposalId)
+      ];
+    case "proposal_committed":
+      return [
+        ...rootStatePatterns(),
+        ...proposalPatterns(payload.proposalId),
+        ...revisionPatterns(payload.committedRevisionId)
+      ];
+    case "revision_created":
+      return [
+        ...rootStatePatterns(),
+        ...revisionPatterns(payload.revisionId)
+      ];
+    case "artifacts_generated":
+      return artifactPatterns(payload.revisionId, payload.artifacts || []);
+    case "revision_reverted":
+    case "review_submitted":
+    case "review_submission_failed":
+      return rootStatePatterns();
+    default:
+      return [];
+  }
+}
+
+function rootStatePatterns() {
+  return [
+    "project_manifest.json",
+    "product_plan.json",
+    "runtime_plan.json"
+  ];
+}
+
+function proposalPatterns(proposalId = "") {
+  const safeId = safeSegment(proposalId);
+  return safeId ? [`proposals/${safeId}.json`] : [];
+}
+
+function revisionPatterns(revisionId = "") {
+  const safeId = safeSegment(revisionId);
+  if (!safeId) return [];
+  return [
+    `revisions/${safeId}/revision_manifest.json`,
+    `revisions/${safeId}/product_plan.json`,
+    `revisions/${safeId}/geometry-spec.json`,
+    `revisions/${safeId}/component_descriptors.json`
+  ];
+}
+
+function artifactPatterns(revisionId = "", artifacts = []) {
+  const safeId = safeSegment(revisionId);
+  if (!safeId) return [];
+  const explicit = artifacts
+    .map((artifact) => normalizePath(artifact))
+    .filter((artifact) => artifact.startsWith("artifacts/"))
+    .map((artifact) => `revisions/${safeId}/${artifact}`);
+  return explicit;
+}
+
+function safeSegment(value = "") {
+  return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "_");
 }

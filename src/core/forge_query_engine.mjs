@@ -186,6 +186,7 @@ export async function runForgeChatTurn({
         iteration
       });
     }
+    const codexTraceEvents = [];
     const modelResult = await adapter.runTurn({
       prompt: prompt.systemPrompt,
       tools: exported.tools,
@@ -194,15 +195,30 @@ export async function runForgeChatTurn({
       toolResults: loopToolResults,
       messages: session.messages || [],
       signal: abortSignal,
-      onCodexEvent: (event) => emitTraceEvent(onTraceEvent, {
-        turnId,
-        sessionId,
-        runtimeProvider: runtime.runtimeProvider,
-        modelProvider: runtime.modelProvider,
-        ...event
-      })
+      onCodexEvent: (event) => {
+        const traceEvent = {
+          turnId,
+          sessionId,
+          runtimeProvider: runtime.runtimeProvider,
+          modelProvider: runtime.modelProvider,
+          ...event
+        };
+        codexTraceEvents.push(traceEvent);
+        emitTraceEvent(onTraceEvent, traceEvent);
+      }
     });
     modelResponses.push(modelResult);
+    for (const traceEvent of codexTraceEvents) {
+      const { type, ...payload } = traceEvent;
+      if (!type) continue;
+      eventsAppended.push(appendWorkspaceEvent({
+        workspaceId,
+        rootDir,
+        type,
+        actor: "codex",
+        payload
+      }));
+    }
     eventsAppended.push(appendWorkspaceEvent({
       workspaceId,
       rootDir,
@@ -215,7 +231,8 @@ export async function runForgeChatTurn({
         toolCallCount: modelResult?.toolCalls?.length || 0,
         hasFinalMessage: Boolean(modelResult?.finalMessage),
         responseId: modelResult?.rawResponseId || "",
-        codexThreadId: modelResult?.codexThreadId || ""
+        runtimeBinding: clone(modelResult?.runtimeBinding || null),
+        bindingId: modelResult?.bindingId || modelResult?.runtimeBinding?.bindingId || ""
       }
     }));
     emitTraceEvent(onTraceEvent, {
@@ -227,7 +244,8 @@ export async function runForgeChatTurn({
       toolCallCount: modelResult?.toolCalls?.length || 0,
       hasFinalMessage: Boolean(modelResult?.finalMessage),
       responseId: modelResult?.rawResponseId || "",
-      codexThreadId: modelResult?.codexThreadId || "",
+      runtimeBinding: clone(modelResult?.runtimeBinding || null),
+      bindingId: modelResult?.bindingId || modelResult?.runtimeBinding?.bindingId || "",
       error: modelResult?.error || null
     });
 
@@ -454,14 +472,16 @@ export async function runForgeChatTurn({
     pendingConfirmation,
     eventsAppended,
     productPlan: clone(getProductPlan(workspaceId) || null),
-    codexThreadId: modelResponses.find((response) => response?.codexThreadId)?.codexThreadId || "",
+    runtimeBinding: modelResponses.find((response) => response?.runtimeBinding)?.runtimeBinding || null,
+    bindingId: modelResponses.find((response) => response?.bindingId)?.bindingId || "",
     modelResponses: modelResponses.map((response) => ({
       ok: Boolean(response?.ok),
       toolCallCount: response?.toolCalls?.length || 0,
       hasFinalMessage: Boolean(response?.finalMessage),
       errorCode: response?.error?.code || "",
       errorMessage: response?.error?.message || "",
-      codexThreadId: response?.codexThreadId || ""
+      runtimeBinding: clone(response?.runtimeBinding || null),
+      bindingId: response?.bindingId || response?.runtimeBinding?.bindingId || ""
     }))
   };
 }

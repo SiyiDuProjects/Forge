@@ -1,20 +1,8 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import {
-  applyDesignPatch,
-  commitStagedChange,
-  getRevisionArtifacts,
-  getWorkspaceSummary,
-  proposeDesignChange,
-  regenerateRevision,
-  rejectStagedChange,
-  revertRevision,
-  searchComponentLibrary,
-  stageDesignPatch,
-  validateDesign
-} from "../src/core/forge_actions.mjs";
-import { submitProductPlanReview, hydrateProductPlanFromWorkspace } from "../src/core/product_plan.mjs";
+import { hydrateProductPlanFromWorkspace } from "../src/core/product_plan.mjs";
+import { executeForgeToolWithPolicy } from "../src/core/tool_executor.mjs";
 
 const COMMANDS = {
   summary: runSummary,
@@ -103,95 +91,237 @@ async function main() {
 }
 
 function runSummary({ workspaceId }) {
-  return getWorkspaceSummary({ workspaceId });
+  return runTool({ workspaceId, toolName: "getWorkspaceSummary" });
 }
 
-function runSearchComponent({ options }) {
-  return searchComponentLibrary({
-    query: options.query || "",
-    componentType: options.componentType || options.type || "",
-    limit: numberOption(options.limit, 10)
-  });
-}
-
-function runPropose({ workspaceId, options }) {
-  return proposeDesignChange({
+function runSearchComponent({ workspaceId, options }) {
+  return runTool({
     workspaceId,
-    message: required(options.message, "message")
-  });
-}
-
-function runStage({ workspaceId, options }) {
-  return stageDesignPatch({
-    workspaceId,
-    patches: parsePatches(options),
-    summary: options.summary || options.message || ""
-  });
-}
-
-function runCommit({ workspaceId, options }) {
-  return commitStagedChange({
-    workspaceId,
-    proposalId: required(options.proposalId || options.proposal, "proposalId")
-  });
-}
-
-function runApply({ workspaceId, options }) {
-  return applyDesignPatch({
-    workspaceId,
-    message: options.message || "",
-    patches: parsePatches(options)
-  });
-}
-
-function runValidate({ workspaceId, options }) {
-  return validateDesign({
-    workspaceId,
-    proposalId: options.proposalId || options.proposal || "",
-    patches: options.patches || options.patchesFile || options.patchFile ? parsePatches(options) : null,
-    mode: options.mode || "current_or_proposal"
-  });
-}
-
-function runGenerate({ workspaceId, options }) {
-  return regenerateRevision({
-    workspaceId,
-    revisionId: options.revisionId || options.revision || "",
-    reason: options.reason || "user_confirmed_model_generation"
-  });
-}
-
-function runRevert({ workspaceId, options }) {
-  return revertRevision({
-    workspaceId,
-    revisionId: required(options.revisionId || options.revision, "revisionId")
-  });
-}
-
-function runArtifacts({ workspaceId, options }) {
-  return getRevisionArtifacts({
-    workspaceId,
-    revisionId: options.revisionId || options.revision || ""
-  });
-}
-
-async function runReview({ workspaceId, options }) {
-  return submitProductPlanReview({
-    planId: workspaceId,
-    revisionId: options.revisionId || options.revision || "",
-    contactInfo: {
-      name: options.name || "",
-      email: options.email || ""
+    toolName: "searchComponentLibrary",
+    input: {
+      query: options.query || "",
+      componentType: options.componentType || options.type || "",
+      limit: numberOption(options.limit, 10)
     }
   });
 }
 
-function runReject({ workspaceId, options }) {
-  return rejectStagedChange({
+function runPropose({ workspaceId, options }) {
+  return runTool({
     workspaceId,
-    proposalId: required(options.proposalId || options.proposal, "proposalId"),
-    reason: options.reason || ""
+    toolName: "proposeDesignChange",
+    input: {
+      message: required(options.message, "message")
+    },
+    userMessage: options.message || ""
   });
+}
+
+function runStage({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "stageDesignPatch",
+    input: {
+      patches: parsePatches(options),
+      summary: options.summary || options.message || ""
+    },
+    userMessage: options.summary || options.message || ""
+  });
+}
+
+function runCommit({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "commitStagedChange",
+    input: {
+      proposalId: required(options.proposalId || options.proposal, "proposalId")
+    },
+    userMessage: "confirm commit staged change",
+    mode: "confirmed"
+  });
+}
+
+function runApply({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "applyDesignPatch",
+    input: {
+      message: options.message || "",
+      patches: parsePatches(options)
+    },
+    userMessage: options.message || "apply design patch",
+    mode: "confirmed"
+  });
+}
+
+function runValidate({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "validateDesign",
+    input: {
+      proposalId: options.proposalId || options.proposal || "",
+      patches: options.patches || options.patchesFile || options.patchFile ? parsePatches(options) : null,
+      mode: options.mode || "current_or_proposal"
+    },
+    userMessage: "validate design"
+  });
+}
+
+function runGenerate({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "regenerateRevision",
+    input: {
+      revisionId: options.revisionId || options.revision || "",
+      reason: options.reason || "user_confirmed_model_generation"
+    },
+    userMessage: options.reason || "generate model artifacts",
+    mode: "confirmed"
+  });
+}
+
+function runRevert({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "revertRevision",
+    input: {
+      revisionId: required(options.revisionId || options.revision, "revisionId")
+    },
+    userMessage: "revert revision",
+    mode: "confirmed"
+  });
+}
+
+function runArtifacts({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "getRevisionArtifacts",
+    input: {
+      revisionId: options.revisionId || options.revision || ""
+    }
+  });
+}
+
+async function runReview({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "submitReviewPacket",
+    input: {
+      revisionId: options.revisionId || options.revision || "",
+      contactInfo: {
+        name: options.name || "",
+        email: options.email || ""
+      }
+    },
+    userMessage: "submit review packet",
+    mode: "confirmed"
+  });
+}
+
+function runReject({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "rejectStagedChange",
+    input: {
+      proposalId: required(options.proposalId || options.proposal, "proposalId"),
+      reason: options.reason || ""
+    },
+    userMessage: options.reason || "reject staged change"
+  });
+}
+
+async function runTool({
+  workspaceId,
+  toolName,
+  input = {},
+  userMessage = "",
+  mode = "normal"
+} = {}) {
+  const execution = await executeForgeToolWithPolicy({
+    workspaceId,
+    toolCall: {
+      name: toolName,
+      input: {
+        workspaceId,
+        ...(input || {})
+      }
+    },
+    userMessage,
+    mode,
+    confirmation: mode === "confirmed" ? { approved: true } : null
+  });
+  const result = execution.result || {
+    ok: false,
+    error: {
+      code: "FORGE_TOOL_EXECUTION_FAILED",
+      message: "Forge tool execution did not return a result."
+    }
+  };
+  return compactCliToolResult({
+    toolName,
+    result,
+    resultSummary: execution.summary
+  });
+}
+
+function compactCliToolResult({
+  toolName = "",
+  result = {},
+  resultSummary = null
+} = {}) {
+  if (!result || result.ok === false) return result;
+  if (toolName === "getWorkspaceSummary" || toolName === "searchComponentLibrary" || toolName === "getRevisionArtifacts") {
+    return omitLargeState(result);
+  }
+
+  const compact = {
+    ok: true
+  };
+  copyPresent(compact, result, [
+    "proposalId",
+    "status",
+    "newRevisionId",
+    "revisionId",
+    "sourceRevisionId",
+    "currentRevisionId",
+    "committed",
+    "applied",
+    "regenerated",
+    "reverted",
+    "rejected",
+    "submitted",
+    "reviewId",
+    "requiresConfirmation",
+    "canCommit",
+    "summary"
+  ]);
+  if (Array.isArray(result.results)) compact.results = result.results;
+  if (Array.isArray(result.warnings)) compact.warnings = result.warnings;
+  if (Array.isArray(result.errors)) compact.errors = result.errors;
+  if (result.diff) compact.diff = result.diff;
+  if (result.validationReport) compact.validationReport = result.validationReport;
+  if (result.geometryValidation) compact.geometryValidation = result.geometryValidation;
+  if (result.validationPreview) compact.validationPreview = result.validationPreview;
+  if (result.expectedEffects) compact.expectedEffects = result.expectedEffects;
+  if (result.expectedWarnings) compact.expectedWarnings = result.expectedWarnings;
+  if (result.artifactPaths) compact.artifactPaths = result.artifactPaths;
+  if (result.artifactStatus) compact.artifactStatus = result.artifactStatus;
+  if (result.submission) compact.submission = result.submission;
+  if (resultSummary) compact.resultSummary = resultSummary;
+  return compact;
+}
+
+function omitLargeState(result = {}) {
+  const compact = { ...result };
+  delete compact.productPlan;
+  delete compact.revision;
+  return compact;
+}
+
+function copyPresent(target, source, keys) {
+  for (const key of keys) {
+    if (source[key] !== undefined) target[key] = source[key];
+  }
 }
 
 function parseCli(args) {

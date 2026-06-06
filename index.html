@@ -19,7 +19,6 @@
         <div class="project-group">
           <div class="project-head">
             <span class="sidebar-label">项目</span>
-            <button class="project-menu-button" id="openThreadMenu" type="button" aria-label="原型菜单">...</button>
           </div>
           <div class="thread-list" aria-label="ProductPlan 项目"></div>
         </div>
@@ -40,7 +39,7 @@
             <span id="draftStatus" hidden></span>
           </div>
           <div class="topbar-actions">
-            <button class="compact-button" id="copySpec" type="button">预览原型快照</button>
+            <button class="compact-button" id="previewSnapshot" type="button">预览原型快照</button>
             <button class="compact-button primary" id="submitReview" type="button">提交审核下单</button>
           </div>
         </header>
@@ -154,7 +153,7 @@
         <button type="button" data-action="history">查看版本记录</button>
         <button type="button" data-action="duplicate">复制场景</button>
         <button type="button" data-action="export">导出原型方案预览</button>
-        <button type="button" data-action="archive">归档草稿</button>
+        <button type="button" data-action="remove">从列表移除</button>
       </section>
 
       <section class="floating-card review-contact-dialog" data-dialog="reviewContact" hidden aria-label="提交审核下单">
@@ -195,8 +194,8 @@
         </div>
       </section>
 
-      <section class="floating-card detail-popover" data-dialog="dfm" hidden aria-label="生产可行性等级（DFM）">
-        <div id="dfmPopover"></div>
+      <section class="floating-card detail-popover" data-dialog="prototypeSnapshot" hidden aria-label="原型结构预览（3D）">
+        <div id="snapshotPopover"></div>
       </section>
     </div>
 

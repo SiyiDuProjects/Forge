@@ -2,8 +2,8 @@ import {
   appendWorkspaceEvent,
   defaultProjectWorkspaceRoot,
   projectWorkspacePath,
-  readProjectManifest,
-  updateProjectManifest
+  readRuntimeBinding,
+  updateRuntimeBinding
 } from "./project_workspace.mjs";
 import {
   detectGuardViolations,
@@ -30,8 +30,10 @@ export async function ensureCodexProjectThread({
     };
   }
 
-  const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
-  const existingThreadId = manifest.codexThreadId || "";
+  const runtimeBinding = readRuntimeBinding({ workspaceId, rootDir });
+  const existingThreadId = runtimeBinding?.provider === "codex" && runtimeBinding.status === "ready"
+    ? runtimeBinding.bindingId || runtimeBinding.providerState?.threadId || ""
+    : "";
   const threadOptions = codexThreadOptions({
     workspacePath: workspacePath || projectWorkspacePath(workspaceId, { rootDir })
   });
@@ -42,7 +44,8 @@ export async function ensureCodexProjectThread({
     if (existingThreadId && typeof client.codex.resumeThread === "function") {
       return {
         ok: true,
-        codexThreadId: existingThreadId,
+        runtimeBinding,
+        bindingId: existingThreadId,
         thread: client.codex.resumeThread(existingThreadId, threadOptions),
         created: false
       };
@@ -58,12 +61,14 @@ export async function ensureCodexProjectThread({
     }
     const thread = client.codex.startThread(threadOptions);
     const codexThreadId = codexThreadIdFrom(thread);
+    let binding = null;
     if (codexThreadId) {
-      persistCodexThreadId({ workspaceId, rootDir, codexThreadId });
+      binding = persistCodexRuntimeBinding({ workspaceId, rootDir, codexThreadId });
     }
     return {
       ok: true,
-      codexThreadId,
+      runtimeBinding: binding,
+      bindingId: codexThreadId,
       thread,
       created: true,
       codexThreadPending: !codexThreadId
@@ -116,15 +121,17 @@ export async function runCodexProductTurn({
         guardViolations
       };
     }
+    const persistedBinding = persistCodexRuntimeBinding({
+      workspaceId,
+      rootDir,
+      codexThreadId: codexThreadIdFrom(thread) || codexThreadIdFrom(result)
+    }) || null;
     return {
       ok: true,
       result,
       text: codexResultText(result),
-      codexThreadId: persistCodexThreadId({
-        workspaceId,
-        rootDir,
-        codexThreadId: codexThreadIdFrom(thread) || codexThreadIdFrom(result)
-      })?.codexThreadId || codexThreadIdFrom(thread) || codexThreadIdFrom(result)
+      runtimeBinding: persistedBinding,
+      bindingId: persistedBinding?.bindingId || codexThreadIdFrom(thread) || codexThreadIdFrom(result)
     };
   } catch (error) {
     return {
@@ -251,6 +258,7 @@ function codexTraceEventFromSdk(event = {}) {
       itemId: item.id || "",
       itemType: item.type || "",
       itemStatus: codexItemStatus(item, sdkEventType),
+      item: safeCodexThreadItem(item),
       summary: summarizeCodexItem(item)
     };
   }
@@ -318,6 +326,75 @@ function summarizeCodexItem(item = {}) {
     };
   }
   return {};
+}
+
+function safeCodexThreadItem(item = {}) {
+  if (!item || typeof item !== "object") return {};
+  const base = {
+    id: item.id || "",
+    type: item.type || ""
+  };
+  if (item.type === "command_execution") {
+    return {
+      ...base,
+      command: compactTraceText(item.command || "", 260),
+      status: item.status || "",
+      exitCode: item.exit_code
+    };
+  }
+  if (item.type === "file_change") {
+    return {
+      ...base,
+      status: item.status || "",
+      changes: (item.changes || []).map((change) => ({
+        path: compactTraceText(change.path || "", 220),
+        kind: change.kind || "update"
+      })).slice(0, 12)
+    };
+  }
+  if (item.type === "mcp_tool_call") {
+    return {
+      ...base,
+      server: compactTraceText(item.server || "", 120),
+      tool: compactTraceText(item.tool || "", 160),
+      status: item.status || "",
+      error: item.error?.message ? { message: compactTraceText(item.error.message, 260) } : null
+    };
+  }
+  if (item.type === "agent_message") {
+    return {
+      ...base,
+      text: compactTraceText(item.text || "", 2400)
+    };
+  }
+  if (item.type === "reasoning") {
+    return {
+      ...base,
+      text: compactTraceText(item.text || "", 1800)
+    };
+  }
+  if (item.type === "web_search") {
+    return {
+      ...base,
+      query: compactTraceText(item.query || "", 240)
+    };
+  }
+  if (item.type === "todo_list") {
+    return {
+      ...base,
+      items: (item.items || []).map((todo) => ({
+        text: compactTraceText(todo.text || "", 240),
+        completed: Boolean(todo.completed)
+      })).slice(0, 12)
+    };
+  }
+  if (item.type === "error") {
+    return {
+      ...base,
+      message: compactTraceText(item.message || "", 320)
+    };
+  }
+  return base;
 }
 
 function summarizeCodexUsage(usage = null) {
@@ -485,30 +562,41 @@ export function codexThreadIdFrom(value) {
     || "";
 }
 
-export function persistCodexThreadId({
+export function persistCodexRuntimeBinding({
   workspaceId = "",
   rootDir = defaultProjectWorkspaceRoot(),
   codexThreadId = ""
 } = {}) {
   if (!workspaceId || !codexThreadId) return null;
-  const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
-  if (manifest.codexThreadId === codexThreadId) return manifest;
-  const updated = updateProjectManifest({
+  const existing = readRuntimeBinding({ workspaceId, rootDir });
+  if (existing?.provider === "codex" && existing.status === "ready" && existing.bindingId === codexThreadId) {
+    return existing;
+  }
+  const runtimeBinding = updateRuntimeBinding({
     workspaceId,
     rootDir,
-    patch: { codexThreadId }
+    provider: "codex",
+    status: "ready",
+    bindingId: codexThreadId,
+    providerState: {
+      threadId: codexThreadId,
+      runtimeVersion: CODEX_RUNTIME_VERSION
+    },
+    error: null
   });
   appendWorkspaceEvent({
     workspaceId,
     rootDir,
-    type: "codex_thread_created",
+    type: "runtime_binding_updated",
     actor: "system",
     payload: {
-      codexThreadId,
+      provider: "codex",
+      status: "ready",
+      bindingId: codexThreadId,
       runtimeVersion: CODEX_RUNTIME_VERSION
     }
   });
-  return updated;
+  return runtimeBinding;
 }
 
 async function createCodexClient({ codexFactory = null } = {}) {

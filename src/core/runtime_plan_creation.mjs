@@ -1,6 +1,6 @@
 import { ensureCodexProjectThread, runCodexProductTurn } from "./codex_runtime.mjs";
 import { createProductPlan } from "./product_plan.mjs";
-import { defaultProjectWorkspaceRoot, persistProjectPlan } from "./project_workspace.mjs";
+import { defaultProjectWorkspaceRoot, updateRuntimeBinding } from "./project_workspace.mjs";
 
 export async function createProductPlanForRuntime({
   message = "",
@@ -55,11 +55,20 @@ export async function createProductPlanForRuntime({
       type: "plan_create_failed",
       error: thread.error || null
     });
-    return thread;
+    return {
+      ...thread,
+      workspaceId: result.productPlan.planId,
+      runtimeBinding: markRuntimeInitializationFailed({
+        workspaceId: result.productPlan.planId,
+        rootDir,
+        error: thread.error || {}
+      })
+    };
   }
 
-  let codexThreadId = thread.codexThreadId;
-  if (!codexThreadId) {
+  let runtimeBinding = thread.runtimeBinding || null;
+  let bindingId = thread.bindingId || runtimeBinding?.bindingId || "";
+  if (!bindingId) {
     emitPlanTraceEvent(onTraceEvent, {
       type: "codex_thread_initializing",
       workspaceId: result.productPlan.planId
@@ -80,12 +89,21 @@ export async function createProductPlanForRuntime({
         type: "plan_create_failed",
         error: initialized.error || null
       });
-      return initialized;
+      return {
+        ...initialized,
+        workspaceId: result.productPlan.planId,
+        runtimeBinding: markRuntimeInitializationFailed({
+          workspaceId: result.productPlan.planId,
+          rootDir,
+          error: initialized.error || {}
+        })
+      };
     }
-    codexThreadId = initialized.codexThreadId;
+    runtimeBinding = initialized.runtimeBinding || null;
+    bindingId = initialized.bindingId || runtimeBinding?.bindingId || "";
   }
 
-  if (!codexThreadId) {
+  if (!bindingId) {
     const missing = {
       ok: false,
       error: {
@@ -97,21 +115,47 @@ export async function createProductPlanForRuntime({
       type: "plan_create_failed",
       error: missing.error
     });
+    missing.workspaceId = result.productPlan.planId;
+    missing.runtimeBinding = markRuntimeInitializationFailed({
+      workspaceId: result.productPlan.planId,
+      rootDir,
+      error: missing.error
+    });
     return missing;
   }
 
-  result.codexThreadId = codexThreadId;
-  result.productPlan.workspaceState = {
-    ...(result.productPlan.workspaceState || {}),
-    codexThreadId
+  result.runtimeBinding = runtimeBinding || {
+    provider: "codex",
+    status: "ready",
+    bindingId
   };
-  persistProjectPlan({ plan: result.productPlan, rootDir });
   emitPlanTraceEvent(onTraceEvent, {
     type: "codex_thread_ready",
     workspaceId: result.productPlan.planId,
-    codexThreadId
+    runtimeBinding: result.runtimeBinding,
+    bindingId
   });
   return result;
+}
+
+function markRuntimeInitializationFailed({
+  workspaceId,
+  rootDir = defaultProjectWorkspaceRoot(),
+  error = {}
+} = {}) {
+  return updateRuntimeBinding({
+    workspaceId,
+    rootDir,
+    provider: "codex",
+    status: "failed",
+    error: {
+      code: error.code || "CODEX_RUNTIME_INITIALIZATION_FAILED",
+      message: error.message || "Codex runtime initialization failed."
+    },
+    providerState: {
+      failureAt: new Date().toISOString()
+    }
+  });
 }
 
 function emitPlanTraceEvent(onTraceEvent, event = {}) {

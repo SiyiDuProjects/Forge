@@ -8,25 +8,17 @@ import { registerAsset } from "./src/core/assets.mjs";
 import { buildContextPack } from "./src/core/context_pack_builder.mjs";
 import { loadChatSession } from "./src/core/chat_session_store.mjs";
 import {
-  applyDesignPatch,
-  commitStagedChange,
   getRevisionArtifacts,
-  getWorkspaceSummary,
-  proposeDesignChange,
-  regenerateRevision,
-  rejectStagedChange,
-  revertRevision,
-  searchComponentLibrary,
-  stageDesignPatch,
-  validateDesign
+  getWorkspaceSummary
 } from "./src/core/forge_actions.mjs";
 import { confirmForgeChatTool, resolveChatRuntime, runForgeChatTurn } from "./src/core/forge_query_engine.mjs";
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
-import { addProductPlanTurn, getProductPlan, revertProductPlanRevision, submitProductPlanReview } from "./src/core/product_plan.mjs";
+import { addProductPlanTurn } from "./src/core/product_plan.mjs";
 import { listProjectWorkspaces, readProjectWorkspacePlan } from "./src/core/project_workspace.mjs";
 import { createProductPlanForRuntime } from "./src/core/runtime_plan_creation.mjs";
 import { getRuntimeStatus } from "./src/core/runtime_status.mjs";
+import { executeForgeToolWithPolicy } from "./src/core/tool_executor.mjs";
 import { listToolMetadata } from "./src/core/tool_registry.mjs";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -244,92 +236,125 @@ async function handleApi(request, response, url) {
   const workspaceComponentSearchMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/search$/);
   if (request.method === "POST" && workspaceComponentSearchMatch) {
     const body = await readJsonBody(request);
-    sendActionJson(response, searchComponentLibrary({
+    await sendToolActionJson(response, {
       workspaceId: workspaceComponentSearchMatch[1],
-      query: body.query || "",
-      componentType: body.componentType || "",
-      limit: body.limit || 10
-    }));
+      toolName: "searchComponentLibrary",
+      input: {
+        query: body.query || "",
+        componentType: body.componentType || "",
+        limit: body.limit || 10
+      }
+    });
     return;
   }
 
   const workspaceProposalMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals$/);
   if (request.method === "POST" && workspaceProposalMatch) {
     const body = await readJsonBody(request);
-    const result = Array.isArray(body.patches)
-      ? stageDesignPatch({
-        workspaceId: workspaceProposalMatch[1],
+    await sendToolActionJson(response, {
+      workspaceId: workspaceProposalMatch[1],
+      toolName: Array.isArray(body.patches) ? "stageDesignPatch" : "proposeDesignChange",
+      input: Array.isArray(body.patches)
+        ? {
         patches: body.patches,
         summary: body.summary || ""
-      })
-      : proposeDesignChange({
-        workspaceId: workspaceProposalMatch[1],
+      }
+        : {
         message: body.message || ""
-      });
-    sendActionJson(response, result);
+      },
+      userMessage: body.message || body.summary || "stage or propose workspace change"
+    });
     return;
   }
 
   const workspaceProposalCommitMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/([^/]+)\/commit$/);
   if (request.method === "POST" && workspaceProposalCommitMatch) {
-    sendActionJson(response, commitStagedChange({
+    await sendToolActionJson(response, {
       workspaceId: workspaceProposalCommitMatch[1],
-      proposalId: workspaceProposalCommitMatch[2]
-    }));
+      toolName: "commitStagedChange",
+      input: {
+        proposalId: workspaceProposalCommitMatch[2]
+      },
+      mode: "confirmed",
+      userMessage: "confirm commit staged change"
+    });
     return;
   }
 
   const workspaceProposalRejectMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/proposals\/([^/]+)\/reject$/);
   if (request.method === "POST" && workspaceProposalRejectMatch) {
     const body = await readJsonBody(request);
-    sendActionJson(response, rejectStagedChange({
+    await sendToolActionJson(response, {
       workspaceId: workspaceProposalRejectMatch[1],
-      proposalId: workspaceProposalRejectMatch[2],
-      reason: body.reason || ""
-    }));
+      toolName: "rejectStagedChange",
+      input: {
+        proposalId: workspaceProposalRejectMatch[2],
+        reason: body.reason || ""
+      },
+      userMessage: body.reason || "reject staged change"
+    });
     return;
   }
 
   const workspacePatchApplyMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/patches\/apply$/);
   if (request.method === "POST" && workspacePatchApplyMatch) {
     const body = await readJsonBody(request);
-    sendActionJson(response, applyDesignPatch({
+    await sendToolActionJson(response, {
       workspaceId: workspacePatchApplyMatch[1],
-      message: body.message || "",
-      patches: body.patches || []
-    }));
+      toolName: "applyDesignPatch",
+      input: {
+        message: body.message || "",
+        patches: body.patches || []
+      },
+      mode: "confirmed",
+      userMessage: body.message || "apply design patch"
+    });
     return;
   }
 
   const workspaceRegenerateMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revisions\/regenerate$/);
   if (request.method === "POST" && workspaceRegenerateMatch) {
     const body = await readJsonBody(request);
-    sendActionJson(response, regenerateRevision({
+    await sendToolActionJson(response, {
       workspaceId: workspaceRegenerateMatch[1],
-      revisionId: body.revisionId || "",
-      reason: body.reason || "manual_regeneration"
-    }));
+      toolName: "regenerateRevision",
+      input: {
+        revisionId: body.revisionId || "",
+        reason: body.reason || "manual_regeneration"
+      },
+      mode: "confirmed",
+      userMessage: body.reason || "generate model artifacts"
+    });
     return;
   }
 
   const workspaceRevisionRevertMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revisions\/([^/]+)\/revert$/);
   if (request.method === "POST" && workspaceRevisionRevertMatch) {
-    sendActionJson(response, revertRevision({
+    await sendToolActionJson(response, {
       workspaceId: workspaceRevisionRevertMatch[1],
-      revisionId: workspaceRevisionRevertMatch[2]
-    }));
+      toolName: "revertRevision",
+      input: {
+        revisionId: workspaceRevisionRevertMatch[2]
+      },
+      mode: "confirmed",
+      userMessage: "revert revision"
+    });
     return;
   }
 
   const workspaceValidateMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/validate$/);
   if (request.method === "POST" && workspaceValidateMatch) {
     const body = await readJsonBody(request);
-    sendActionJson(response, validateDesign({
+    await sendToolActionJson(response, {
       workspaceId: workspaceValidateMatch[1],
-      proposalId: body.proposalId || "",
-      patches: Array.isArray(body.patches) ? body.patches : null,
-      mode: body.mode || "current_or_proposal"
-    }));
+      toolName: "validateDesign",
+      input: {
+        proposalId: body.proposalId || "",
+        patches: Array.isArray(body.patches) ? body.patches : null,
+        mode: body.mode || "current_or_proposal"
+      },
+      userMessage: "validate design"
+    });
     return;
   }
 
@@ -367,6 +392,10 @@ async function handleApi(request, response, url) {
   const planTurnMatch = url.pathname.match(/^\/api\/plans\/([^/]+)\/turns$/);
   if (request.method === "POST" && planTurnMatch) {
     const body = await readJsonBody(request);
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/plans/:planId/turns");
+      return;
+    }
     sendJson(response, 200, addProductPlanTurn({
       planId: planTurnMatch[1],
       message: body.message,
@@ -380,10 +409,15 @@ async function handleApi(request, response, url) {
   const planRevertMatch = url.pathname.match(/^\/api\/plans\/([^/]+)\/revert$/);
   if (request.method === "POST" && planRevertMatch) {
     const body = await readJsonBody(request);
-    sendJson(response, 200, revertProductPlanRevision({
-      planId: planRevertMatch[1],
-      revisionId: body.revisionId
-    }));
+    await sendToolActionJson(response, {
+      workspaceId: planRevertMatch[1],
+      toolName: "revertRevision",
+      input: {
+        revisionId: body.revisionId
+      },
+      mode: "confirmed",
+      userMessage: "revert revision"
+    });
     return;
   }
 
@@ -397,6 +431,10 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/jobs") {
     const body = await readJsonBody(request);
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/jobs");
+      return;
+    }
     sendJson(response, 200, {
       job: createGenerationJob({
         planId: body.planId,
@@ -423,6 +461,10 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/model/generate") {
     const body = await readJsonBody(request);
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/model/generate");
+      return;
+    }
     const job = createGenerationJob({
       planId: body.planId,
       revisionId: body.revisionId,
@@ -446,6 +488,10 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/geometry/generate") {
     const body = await readJsonBody(request);
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/geometry/generate");
+      return;
+    }
     const job = createGenerationJob({
       planId: body.planId,
       revisionId: body.revisionId,
@@ -468,6 +514,10 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/layout/electronics") {
     const body = await readJsonBody(request);
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/layout/electronics");
+      return;
+    }
     const job = createGenerationJob({
       planId: body.planId,
       revisionId: body.revisionId,
@@ -488,6 +538,10 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/quote/estimate") {
     const body = await readJsonBody(request);
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/quote/estimate");
+      return;
+    }
     const job = createGenerationJob({
       planId: body.planId,
       revisionId: body.revisionId,
@@ -528,21 +582,20 @@ async function handleApi(request, response, url) {
   if (request.method === "POST" && url.pathname === "/api/review/submit") {
     const body = await readJsonBody(request);
     if (body.planId) {
-      const plan = getProductPlan(body.planId);
-      if (!plan) {
-        sendJson(response, 404, {
-          error: {
-            code: "not_found",
-            message: `Unknown ProductPlan ${body.planId}`
-          }
-        });
-        return;
-      }
-      sendJson(response, 200, await submitProductPlanReview({
-        planId: body.planId,
-        revisionId: body.revisionId,
-        contactInfo: body.contactInfo || {}
-      }));
+      await sendToolActionJson(response, {
+        workspaceId: body.planId,
+        toolName: "submitReviewPacket",
+        input: {
+          revisionId: body.revisionId || "",
+          contactInfo: body.contactInfo || {}
+        },
+        mode: "confirmed",
+        userMessage: "submit review packet"
+      });
+      return;
+    }
+    if (!internalRouteAllowed(request, body)) {
+      sendInternalOnlyJson(response, "/api/review/submit without planId");
       return;
     }
     sendJson(response, 200, await submitReview({
@@ -740,6 +793,51 @@ function streamAbortController(request, response) {
   request.on("aborted", abort);
   response.on("close", abort);
   return controller;
+}
+
+async function sendToolActionJson(response, {
+  workspaceId = "",
+  toolName = "",
+  input = {},
+  userMessage = "",
+  mode = "normal"
+} = {}) {
+  const execution = await executeForgeToolWithPolicy({
+    workspaceId,
+    toolCall: {
+      name: toolName,
+      input: {
+        workspaceId,
+        ...(input || {})
+      }
+    },
+    userMessage,
+    mode,
+    confirmation: mode === "confirmed" ? { approved: true } : null
+  });
+  sendActionJson(response, execution.result || {
+    ok: false,
+    error: {
+      code: "TOOL_EXECUTION_FAILED",
+      message: "Forge tool execution did not return a result."
+    }
+  });
+}
+
+function internalRouteAllowed(request, body = {}) {
+  return process.env.FORGE_ENABLE_INTERNAL_API_MUTATIONS === "1"
+    || body.internal === true
+    || request.headers["x-forge-internal"] === "true";
+}
+
+function sendInternalOnlyJson(response, route) {
+  sendJson(response, 403, {
+    ok: false,
+    error: {
+      code: "INTERNAL_ROUTE_ONLY",
+      message: `${route} is an internal/test-only mutation route. Use Forge workspace tools or set x-forge-internal=true in a trusted test harness.`
+    }
+  });
 }
 
 function sendJson(response, status, payload) {

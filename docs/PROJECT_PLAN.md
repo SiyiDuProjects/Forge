@@ -84,7 +84,7 @@ Current direction:
 - `新项目` should stay visually neutral by default with no filled background; use a subtle background only on hover/focus interaction.
 - A compact project list below it. ProductPlan revisions are selected from the project history view instead of being mixed into the primary project list.
 - Project/revision rows show only the project name in the visible UI; do not add subtitle explanations such as status, model state, or quote text under each row.
-- The `方案菜单` / project actions `...` button belongs on the right side of the left-sidebar `项目` header, not in the center thread topbar.
+- The `方案菜单` / project actions `...` button belongs to each individual project row. Keep it hidden by default and reveal it on row hover or focus; it should not be a global menu next to the left-sidebar `项目` header and should not be in the center thread topbar.
 - `Forge 设置` stays in the lower-left footer.
 - Review submission APIs and internal review material remain available through the plan/review flow, but `审核包` should not be a left-sidebar primary entry during the current 3D-generation focus.
 
@@ -104,9 +104,12 @@ Required content:
 
 - User request bubble
 - Bench agent response
-- Minimal runtime feedback only when a send fails; live runtime status and confirmation controls belong in the right inspector
+- Codex-style processed transcript projected from streamed `ThreadEvent` / `ThreadItem` data. Running turns stay expanded; completed turns collapse to an `已处理 <duration>` / `Processed <duration>` header; the final `agent_message` remains visible as normal assistant text.
+- Expanded processed details may show SDK-provided natural-language `agent_message` / `reasoning` text, `todo_list` progress, and safe aggregate counts for `command_execution`, `file_change`, `mcp_tool_call`, `web_search`, and `error` events.
+- Command/file/tool specifics should be hidden behind a second-level expansion from those aggregate `已...` rows. Natural-language text should redact exact command/path strings when the same value is already available as a secondary detail. Internal bridge events and unsafe raw SDK fields must not render in the main UI: no runtime binding, model request/response rows, command output, file contents, raw tool input/output, model provider details, or raw `tool_call` labels. Forge domain events may still update ProductPlan/GeometrySpec/confirmation/artifact state, but must not be invented as fake Codex steps.
+- Live stream rows, reload replay from `events.jsonl`, and project-switch restoration must use the same transcript projection/merge path so the user sees the same completed turn after refresh as they saw while it streamed.
 - Bottom composer for hardware request entry and send/update only
-- Do not show numbered ProductPlan step cards, status packets, or a center 3D preview; generation status and structure preview belong in the right inspector.
+- Do not show numbered ProductPlan step cards, status packets, internal trace tables, or a center 3D preview. The center may show the processed Codex transcript; structure preview belongs in the right inspector.
 - Do not prefix assistant messages with role labels such as `原型助手` or `Prototype assistant`; the bubble content should stand on its own.
 
 Composer actions:
@@ -121,9 +124,8 @@ Purpose: Focused live structure output, not a generic dashboard or review packet
 Current sections:
 
 - `原型结构预览（3D）`
-- `执行状态` when a turn, tool call, or confirmation is active or has just completed
 
-The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, and structure checks visible. It may also show compact runtime/tool status and pending confirmations for the current turn. The generated/pending 3D state belongs in the section header summary, not as a duplicate fact row. Scope, parts list (BOM), quote, risk limits, and review status should not be duplicated as numbered center-thread cards. When surfaced, keep them in the right inspector, explicit review surfaces, or compact generated evidence rather than a stacked center packet list.
+The right inspector should keep the 3D preview, `外观层` / `元器件层` layer controls, shell path, dimensions, structure checks, and compact 3D model status visible. It should stop at the 3D model status row by default and should not carry proxy ComponentDescriptor disclaimers, component asset source lists, generated evidence link lists, instruction paragraphs, the main execution transcript, runtime/tool narration, or pending-confirmation controls. Transcript and confirmation controls belong in the center thread next to the conversation. ComponentDescriptor evidence, component asset manifest, validation reports, GLB/STL/STEP files, and design summaries remain persisted revision artifacts for explicit engineering/review surfaces, not default right-inspector text.
 
 Visual direction:
 
@@ -132,7 +134,7 @@ Visual direction:
 - Use layer states rather than camera presets: switching `外观层` / `元器件层` must not rotate, pan, zoom, or reset the current view. `外观层` keeps normal/default material opacity, so the 3D printed shell stays opaque and any genuinely exposed components remain visible. `元器件层` keeps the same camera and makes every shell surface semi-transparent so internal components, interface markers, cable routes, and risk colors can be inspected.
 - Layer implementation must cover shell nodes, shell materials, shell roles, and shell-derived structural feature nodes such as openings, cutouts, windows, vents, standoffs, and bays. Browser verification must use screenshots to confirm the main visible shell turns transparent; a tiny pixel diff or a single small part changing color is not enough.
 - Add a compact fullscreen preview button on the 3D preview itself; it should open a larger read-only preview and allow returning to the normal inspector size.
-- Show generated artifact links only as compact read-only evidence links after confirmed generation; do not make them CAD editing, export, checkout, or production controls. Review contact/person fields belong in the separate submission dialog.
+- Do not show generated artifact links in the default right inspector. Keep generated artifacts as read-only revision evidence for explicit engineering/review surfaces; do not make them CAD editing, export, checkout, or production controls. Review contact/person fields belong in the separate submission dialog.
 - Keep the preview, layer controls, and structure fact rows on one consistent indentation grid; avoid flex rows that make labels, values, and chips jump between different left edges.
 - Avoid instruction paragraphs under the inspector preview; interaction affordances should be discoverable from the 3D surface and the fullscreen button.
 - Low shadow
@@ -144,7 +146,7 @@ Visual direction:
 
 Required floating surfaces:
 
-- Thread menu
+- Per-project row action menu
 - Prototype structure preview (3D) popover from explicit preview actions
 - Review contact dialog for `提交审核下单`
 - Forge 设置 dialog
@@ -188,7 +190,7 @@ Implemented:
 - Right inspector changed toward flat section styling
 - No fake complete ProductPlan fallback when API fetch fails; keep the draft/input visible and show a clear error instead.
 - Conversation-first ProductPlan flow with compact left-side project/conversation selection, center chat, revision history view, and live right-side plan packet
-- Chat-only center thread: generated conversations show user/assistant messages plus minimal retry feedback, without numbered ProductPlan step cards, execution traces, pending-confirmation controls, or a center 3D snapshot.
+- Processed Codex center thread: generated conversations show user messages, final assistant text, and a Codex-style processed transcript projected from streamed SDK events. Completed work collapses to `已处理 <duration>` by default, while expansion shows SDK natural-language text and safe aggregate counts such as `已探索`, `已运行`, `已编辑`, and todo progress. Raw commands, file paths, and tool names are hidden behind second-level detail expansion from aggregate rows; command output, file contents, raw tool input/output, runtime binding, model request/response rows, and model provider details are not rendered in the main UI.
 - Right-side `原型结构预览（3D）` section pinned near the top, expanded by default, with `外观层` and `元器件层` transparency states
 - One seeded real backend-generated conversation with confirmed 3D model artifacts; new projects start as blank real ProductPlan drafts.
 - Expanded UI-only flow state data for request parsing, scope, parts list (BOM), risk limits, quote, behavior rules, and manufacturing check (DFM) packet remains available to the plan/review runtime, but it is no longer rendered as numbered center-thread cards.
@@ -208,13 +210,14 @@ Implemented:
 - Forge QueryEngine / Chat Runtime V1: `ContextPack -> prompt sections -> model adapter -> tool schema export -> permission gate -> tool executor -> Forge actions -> assistant/UI payload`.
 - Chat session JSONL and pending confirmation storage under `data/workspaces/<planId>/chat_sessions/`.
 - Codex SDK is the default frontend product-task runtime (`runtimeProvider: "codex"`): normal product conversations create or resume the project-bound Codex thread, while Forge remains the bounded persistence/tool layer for ProductPlan, revisions, proposals, GeometrySpec, validation, and artifacts. The deterministic local Forge adapter (`runtimeProvider: "mock"`) remains available as an explicit fallback/test mode that exercises the same Forge actions without external Codex execution, and OpenAI Responses remains available through the Forge QueryEngine path.
-- Codex SDK project-task runtime mode for Forge product tasks: `runtime` / `runtimeProvider: "codex"` creates or resumes one Codex thread per Forge project, stores `codexThreadId` in `project_manifest.json`, runs Codex inside the generated project workspace, injects ContextPack each turn, and lets Codex decide follow-up questions, task splitting, and Forge tool usage while Forge still executes and persists actual state changes.
+- Codex SDK project-task runtime mode for Forge product tasks: `runtime` / `runtimeProvider: "codex"` creates or resumes one Codex thread per Forge project through provider-neutral `runtimeBinding` stored in `project_manifest.json`, runs Codex inside the generated project workspace, injects ContextPack each turn, and lets Codex decide follow-up questions, task splitting, and Forge tool usage while Forge still executes and persists actual state changes.
 - Generated project-workspace context for Codex: `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, `skills/*.md`, and `runtime_plan.json`.
-- `forge-tool` CLI wrapper for Codex-side tool calls into Forge actions without direct guarded-file mutation.
-- Guarded-file detector for Codex SDK turns so direct edits to ProductPlan, manifests, revision sources, GeometrySpec, or artifacts return `GUARD_VIOLATION`.
+- `forge-tool` CLI wrapper for Codex-side tool calls into the same policy-checked Forge action executor used by agent tools and API action routes, without direct guarded-file mutation.
+- Guarded-file detector for Codex SDK turns so direct edits to ProductPlan, manifests, revision sources, GeometrySpec, or artifacts return `GUARD_VIOLATION`; legitimate writes must match the exact proposal, revision, artifact, or append-only event path authorized by the new Forge event payload.
+- Runtime binding and mutation hardening: legacy `codexThreadId` fields are migration inputs only, new runtime state is `runtimeBinding`, Codex initialization failure is recorded as `runtimeBinding.status = "failed"`, mutation tools use per-workspace `workspace-write` locks, and local review submission is a registered `submitReviewPacket` action rather than a CLI-only side path.
 - Optional live Codex smoke script: `FORGE_LIVE_CODEX_SMOKE=1 FORGE_LIVE_CODEX_SMOKE_EXTERNAL_ACK=send_project_context_to_codex npm run smoke:codex-live` runs the idea/modification/3D-generation/USB-move/revert demo through `runtimeProvider: "codex"` outside the default test suite. The acknowledged V1 live smoke passed on 2026-06-05.
 - API routes for `/api/workspaces`, `/api/workspaces/:workspaceId/plan`, `/api/plans/stream`, `/api/workspaces/:workspaceId/chat/turn/stream`, `/api/workspaces/:workspaceId/chat/turn`, `/api/workspaces/:workspaceId/chat/:sessionId`, and `/api/workspaces/:workspaceId/chat/confirm`.
-- Frontend runtime selector in `Forge 设置` for `Codex`, `Forge QueryEngine`, and `本地 Forge（降级）`, with a read-only runtime preflight status for Codex SDK availability and current project thread state; Codex is selected by default, and legacy browser state that only stored the old `mock` default is ignored unless the user explicitly reselects the fallback mode. The preflight refreshes when the frontend starts a new project or switches projects so stale `codexThreadId` values are not shown across project boundaries. The composer shows the active runtime before send, so users can see whether the next turn will use Codex, Forge QueryEngine, or the local Forge fallback. The composer runtime meta is also a compact runtime-settings entry: clicking it opens `Forge 设置` and focuses the runtime mode selector without adding extra composer chips. On startup, the frontend restores recent persisted ProductPlan projects from `data/workspaces` through the backend workspace APIs, then collapses duplicate visible project names to the latest project because the sidebar intentionally shows only project names. If there is no restorable project or the backend is unavailable, it opens a blank draft and keeps the input path retryable instead of synthesizing a demo ProductPlan. Restored projects with a saved `codexThreadId` reopen in Codex runtime mode so continuing the project resumes the same project thread instead of silently falling back to local Forge. Restored and switched projects also load their persisted chat session, recover session messages when they are newer than the ProductPlan conversation, restore pending confirmation controls so a refresh does not lose `确认执行` / `取消` decisions, and rebuild recent runtime trace rows from bounded session-scoped events. The right inspector SSE execution status renders ProductPlan creation, runtime/model request and response events, bounded Codex SDK event summaries, Forge tool progress, revision/proposal state, pending confirmations, artifact generation status, and stop-current-turn behavior for long-running requests; running, failed, cancelled, and pending-confirmation runtime states temporarily lead the inspector before the 3D preview so the user can see progress or confirmation controls without scrolling past artifact evidence. The composer send button must show an idle send arrow and only switch to the stop square while a turn is actively running.
+- Frontend runtime selector in `Forge 设置` for `Codex`, `Forge QueryEngine`, and `本地 Forge（降级）`, with a read-only runtime preflight status for Codex SDK availability and current project runtime binding state; Codex is selected by default, and legacy browser state that only stored the old `mock` default is ignored unless the user explicitly reselects the fallback mode. The preflight refreshes when the frontend starts a new project or switches projects so stale runtime binding values are not shown across project boundaries. The composer shows the active runtime before send, so users can see whether the next turn will use Codex, Forge QueryEngine, or the local Forge fallback. The composer runtime meta is also a compact runtime-settings entry: clicking it opens `Forge 设置` and focuses the runtime mode selector without adding extra composer chips. On startup, the frontend restores recent persisted ProductPlan projects from `data/workspaces` through the backend workspace APIs, then collapses duplicate visible project names to the latest project because the sidebar intentionally shows only project names. If there is no restorable project or the backend is unavailable, it opens a blank draft and keeps the input path retryable instead of synthesizing a demo ProductPlan. Restored projects with a ready Codex `runtimeBinding` reopen in Codex runtime mode so continuing the project resumes the same project thread instead of silently falling back to local Forge; failed bindings surface as runtime initialization failures instead of successful projects. Restored and switched projects also load their persisted chat session, recover session messages when they are newer than the ProductPlan conversation, restore pending confirmation controls so a refresh does not lose `确认执行` / `取消` decisions, and rebuild recent runtime events from bounded session-scoped `events.jsonl`. Live streamed trace events, final response events, confirmation response events, and restored `events.jsonl` entries are normalized through the same frontend transcript merge path before being projected into the processed transcript. The center thread renders ProductPlan conversation, processed Codex work state, secondary details for safe command/file/tool fields, pending confirmations, and stop-current-turn behavior; it does not render runtime/model request rows, command output, file contents, raw tool input/output, or model provider details. The right inspector is reserved for the compact 3D prototype result surface; detailed generated evidence stays in revision artifacts and explicit engineering/review surfaces. The composer send button must show an idle send arrow and only switch to the stop square while a turn is actively running.
 
 Implementation boundary:
 
@@ -344,7 +347,7 @@ Implemented V1 conversational hardware prototype path:
 - Generate a semantic `model.glb` with stable nodes under `shell.*`, `feature.*`, `module.*`, `interface.*`, and `route.*`. The current GLB shows a standard desktop display shell, screen opening, rear USB-C opening, ambient sensor opening, back-frame access, core board, USB-C, ambient sensor, mounting points, connector markers, keepout/access-volume proxy markers, chips, and cable-route geometry.
 - Keep shell print handoff split into `shell_front.stl` and `shell_back.stl`; electronics are excluded from printable STL output.
 - Persist generation evidence files with each revision: `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `model.glb`, shell STL files, `design_summary.md`, `validation_report.json`, STEP handoff summary, and the CadQuery adapter script.
-- Keep the UI as a read-only result preview. Users can switch `外观层` / `元器件层`, rotate, zoom, pan, view component asset quality, view warnings, and open generated evidence links, but they cannot drag parts, edit holes, or modify geometry directly.
+- Keep the UI as a read-only result preview. Users can switch `外观层` / `元器件层`, rotate, zoom, and pan in the right inspector, but they cannot drag parts, edit holes, modify geometry directly, or browse generated artifact evidence from the default inspector. Component asset quality, warnings, and generated evidence belong in persisted revision artifacts and explicit engineering/review surfaces.
 
 Implemented Forge action contract:
 
@@ -416,8 +419,7 @@ Required:
 - Test settings dialog
 - Test thread menu
 - Confirm the composer has no placeholder shortcut chips.
-- Confirm the right inspector only shows generated artifact links as read-only evidence for generated revisions, with no modeling, CAD editing, checkout, or production controls.
-- Confirm the right inspector has no duplicated 3D status row or review contact/person fields.
+- Confirm the right inspector stops at the 3D model status row and does not show proxy disclaimers, component asset source lists, generated evidence link lists, instruction paragraphs, duplicated 3D status rows, or review contact/person fields.
 - Confirm the 3D fullscreen preview opens, keeps layer switching, and can be closed back to the compact inspector.
 - Test prototype structure preview (3D) popover and `外观层` / `元器件层` transparency states
 - Test camera/battery human-review risk flow
@@ -433,11 +435,11 @@ The project should not be considered done until:
 - All visible buttons use Forge hardware language.
 - Unneeded Codex-style buttons are removed.
 - Settings and floating menus open, close, and show useful product-specific content.
-- Right inspector reads as a focused 3D structure preview, not a generic dashboard or contact form. Read-only generated evidence links may appear after confirmed generation.
+- Right inspector reads as a focused 3D structure preview, not a generic dashboard, evidence list, or contact form. It should stop at the compact 3D model status row by default.
 - A normal request produces a ProductPlan revision with scope, parts list (BOM), GeometrySpec, pending prototype structure preview (3D), electronics layout, quote assumptions, and risk limits.
 - A confirmed generation request writes a new revision with GLB/STL/STEP, validation report, and placed part volumes in the GLB.
 - A confirmed generation request also writes ComponentDescriptor v2 evidence: `component_descriptors.json` and `component_asset_manifest.json`.
-- Component asset quality and validation status are visible in the UI and generated evidence. Current proxy components must not be presented as production ready.
+- Component asset quality and validation status remain visible in generated evidence, artifact metadata, and explicit engineering/review surfaces, but are not listed in the default right inspector. Current proxy components must not be presented as production ready.
 - The 3D preview is visible as an outcome snapshot and allows rotate, zoom, pan, and appearance/component layer switching, but does not introduce modeling-editor behavior.
 - Future chatbot, agent, or LLM tool-calling runtimes can drive Forge by calling a small safe set of backend actions rather than directly mutating files or geometry.
 - Each ProductPlan can be represented as a durable local project folder with `project_manifest.json`, `product_plan.json`, append-only `events.jsonl`, persistent proposals, immutable revision folders, markdown indexes, and revision-scoped generated artifacts after explicit generation.

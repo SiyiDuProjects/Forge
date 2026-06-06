@@ -1,4 +1,4 @@
-import { readProjectManifest } from "./project_workspace.mjs";
+import { readRuntimeBinding } from "./project_workspace.mjs";
 
 export const CODEX_SDK_PACKAGE = "@openai/codex-sdk";
 
@@ -11,9 +11,10 @@ export async function getRuntimeStatus({
   rootDir,
   sdkImporter = (specifier) => import(specifier)
 } = {}) {
-  const manifest = workspaceId ? readProjectManifest({ workspaceId, rootDir }) : null;
+  const runtimeBinding = workspaceId ? readRuntimeBinding({ workspaceId, rootDir }) : null;
   const codex = await codexSdkStatus({ sdkImporter });
-  const codexThreadId = manifest?.codexThreadId || "";
+  const codexBinding = runtimeBinding?.provider === "codex" ? runtimeBinding : null;
+  const bindingId = codexBinding?.bindingId || "";
   return {
     ok: true,
     workspaceId,
@@ -43,8 +44,15 @@ export async function getRuntimeStatus({
         sdkExport: codex.sdkExport || "",
         message: codex.message || "",
         workspaceId,
-        codexThreadId,
-        threadState: workspaceId ? (codexThreadId ? "ready" : "not_started") : "no_workspace"
+        runtimeBinding: codexBinding,
+        bindingId,
+        threadState: workspaceId
+          ? codexBinding?.status === "failed"
+            ? "failed"
+            : bindingId
+              ? "ready"
+              : "not_started"
+          : "no_workspace"
       }
     }
   };

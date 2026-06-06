@@ -255,12 +255,15 @@ export class CodexSdkRuntimeAdapter {
       force: true
     });
     const parsed = parseCodexToolIntent(run.text);
+    const runtimeBinding = run.runtimeBinding || thread.runtimeBinding || null;
+    const bindingId = run.bindingId || runtimeBinding?.bindingId || thread.bindingId || "";
     return {
       ok: true,
       finalMessage: parsed.finalMessage,
       toolCalls: parsed.toolCalls,
-      rawResponseId: run.codexThreadId || thread.codexThreadId,
-      codexThreadId: run.codexThreadId || thread.codexThreadId,
+      rawResponseId: bindingId,
+      runtimeBinding,
+      bindingId,
       codexThreadCreated: Boolean(thread.created)
     };
   }

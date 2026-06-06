@@ -24,9 +24,9 @@ The local file-backed workspace is written under `data/workspaces/<planId>/`. It
 
 Generated GLB/STL/STEP files under `revisions/<revisionId>/artifacts/` are derived outputs. They are not editable source and must still be regenerated from ProductPlan, ComponentDescriptor selections, and GeometrySpec through Forge actions.
 
-Tool Protocol metadata lives in `src/core/tool_registry.mjs`. Future chat runtimes should inspect it before action calls so they can respect confirmation gates, read/write behavior, side effects, concurrency locks, rollback policy, and disallowed raw mutation targets.
+Tool Protocol metadata lives in `src/core/tool_registry.mjs`. Chat runtimes, API action routes, and `forge-tool` use that registry as the shared contract so they can respect confirmation gates, read/write behavior, side effects, concurrency locks, rollback policy, and disallowed raw mutation targets.
 
-Forge QueryEngine V1 now implements that runtime layer in `src/core/forge_query_engine.mjs`. It exports model tool schemas, runs `permission_gate.mjs`, dispatches through `tool_executor.mjs`, persists chat sessions under `data/workspaces/<planId>/chat_sessions/`, and exposes `/api/workspaces/:workspaceId/chat/*` routes.
+Forge QueryEngine V1 now implements that runtime layer in `src/core/forge_query_engine.mjs`. It exports model tool schemas, runs `permission_gate.mjs`, dispatches through `tool_executor.mjs`, persists chat sessions under `data/workspaces/<planId>/chat_sessions/`, and exposes `/api/workspaces/:workspaceId/chat/*` routes. `tool_executor.mjs` also enforces per-workspace `workspace-write` locks for mutation tools.
 
 ## Proposal Model
 
@@ -390,6 +390,38 @@ Creates revision: no.
 Requires confirmation: no.
 
 Common errors: `UNKNOWN_WORKSPACE`, `NOT_FOUND`, `REVERT_FAILED`.
+
+### `submitReviewPacket(input)`
+
+Purpose: write a local human review packet for the selected ProductPlan revision.
+
+Input:
+
+```json
+{
+  "workspaceId": "plan-...",
+  "revisionId": "rev-...",
+  "contactInfo": {
+    "name": "Internal Tester",
+    "email": "tester@example.com"
+  }
+}
+```
+
+Output includes:
+
+- `submitted: true`
+- `status`
+- `reviewId`
+- `submission`
+
+Side effects: writes local review request/notes, appends review events, and never starts payment, supplier ordering, or manufacturing.
+
+Creates revision: no.
+
+Requires confirmation: yes for agent/tool usage.
+
+Common errors: `UNKNOWN_WORKSPACE`, `REVIEW_SUBMISSION_FAILED`, contact validation errors.
 
 ### `getRevisionArtifacts(input)`
 

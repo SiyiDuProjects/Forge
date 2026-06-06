@@ -6,7 +6,8 @@ import {
   currentRevision,
   getProductPlan,
   regenerateProductPlanRevision,
-  revertProductPlanRevision
+  revertProductPlanRevision,
+  submitProductPlanReview
 } from "./product_plan.mjs";
 import {
   appendWorkspaceEvent,
@@ -445,6 +446,7 @@ export function revertRevision({ workspaceId, revisionId } = {}) {
       reverted: true,
       currentRevisionId: result.revision.revisionId,
       artifactPaths: actionArtifactPaths(result.revision),
+      productPlan: clone(result.productPlan || null),
       summary: `Reverted to ${result.revision.revisionId}.`
     });
   } catch (error) {
@@ -500,6 +502,34 @@ export function rejectStagedChange({ workspaceId, proposalId, reason = "" } = {}
     proposalId: proposal.proposalId,
     status: proposal.status
   });
+}
+
+export async function submitReviewPacket({ workspaceId, revisionId = "", contactInfo = {} } = {}) {
+  const planResult = resolvePlan(workspaceId);
+  if (!planResult.ok) return planResult;
+  recordToolCalled(planResult.plan, "submitReviewPacket", {
+    revisionId,
+    hasName: Boolean(contactInfo?.name),
+    hasEmail: Boolean(contactInfo?.email)
+  });
+  try {
+    const result = await submitProductPlanReview({
+      planId: planResult.plan.planId,
+      revisionId,
+      contactInfo
+    });
+    return ok({
+      submitted: true,
+      status: result.submission?.status || "",
+      reviewId: result.submission?.reviewId || "",
+      submission: clone(result.submission || null),
+      productPlan: clone(result.productPlan || null)
+    });
+  } catch (error) {
+    const result = errorFromException(error, "REVIEW_SUBMISSION_FAILED");
+    recordToolFailed(planResult.plan, "submitReviewPacket", result.error);
+    return result;
+  }
 }
 
 export function validateActionPatches(patches = []) {

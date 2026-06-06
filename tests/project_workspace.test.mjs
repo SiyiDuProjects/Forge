@@ -29,8 +29,10 @@ import {
   projectWorkspacePath,
   readProjectWorkspacePlan,
   readRuntimePlan,
+  readRuntimeBinding,
   readWorkspaceEvents
 } from "../src/core/project_workspace.mjs";
+import { withWorkspaceWriteLock } from "../src/core/tool_executor.mjs";
 import {
   getToolMetadata,
   listToolMetadata,
@@ -94,6 +96,7 @@ test("ProductPlan creation writes a durable Forge project folder", () => {
   assert.match(tools, /search-component/);
   assert.match(tools, /generate --reason/);
   assert.match(tools, /review --name/);
+  assert.match(tools, /Forge action: `submitReviewPacket`/);
   assert.ok(events.some((event) => event.type === "workspace_created"));
   assert.ok(events.some((event) => event.type === "revision_created"));
   assert.ok(events.some((event) => event.type === "user_message"));
@@ -140,6 +143,29 @@ test("workspace listing skips unreadable ProductPlan files", () => {
   assert.equal(readProjectWorkspacePlan({ workspaceId: brokenWorkspaceId, rootDir }), null);
 });
 
+test("runtime binding migrates legacy codexThreadId fields without rewriting them", () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const manifest = readJson(`${workspacePath}/project_manifest.json`);
+  manifest.codexThreadId = "legacy-thread";
+  writeFileSync(`${workspacePath}/project_manifest.json`, JSON.stringify(manifest, null, 2));
+  const runtimePlan = readJson(`${workspacePath}/runtime_plan.json`);
+  runtimePlan.workspaceState.codexThreadId = "legacy-thread";
+  writeFileSync(`${workspacePath}/runtime_plan.json`, JSON.stringify(runtimePlan, null, 2));
+
+  const binding = readRuntimeBinding({ workspaceId: plan.planId });
+  assert.equal(binding.provider, "codex");
+  assert.equal(binding.bindingId, "legacy-thread");
+  assert.equal(binding.migratedFrom, "codexThreadId");
+
+  ensureProjectWorkspace({ plan });
+  const migratedManifest = readJson(`${workspacePath}/project_manifest.json`);
+  const migratedPlan = readJson(`${workspacePath}/runtime_plan.json`);
+  assert.equal(migratedManifest.codexThreadId, undefined);
+  assert.equal(migratedManifest.runtimeBinding.bindingId, "legacy-thread");
+  assert.equal(migratedPlan.workspaceState.codexThreadId, undefined);
+});
+
 test("forge-tool restores a project workspace in a separate process", () => {
   const plan = createWorkspacePlan();
   const workspacePath = projectWorkspacePath(plan.planId);
@@ -178,6 +204,13 @@ test("forge-tool restores a project workspace in a separate process", () => {
   const runtimePlan = readJson(`${workspacePath}/runtime_plan.json`);
   assert.equal(runtimePlan.revisions.length, beforeRevisionCount + 1);
   assert.equal(runtimePlan.workspaceState.productPlan.constraints.finish, "graphite");
+
+  const review = runForgeTool(["review", "--name", "Internal Tester", "--email", "tester@example.com"], workspacePath);
+  assert.equal(review.status, 0, review.stderr);
+  assert.equal(review.json.ok, true);
+  assert.equal(review.json.submitted, true);
+  assert.ok(review.json.reviewId);
+  assert.equal(existsSync(`${workspacePath}/review/review_request.json`), true);
 });
 
 test("guarded file detector catches direct source-of-truth writes", () => {
@@ -261,6 +294,53 @@ test("guarded file detector allows legitimate revision writes from Forge actions
     beforeEventCount
   });
   assert.deepEqual(violations, []);
+});
+
+test("guarded file detector allows only event-payload-specific proposal paths", () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const before = snapshotGuardedFiles({ workspaceId: plan.planId });
+  const beforeEventCount = guardedEventCount({ workspaceId: plan.planId });
+
+  writeFileSync(`${workspacePath}/proposals/proposal-unauthorized.json`, JSON.stringify({ tampered: true }, null, 2));
+  appendWorkspaceEvent({
+    workspaceId: plan.planId,
+    type: "proposal_created",
+    actor: "assistant",
+    payload: { proposalId: "proposal-authorized" }
+  });
+
+  const violations = detectGuardViolations({
+    workspaceId: plan.planId,
+    before,
+    beforeEventCount
+  });
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].path, "proposals/proposal-unauthorized.json");
+});
+
+test("guarded file detector allows only event-payload-specific revision paths", () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const before = snapshotGuardedFiles({ workspaceId: plan.planId });
+  const beforeEventCount = guardedEventCount({ workspaceId: plan.planId });
+
+  mkdirSync(`${workspacePath}/revisions/rev_unauthorized`, { recursive: true });
+  writeFileSync(`${workspacePath}/revisions/rev_unauthorized/product_plan.json`, JSON.stringify({ tampered: true }, null, 2));
+  appendWorkspaceEvent({
+    workspaceId: plan.planId,
+    type: "revision_created",
+    actor: "system",
+    payload: { revisionId: "rev_authorized" }
+  });
+
+  const violations = detectGuardViolations({
+    workspaceId: plan.planId,
+    before,
+    beforeEventCount
+  });
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].path, "revisions/rev_unauthorized/product_plan.json");
 });
 
 test("events.jsonl is append-only for validation events", () => {
@@ -415,7 +495,8 @@ test("Tool Protocol metadata covers existing Forge actions and safety flags", ()
     "validateDesign",
     "revertRevision",
     "getRevisionArtifacts",
-    "rejectStagedChange"
+    "rejectStagedChange",
+    "submitReviewPacket"
   ]) {
     assert.ok(names.includes(expectedName), expectedName);
   }
@@ -431,7 +512,7 @@ test("Tool Protocol metadata covers existing Forge actions and safety flags", ()
   assert.equal(validate.permission.requiresConfirmation, false);
   assert.ok(validate.sideEffects.some((effect) => effect.includes("validation_completed")));
 
-  for (const name of ["commitStagedChange", "applyDesignPatch", "regenerateRevision", "revertRevision"]) {
+  for (const name of ["commitStagedChange", "applyDesignPatch", "regenerateRevision", "revertRevision", "submitReviewPacket"]) {
     const metadata = getToolMetadata(name);
     assert.equal(metadata.permission.requiresConfirmation, true, name);
     assert.equal(metadata.concurrency.safeToRunInParallel, false, name);
@@ -441,6 +522,54 @@ test("Tool Protocol metadata covers existing Forge actions and safety flags", ()
 
   const writeTools = listToolMetadata().filter((tool) => tool.behavior.createsRevision || tool.behavior.mutatesCurrentState);
   assert.ok(writeTools.every((tool) => tool.concurrency.safeToRunInParallel === false));
+});
+
+test("workspace-write lock serializes writes per workspace without blocking reads or other workspaces", async () => {
+  const writeMetadata = getToolMetadata("applyDesignPatch");
+  const readMetadata = getToolMetadata("getWorkspaceSummary");
+  const order = [];
+  let releaseFirst;
+  let firstStartedResolve;
+  const firstStarted = new Promise((resolve) => {
+    firstStartedResolve = resolve;
+  });
+  const first = withWorkspaceWriteLock({
+    workspaceId: "workspace-a",
+    toolMetadata: writeMetadata
+  }, async () => {
+    order.push("first-start");
+    firstStartedResolve();
+    await new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    order.push("first-end");
+  });
+  await firstStarted;
+
+  const second = withWorkspaceWriteLock({
+    workspaceId: "workspace-a",
+    toolMetadata: writeMetadata
+  }, async () => {
+    order.push("second");
+  });
+  const read = withWorkspaceWriteLock({
+    workspaceId: "workspace-a",
+    toolMetadata: readMetadata
+  }, async () => {
+    order.push("read");
+  });
+  const otherWorkspace = withWorkspaceWriteLock({
+    workspaceId: "workspace-b",
+    toolMetadata: writeMetadata
+  }, async () => {
+    order.push("other-workspace");
+  });
+
+  await Promise.all([read, otherWorkspace]);
+  assert.deepEqual(order, ["first-start", "read", "other-workspace"]);
+  releaseFirst();
+  await Promise.all([first, second]);
+  assert.deepEqual(order, ["first-start", "read", "other-workspace", "first-end", "second"]);
 });
 
 test("API contract advertises project context and tool metadata routes", () => {

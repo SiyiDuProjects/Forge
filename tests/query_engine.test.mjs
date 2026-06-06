@@ -14,7 +14,7 @@ import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs"
 import { createProductPlanForRuntime } from "../src/core/runtime_plan_creation.mjs";
 import { getRuntimeStatus } from "../src/core/runtime_status.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
-import { projectWorkspacePath, readProjectManifest, readWorkspaceEvents, updateProjectManifest } from "../src/core/project_workspace.mjs";
+import { projectWorkspacePath, readProjectManifest, readRuntimeBinding, readWorkspaceEvents, updateRuntimeBinding } from "../src/core/project_workspace.mjs";
 import { getToolMetadata, listToolMetadata } from "../src/core/tool_registry.mjs";
 
 function createChatPlan() {
@@ -364,9 +364,11 @@ test("runtime selection keeps Codex, Forge QueryEngine, mock, and OpenAI roles d
 
 test("runtime status preflight reports Codex SDK and project thread state", async () => {
   const plan = createChatPlan();
-  updateProjectManifest({
+  updateRuntimeBinding({
     workspaceId: plan.planId,
-    patch: { codexThreadId: "thread-runtime-status" }
+    provider: "codex",
+    status: "ready",
+    bindingId: "thread-runtime-status"
   });
 
   const ready = await getRuntimeStatus({
@@ -381,7 +383,8 @@ test("runtime status preflight reports Codex SDK and project thread state", asyn
   assert.equal(ready.runtimes["forge-query-engine"].ready, true);
   assert.equal(ready.runtimes.codex.available, true);
   assert.equal(ready.runtimes.codex.threadState, "ready");
-  assert.equal(ready.runtimes.codex.codexThreadId, "thread-runtime-status");
+  assert.equal(ready.runtimes.codex.bindingId, "thread-runtime-status");
+  assert.equal(ready.runtimes.codex.runtimeBinding.bindingId, "thread-runtime-status");
 
   const missing = await getRuntimeStatus({
     runtimeProvider: "codex",
@@ -503,7 +506,8 @@ test("Codex runtime creates and reuses one thread for a Forge project", async ()
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.codexThreadId, "codex-thread-1");
+  assert.equal(result.runtimeBinding.bindingId, "codex-thread-1");
+  assert.equal(result.bindingId, "codex-thread-1");
   assert.equal(startCount, 1);
   assert.equal(resumeCount, 1);
   assert.equal(startOptions[0].workingDirectory, projectWorkspacePath(plan.planId));
@@ -512,8 +516,10 @@ test("Codex runtime creates and reuses one thread for a Forge project", async ()
   assert.equal(resumeOptions[0].workingDirectory, projectWorkspacePath(plan.planId));
   assert.equal(getProductPlan(plan.planId).revisions.length, initialRevisionCount + 1);
   assert.equal(getProductPlan(plan.planId).revisions.at(-1).productPlanSnapshot.constraints.finish, "graphite");
-  assert.equal(readProjectManifest({ workspaceId: plan.planId }).codexThreadId, "codex-thread-1");
-  assert.ok(result.modelResponses.every((response) => response.codexThreadId === "codex-thread-1"));
+  const manifest = readProjectManifest({ workspaceId: plan.planId });
+  assert.equal(manifest.runtimeBinding.bindingId, "codex-thread-1");
+  assert.equal(manifest.codexThreadId, undefined);
+  assert.ok(result.modelResponses.every((response) => response.bindingId === "codex-thread-1"));
 });
 
 test("Codex runtime streams SDK progress into Forge trace events", async () => {
@@ -558,6 +564,25 @@ test("Codex runtime streams SDK progress into Forge trace events", async () => {
               }
             };
             yield {
+              type: "item.updated",
+              item: {
+                id: "todo_1",
+                type: "todo_list",
+                items: [
+                  { text: "Inspect Forge project context", completed: true },
+                  { text: "Return tool intent", completed: false }
+                ]
+              }
+            };
+            yield {
+              type: "item.completed",
+              item: {
+                id: "reasoning_1",
+                type: "reasoning",
+                text: "The project can be inspected without changing ProductPlan state."
+              }
+            };
+            yield {
               type: "item.completed",
               item: {
                 id: "msg_1",
@@ -593,7 +618,7 @@ test("Codex runtime streams SDK progress into Forge trace events", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.codexThreadId, "stream-thread");
+  assert.equal(result.bindingId, "stream-thread");
   assert.match(result.assistantMessage, /Streamed Codex/);
   assert.ok(traceEvents.some((event) => event.type === "codex_thread_started" && event.codexThreadId === "stream-thread"));
   assert.ok(traceEvents.some((event) => event.type === "codex_turn_started"));
@@ -601,6 +626,20 @@ test("Codex runtime streams SDK progress into Forge trace events", async () => {
   const commandTrace = traceEvents.find((event) => event.type === "codex_item_completed" && event.itemType === "command_execution");
   assert.equal(commandTrace.summary.command, "node scripts/forge-tool.mjs apply --message streamed");
   assert.equal(commandTrace.summary.aggregated_output, undefined);
+  assert.equal(commandTrace.item.command, "node scripts/forge-tool.mjs apply --message streamed");
+  assert.equal(commandTrace.item.aggregated_output, undefined);
+  const todoTrace = traceEvents.find((event) => event.type === "codex_item_updated" && event.itemType === "todo_list");
+  assert.equal(todoTrace.item.items.length, 2);
+  assert.equal(todoTrace.item.items[0].text, "Inspect Forge project context");
+  const reasoningTrace = traceEvents.find((event) => event.type === "codex_item_completed" && event.itemType === "reasoning");
+  assert.match(reasoningTrace.item.text, /without changing ProductPlan state/);
+  const restoredSession = loadChatSession({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_stream_trace",
+    limit: 80
+  });
+  const restoredCodexItem = restoredSession.recentEvents.find((event) => event.type === "codex_item_completed" && event.payload?.itemType === "reasoning");
+  assert.match(restoredCodexItem.payload.item.text, /without changing ProductPlan state/);
 });
 
 test("Codex runtime forwards abort signals to streamed SDK turns", async () => {
@@ -755,6 +794,10 @@ test("Codex runtime demo can drive idea, modification, generation, USB move, and
           const generated = tool(["generate", "--reason", "user_confirmed_model_generation"]);
           return codexJson(`已先 validate=${validation.status}，再生成 3D 模型版本 ${generated.revisionId}。`);
         }
+        if (currentMessage.includes("回退")) {
+          const reverted = tool(["revert", "--revisionId", revisionBeforeUsbMove]);
+          return codexJson(`已回退到 ${reverted.currentRevisionId}。`);
+        }
         if (currentMessage.includes("USB-C") || currentMessage.includes("后面左侧")) {
           revisionBeforeUsbMove = readRuntimePlan(cwd).currentRevisionId;
           const patches = JSON.stringify([
@@ -767,10 +810,6 @@ test("Codex runtime demo can drive idea, modification, generation, USB move, and
           ]);
           const applied = tool(["apply", "--message", "Move USB-C to the rear-left side.", "--patches", patches]);
           return codexJson(`已通过 forge-tool 移动 USB-C，创建版本 ${applied.newRevisionId}。`);
-        }
-        if (currentMessage.includes("回退")) {
-          const reverted = tool(["revert", "--revisionId", revisionBeforeUsbMove]);
-          return codexJson(`已回退到 ${reverted.currentRevisionId}。`);
         }
         return codexJson("我会先读取项目状态再决定下一步。");
       }
@@ -785,7 +824,7 @@ test("Codex runtime demo can drive idea, modification, generation, USB move, and
     codexFactory
   });
   assert.equal(addTurn.ok, true);
-  assert.equal(addTurn.codexThreadId, "forge-tool-demo-thread");
+  assert.equal(addTurn.bindingId, "forge-tool-demo-thread");
   assert.equal(addTurn.toolCalls.length, 0);
   assert.match(addTurn.assistantMessage, /forge-tool/);
   assert.equal(addTurn.productPlan.workspaceState.productPlan.requirements.buttons, 2);
@@ -867,10 +906,10 @@ test("Codex runtime keeps project threads isolated", async () => {
 
   assert.equal(firstThread.ok, true);
   assert.equal(secondThread.ok, true);
-  assert.equal(firstThread.codexThreadId, "thread-1");
-  assert.equal(secondThread.codexThreadId, "thread-2");
-  assert.equal(firstAgain.codexThreadId, "thread-1");
-  assert.notEqual(readProjectManifest({ workspaceId: first.planId }).codexThreadId, readProjectManifest({ workspaceId: second.planId }).codexThreadId);
+  assert.equal(firstThread.bindingId, "thread-1");
+  assert.equal(secondThread.bindingId, "thread-2");
+  assert.equal(firstAgain.bindingId, "thread-1");
+  assert.notEqual(readRuntimeBinding({ workspaceId: first.planId }).bindingId, readRuntimeBinding({ workspaceId: second.planId }).bindingId);
 });
 
 function codexJson(assistantMessage) {
@@ -926,8 +965,8 @@ test("Codex runtime persists delayed SDK thread id after first run", async () =>
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.codexThreadId, "delayed-thread-id");
-  assert.equal(readProjectManifest({ workspaceId: plan.planId }).codexThreadId, "delayed-thread-id");
+  assert.equal(result.bindingId, "delayed-thread-id");
+  assert.equal(readRuntimeBinding({ workspaceId: plan.planId }).bindingId, "delayed-thread-id");
 });
 
 test("Codex runtime plan creation initializes and persists a delayed project thread id", async () => {
@@ -982,9 +1021,9 @@ test("Codex runtime plan creation initializes and persists a delayed project thr
     onTraceEvent: (event) => traceEvents.push(event)
   });
 
-  assert.equal(result.codexThreadId, "created-plan-thread");
-  assert.equal(result.productPlan.workspaceState.codexThreadId, "created-plan-thread");
-  assert.equal(readProjectManifest({ workspaceId: result.productPlan.planId }).codexThreadId, "created-plan-thread");
+  assert.equal(result.runtimeBinding.bindingId, "created-plan-thread");
+  assert.equal(result.productPlan.workspaceState.codexThreadId, undefined);
+  assert.equal(readRuntimeBinding({ workspaceId: result.productPlan.planId }).bindingId, "created-plan-thread");
   assert.equal(runCount, 1);
   assert.equal(startOptions[0].workingDirectory, projectWorkspacePath(result.productPlan.planId));
   assert.match(prompts[0], /Initialize this Codex thread/);
@@ -993,7 +1032,28 @@ test("Codex runtime plan creation initializes and persists a delayed project thr
   assert.ok(traceEvents.some((event) => event.type === "plan_create_started"));
   assert.ok(traceEvents.some((event) => event.type === "product_plan_created"));
   assert.ok(traceEvents.some((event) => event.type === "codex_thread_requested"));
-  assert.ok(traceEvents.some((event) => event.type === "codex_thread_ready" && event.codexThreadId === "created-plan-thread"));
+  assert.ok(traceEvents.some((event) => event.type === "codex_thread_ready" && event.bindingId === "created-plan-thread"));
+});
+
+test("Codex-backed plan creation records failed runtime binding on initialization failure", async () => {
+  const result = await createProductPlanForRuntime({
+    initialMessage: "我想做一个带 3.5 寸屏幕的小桌面闹钟。",
+    language: "zh",
+    runtime: {
+      runtimeProvider: "codex",
+      modelProvider: "codex"
+    },
+    codexFactory: async () => {
+      throw new Error("codex unavailable");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.ok(result.workspaceId);
+  assert.equal(result.runtimeBinding.status, "failed");
+  assert.equal(result.runtimeBinding.provider, "codex");
+  assert.match(result.runtimeBinding.error.message, /codex unavailable/);
+  assert.equal(readRuntimeBinding({ workspaceId: result.workspaceId }).status, "failed");
 });
 
 test("Codex tool intent parser accepts fenced JSON and plain messages", () => {

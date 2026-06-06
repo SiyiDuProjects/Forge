@@ -61,18 +61,18 @@ Current known local limitation:
 - `server.mjs`: static server and JSON API routes.
 - `src/contracts/workbench_contract.mjs`: shared contract constants for chain steps, API routes, statuses, and supported languages.
 - `src/core/product_plan.mjs`: ProductPlan creation, turn handling, revision creation, and local review submission orchestration.
-- `src/core/forge_actions.mjs`: stable backend action contract for future chat/tool-calling layers; supports summaries, component search, proposals, staged patches, committed revision creation, regeneration, validation, revert, and artifact retrieval without direct mesh/file mutation.
+- `src/core/forge_actions.mjs`: stable backend action contract for future chat/tool-calling layers; supports summaries, component search, proposals, staged patches, committed revision creation, regeneration, validation, revert, artifact retrieval, and local review submission without direct mesh/file mutation.
 - `src/core/project_workspace.mjs`: file-backed Forge project runtime for `data/workspaces/<planId>/`, including project manifests, runtime ProductPlan snapshots, current ProductPlan files, append-only events, proposal files, revision folders, revision-scoped artifacts, review files, generated project `AGENTS.md`, state/work/decision/tool markdown indexes, and project-local Skills.
 - `src/core/context_pack_builder.mjs`: compact project-folder context builder for future chat/runtime layers; summarizes current state, revisions, proposals, recent events, decisions, validation warnings, allowed tools, and artifact metadata without loading raw GLB/STL/STEP bytes.
 - `src/core/tool_registry.mjs`: Tool Protocol metadata for existing Forge actions, including schemas, confirmation policy, read/write behavior, side effects, concurrency locks, rollback strategy, and disallowed raw mutation targets.
 - `src/core/forge_query_engine.mjs`: Forge-native Claude Code-style query loop for one chat turn; persists user/assistant messages, builds ContextPack/prompt/tool schemas, calls a model/runtime adapter, permission-checks tool calls, executes Forge actions, records events, and returns UI-ready payloads.
-- `src/core/model_adapters.mjs`: deterministic local Forge `MockModelAdapter` for default UI/tool turns and tests plus OpenAI Responses and Codex SDK runtime adapters behind explicit provider configuration.
-- `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks; creates/resumes one Codex thread per Forge project, stores `codexThreadId` in `project_manifest.json`, runs Codex inside the generated project workspace, injects ContextPack/tool boundaries, parses JSON tool intent, checks guarded-file violations, and reports SDK/thread errors without fabricating ProductPlan state.
-- `src/core/runtime_plan_creation.mjs`: runtime-aware ProductPlan creation helper used by `/api/plans`; initializes and persists Codex project thread ids when `runtimeProvider` is `codex`.
-- `src/core/guarded_files.mjs`: guarded project-file snapshot and violation detection for Codex SDK turns; guarded writes are allowed only when the new Forge event type corresponds to the changed file class.
-- `scripts/forge-tool.mjs`: CLI wrapper around Forge actions for Codex-side project work; it restores a project from `runtime_plan.json` and writes state only through Forge actions.
+- `src/core/model_adapters.mjs`: deterministic local Forge `MockModelAdapter` for fallback/test tool turns plus OpenAI Responses and Codex SDK runtime adapters behind provider configuration.
+- `src/core/codex_runtime.mjs`: Codex SDK runtime bridge for Forge product tasks; creates/resumes one Codex thread per Forge project through provider-neutral `runtimeBinding`, runs Codex inside the generated project workspace, injects ContextPack/tool boundaries, parses JSON tool intent, checks guarded-file violations, and reports SDK/thread errors without fabricating ProductPlan state.
+- `src/core/runtime_plan_creation.mjs`: runtime-aware ProductPlan creation helper used by `/api/plans`; initializes and persists `runtimeBinding` when `runtimeProvider` is `codex`, including failed initialization status.
+- `src/core/guarded_files.mjs`: guarded project-file snapshot and violation detection for Codex SDK turns; guarded writes are allowed only when the new Forge event payload authorizes the exact proposal, revision, artifact, or append-only event path.
+- `scripts/forge-tool.mjs`: CLI wrapper around the same policy-checked Forge actions used by agent tools/API routes; it restores a project from `runtime_plan.json`, writes state only through Forge actions, and outputs compact stable JSON.
 - `src/core/tool_schema_exporter.mjs`: exports Tool Protocol metadata into model-callable tool schemas.
-- `src/core/tool_executor.mjs`: validates and dispatches model tool calls to `forge_actions.mjs`; never executes shell or arbitrary file edits.
+- `src/core/tool_executor.mjs`: validates and dispatches model tool calls to `forge_actions.mjs`, applies permission policy, and enforces per-workspace write locks; never executes shell or arbitrary file edits.
 - `src/core/permission_gate.mjs`: enforces read/proposal/mutation confirmation rules and blocks raw GeometrySpec, GLB/STL/STEP, mesh, and arbitrary file mutation targets.
 - `src/core/chat_session_store.mjs`: append-only chat session JSONL and pending confirmation storage under `data/workspaces/<planId>/chat_sessions/`.
 - `src/core/prompt_sections.mjs`: Forge role, boundary, tool-rule, ContextPack, recent-message, and user-message prompt assembly for chat runtimes.
@@ -145,9 +145,9 @@ The current product UI preserves both Simplified Chinese and English.
 Preserve Codex-like interaction structure:
 
 - Left sidebar for workbench navigation and build sessions.
-- Center thread for user request, bench agent response, and command-style run log.
+- Center thread for user request, bench agent response, Codex-style processed transcript, and confirmation controls.
 - Bottom composer for build request entry and scoped actions.
-- Right inspector for live build chain outputs.
+- Right inspector for 3D prototype result outputs: preview, component layout, dimensions, validation, and compact generated status.
 - Settings dialog and floating menus for secondary controls.
 - The center thread may show a prominent `原型快照` result card after the bench response; this emphasizes the prototype outcome while preserving conversation as the primary workflow.
 
@@ -156,16 +156,18 @@ Required UI-only views:
 - `新项目`: left-side entry that clears the current workbench into a blank ProductPlan input state.
 - New project button visual state: default should be transparent/no filled background; use subtle color only for hover/focus feedback.
 - Compact project list: left-side selection is for ProductPlan projects/conversations. Revision history stays inside the project history view, not as the primary project list. Visible rows should show only the project name, without status/model/quote subtitle explanations.
-- Project actions menu: the `...` / `方案菜单` trigger belongs on the right side of the left-sidebar project header, next to `项目`, not in the center thread topbar.
+- Project actions menu: the `...` / `方案菜单` trigger belongs to each individual project row, stays hidden by default, and appears only when that row is hovered or focused. It should not be a global menu next to the `项目` header and should not appear in the center thread topbar.
 - Conversation flow: central continuous conversation and ProductPlan revision updates.
+- SDK-native transcript flow: project Codex SDK streamed `ThreadEvent` / `ThreadItem` content into a Codex-style processed transcript rather than inventing fake steps or moving the main execution narrative into the right inspector. Live stream updates, reload replay from `events.jsonl`, and project-switch restoration should pass through the same transcript projection so a completed turn reads consistently across those states. Running turns stay expanded; completed turns default to a collapsed `已处理 <duration>` / `Processed <duration>` header; final `agent_message` text remains visible as normal conversation text. Expanded work details may show SDK natural-language text from `agent_message` / `reasoning`, todo progress, and safe aggregate counts such as `已探索`, `已运行`, and `已编辑`. Command/file/tool specifics should sit behind a second-level expansion from those `已...` rows. Do not render runtime binding, model request/response, command output, file contents, raw tool input/output, model provider details, or internal bridge events in the main UI.
 - Internal review material: keep the local human review submission capability in the plan/review flow, but do not expose `审核包` as a left-sidebar primary entry while the current priority is conversation-driven 3D generation.
 
 Right inspector guidance:
 
 - It should read as a focused 3D structure output surface, not a generic analytics dashboard or review packet page.
+- Do not put the main execution transcript, runtime/tool narration, or confirmation controls in the right inspector; those belong in the center thread next to the conversation.
 - Keep `原型结构预览（3D）` near the top and expanded by default when possible.
 - The 3D preview should use layer states rather than CAD-style front/back/exploded view controls: switching `外观层` / `元器件层` must not rotate, pan, zoom, or reset the current view. `外观层` keeps normal/default material opacity, so the 3D printed shell stays opaque and any genuinely exposed components remain visible. `元器件层` keeps the same camera and makes every shell surface semi-transparent so placed components, interface markers, cable routes, and risk colors from GeometrySpec are visible. Orbit rotate, zoom, and pan are allowed. Do not add modeling/editor controls such as drag-to-edit geometry, parametric handles, material authoring, CAD export, timeline tools, or mesh operations.
-- Keep the 3D preview, layer controls, shell/dimension/structure-check rows, component asset quality list, read-only generated evidence links, and a compact fullscreen preview affordance in the right inspector. Do not turn artifact links into CAD editing, production, checkout, or manufacturing controls. Do not put review contact/person fields in this page; use internal review material and the separate review contact dialog instead.
+- Keep the 3D preview, layer controls, shell/dimension/structure-check rows, 3D model status, and a compact fullscreen preview affordance in the right inspector. Do not show proxy ComponentDescriptor disclaimers, component asset source lists, generated evidence link lists, or instruction paragraphs below the 3D model status row by default. Generated evidence remains persisted in revision artifacts and explicit engineering/review surfaces; do not turn artifact access into CAD editing, production, checkout, or manufacturing controls. Do not put review contact/person fields in this page; use internal review material and the separate review contact dialog instead.
 - Keep the right inspector on a consistent indentation grid: preview, layer controls, labels, and values should share stable gutters instead of shifting between unrelated flex alignments.
 - Prefer thin dividers, low shadow, dense sections, and restrained visual hierarchy.
 - Keep controls usable, but avoid large decorative rounded cards.
@@ -202,9 +204,9 @@ Enclosure-specific rule:
 
 The current frontend should use backend ProductPlan APIs for real plans and should not synthesize a fake complete ProductPlan when the backend fails. If the server or API is unavailable, show a clear bilingual error and keep the draft input so the user can retry.
 
-The default local chat runtime is the deterministic Forge tool adapter (`modelProvider: "mock"` / `runtimeProvider: "mock"` in code), because it exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifacts without depending on external API keys. OpenAI-backed turns must be explicitly requested/configured and should not break the default UI if the external key or relay is invalid.
+The current frontend default runtime is Codex (`runtimeProvider: "codex"`). The deterministic local Forge tool adapter (`runtimeProvider: "mock"` / `modelProvider: "mock"`) remains the explicit fallback/test mode because it exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifacts without depending on external API keys. OpenAI-backed turns must be explicitly requested/configured and should not break the default UI if the external key or relay is invalid.
 
-Codex-backed product turns must be explicitly requested with `runtime: "codex"`, `runtimeProvider: "codex"`, or `FORGE_CHAT_RUNTIME_PROVIDER=codex`. Codex owns project-thread conversation context, follow-up decisions, task splitting, and Forge tool selection for one Forge project. Forge still owns ProductPlan persistence, revisions, events, GeometrySpec, artifacts, permissions, confirmation gates, guarded-file detection, and UI-ready outputs. Do not use Codex runtime as a mode for editing Forge source code from within the product.
+Codex-backed product turns use provider-neutral `runtimeBinding` persisted in `project_manifest.json`; legacy `codexThreadId` fields may be read for migration but new code must not write them. Codex owns project-thread conversation context, follow-up decisions, task splitting, and Forge tool selection for one Forge project. Forge still owns ProductPlan persistence, revisions, events, GeometrySpec, artifacts, permissions, confirmation gates, guarded-file detection, and UI-ready outputs. Do not use Codex runtime as a mode for editing Forge source code from within the product.
 
 Generated project workspaces must include the context files Codex needs to operate like a product-task agent: project `AGENTS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, `FORGE_TOOLS.md`, `skills/*.md`, and `runtime_plan.json`. Codex may read those files and write scratch notes under allowed project note locations, but project-changing state must go through `forge-tool` or returned Forge tool intent.
 
