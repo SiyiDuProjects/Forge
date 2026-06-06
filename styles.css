@@ -376,7 +376,7 @@ pre {
 .conversation {
   min-height: 0;
   overflow: auto;
-  padding: 31px 36px 168px;
+  padding: 31px 36px 22px;
 }
 
 .conversation-inner {

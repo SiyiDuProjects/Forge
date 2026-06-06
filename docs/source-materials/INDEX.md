@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-06
 
+### Conversation Bottom Gap Comment
+
+- File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`
+- Status: implemented by reducing the desktop `.conversation` bottom padding so latest content sits closer to the composer.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: conversation, bottom gap, composer distance, padding-bottom, 工作台内容, scroll bottom.
+
 ### Composer Summary Removal Comment
 
 - File: `docs/source-materials/2026-06-06-composer-summary-removal-comment.md`

@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Conversation Bottom Gap Tightening
+
+- Scope: reduce the desktop bottom padding inside `.conversation` so scrolling to the bottom leaves the latest conversation content close to the bottom composer instead of a large blank band.
+- Status: implemented and Browser-verified in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `styles.css`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: `.conversation`, `padding: 31px 36px 22px`, bottom gap, composer distance, scroll bottom.
+- Verification: `npm run check` passes with 77 tests. Browser validation on `http://127.0.0.1:8782/?cacheBust=conversation-bottom-gap-latest` confirmed `.conversation` uses `padding-bottom: 22px`, scrolling to the bottom lands at `distanceFromBottom: 0`, the latest visible transcript block sits `22px` above the composer, the composer still has no `#composerSummary` or `#scopeLevel`, and console warnings/errors were empty.
+- Boundary: this is a layout spacing change only. It does not change transcript rendering, auto-scroll behavior, composer send/stop behavior, ProductPlan persistence, GeometrySpec/artifact generation, or right-inspector behavior.
+
 ### 2026-06-06 - Composer Summary Strip Removal
 
 - Scope: remove the composer header/status strip so the bottom composer is just the hardware request text box plus send/stop control. Runtime mode copy and the compact runtime meta button are no longer shown in the composer.

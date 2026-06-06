@@ -480,6 +480,8 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.doesNotMatch(styles, /\.trace-timeline/);
   assert.doesNotMatch(styles, /\.trace-row\.codex-native/);
   assert.doesNotMatch(styles, /\.codex-native-/);
+  assert.match(styles, /\.conversation\s*{\s*min-height: 0;\s*overflow: auto;\s*padding: 31px 36px 22px;/);
+  assert.doesNotMatch(styles, /padding: 31px 36px 168px/);
   assert.match(styles, /overflow-wrap: anywhere/);
   assert.match(styles, /\.runtime-status-note/);
   assert.match(styles, /\.send-button\[data-running="true"\]/);
