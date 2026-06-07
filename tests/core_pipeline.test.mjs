@@ -1380,6 +1380,33 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.ok(revision.assemblyPlan.steps.find((step) => step.stepId === "install_usb_c").accessRefs.length > 0);
   assert.equal(revision.developmentBoardScaffold.status, "generated");
   assert.ok(revision.developmentBoardScaffold.files.some((file) => file.path === "firmware/bringup/pin_map.json"));
+  assert.equal(revision.developmentBoardScaffold.generatedFiles.length, 4);
+  const scaffoldChecks = Object.fromEntries(revision.developmentBoardScaffold.checks.map((check) => [check.name, check.status]));
+  assert.equal(scaffoldChecks.target_board_present, "pass");
+  assert.equal(scaffoldChecks.pin_map_available, "pass");
+  assert.equal(scaffoldChecks.interfaces_ready, "pass");
+  assert.equal(scaffoldChecks.power_path_ready, "pass");
+  assert.equal(scaffoldChecks.generated_file_contents, "pass");
+  const pinMapFile = revision.developmentBoardScaffold.generatedFiles.find((file) => file.path === "firmware/bringup/pin_map.json");
+  const pinMapConfig = JSON.parse(pinMapFile.content);
+  assert.equal(pinMapConfig.targetBoard.componentId, "core_board_esp32_s3");
+  assert.ok(pinMapConfig.pinMap.some((pin) => pin.interfaceType === "spi" && pin.pin === "GPIO12"));
+  assert.equal(pinMapConfig.boundaries.productionFirmware, false);
+  const mainCpp = revision.developmentBoardScaffold.generatedFiles.find((file) => file.path === "firmware/bringup/main.cpp").content;
+  assert.match(mainCpp, /void setup\(\)/);
+  assert.match(mainCpp, /void loop\(\)/);
+  assert.match(mainCpp, /init_display_spi/);
+  assert.match(mainCpp, /init_i2c_sensor_bus/);
+  assert.match(mainCpp, /test_display_test_pattern/);
+  const behaviorFile = revision.developmentBoardScaffold.generatedFiles.find((file) => (
+    file.path === "firmware/bringup/behavior_rules.placeholder.json"
+  ));
+  const behaviorRules = JSON.parse(behaviorFile.content);
+  assert.equal(behaviorRules.source, "ProductPlan behavior placeholder");
+  assert.equal(behaviorRules.productionReady, false);
+  assert.ok(behaviorRules.rules.some((rule) => rule.ruleId === "button_smoke_event"));
+  assert.equal(revision.prototypeReadinessReport.developmentBoardScaffold.generatedFileCount, 4);
+  assert.equal(revision.prototypeReadinessReport.developmentBoardScaffold.behaviorPlaceholderCount, behaviorRules.rules.length);
   assert.ok(productPlan.jobs.some((job) => job.capability === JOB_CAPABILITY.PROTOTYPE_READINESS));
 
   const revisionPath = join(projectWorkspacePath(productPlan.planId), "revisions", revision.revisionId);
@@ -1387,6 +1414,7 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   const descriptorTrustReport = JSON.parse(await readFile(join(revisionPath, "electronics_descriptor_trust_report.json"), "utf8"));
   const electronicsSpec = JSON.parse(await readFile(join(revisionPath, "electronics_spec.json"), "utf8"));
   const assemblyPlan = JSON.parse(await readFile(join(revisionPath, "assembly_plan.json"), "utf8"));
+  const developmentBoardScaffold = JSON.parse(await readFile(join(revisionPath, "development_board_scaffold.json"), "utf8"));
   const manifest = JSON.parse(await readFile(join(revisionPath, "revision_manifest.json"), "utf8"));
   const ledger = JSON.parse(await readFile(join(projectWorkspacePath(productPlan.planId), "revision_ledger.json"), "utf8"));
   assert.equal(readinessReport.status, "Ready");
@@ -1394,9 +1422,12 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.equal(readinessReport.electronicsValidation.checkStatuses.power_path, "pass");
   assert.equal(readinessReport.electronicsSpecSummary.powerPath.routeId, "route.usb_c_to_core_board");
   assert.equal(readinessReport.assemblyPlan.checkStatuses.step_evidence_refs, "pass");
+  assert.equal(readinessReport.developmentBoardScaffold.checkStatuses.generated_file_contents, "pass");
   assert.equal(descriptorTrustReport.status, "pass");
   assert.equal(electronicsSpec.sourceOfTruth.productPlan, "ProductPlan");
   assert.equal(assemblyPlan.sourceOfTruth.geometrySpec.includes("GeometrySpec"), true);
+  assert.equal(developmentBoardScaffold.bringUpConfig.sourceOfTruth.electronicsSpec, "ElectronicsSpec");
+  assert.ok(developmentBoardScaffold.generatedFiles.find((file) => file.path === "firmware/bringup/main.cpp").content.includes("void setup()"));
   assert.equal(manifest.derivedArtifacts.electronicsDescriptorTrustReport, "electronics_descriptor_trust_report.json");
   assert.equal(manifest.derivedArtifacts.prototypeReadinessReport, "prototype_readiness_report.json");
   assert.ok(ledger.revisions.at(-1).artifactManifest.derivedOutputs.some((item) => (
@@ -1552,6 +1583,12 @@ test("prototype readiness validation blocks obvious GPIO exhaustion", () => {
   assert.ok(readiness.electronicsValidation.errors.some((error) => error.type === "interface_assignment_blocked"));
   assert.equal(readiness.prototypeReadinessReport.status, "Blocked");
   assert.equal(readiness.developmentBoardScaffold.status, "missing_information");
+  assert.equal(readiness.developmentBoardScaffold.generatedFiles.length, 0);
+  const scaffoldChecks = Object.fromEntries(readiness.developmentBoardScaffold.checks.map((check) => [check.name, check.status]));
+  assert.equal(scaffoldChecks.interfaces_ready, "blocked");
+  assert.equal(scaffoldChecks.generated_file_contents, "blocked");
+  assert.ok(readiness.developmentBoardScaffold.blockedReasons.some((reason) => reason.type === "interface_assignment_blocked"));
+  assert.ok(readiness.prototypeReadinessReport.developmentBoardScaffold.blockedReasonCount > 0);
 });
 
 test("assembly plan blocks missing required GeometrySpec feature evidence", () => {

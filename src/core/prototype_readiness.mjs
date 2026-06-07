@@ -849,58 +849,75 @@ export function createAssemblyPlan({
   };
 }
 
-export function createDevelopmentBoardScaffold({ electronicsSpec = {}, electronicsValidation = {} } = {}) {
+export function createDevelopmentBoardScaffold({
+  productPlan = {},
+  electronicsSpec = {},
+  electronicsValidation = {}
+} = {}) {
   const board = electronicsSpec.mainController || {};
-  const assignments = electronicsSpec.interfaceAssignments || [];
+  const assignments = Array.isArray(electronicsSpec.interfaceAssignments)
+    ? electronicsSpec.interfaceAssignments
+    : [];
+  const moduleInitScaffold = uniqueModuleInitScaffold(assignments.map((assignment) => moduleInitForAssignment(assignment)));
+  const testEntrypoints = testEntrypointsFor(assignments);
+  const behaviorRules = behaviorRulePlaceholders(productPlan, assignments);
+  const checklist = bringUpChecklistFor({ electronicsSpec, assignments, behaviorRules });
+  const bringUpConfig = createBringUpConfig({
+    productPlan,
+    electronicsSpec,
+    board,
+    assignments,
+    moduleInitScaffold,
+    testEntrypoints,
+    behaviorRules
+  });
   const status = electronicsValidation.status === "blocked" || !board.componentId
     ? "missing_information"
     : "generated";
+  const files = bringUpFileManifest();
+  const generatedFiles = status === "generated"
+    ? generatedBringUpFiles({ bringUpConfig, checklist })
+    : [];
+  const checks = scaffoldChecksFor({
+    board,
+    assignments,
+    electronicsSpec,
+    electronicsValidation,
+    generatedFiles
+  });
+  const blockedReasons = scaffoldBlockedReasons({
+    board,
+    assignments,
+    electronicsValidation,
+    checks
+  });
   return {
     version: DEVELOPMENT_BOARD_SCAFFOLD_VERSION,
     scopeClassification: SUPPORTING_V1,
     status,
+    sourceOfTruth: {
+      productPlan: "ProductPlan behavior intent",
+      electronicsSpec: "ElectronicsSpec pin/interface/power assignments",
+      electronicsValidation: "Electronics Validation block/warning state",
+      directEditingAllowed: false
+    },
     targetBoard: {
       componentId: board.componentId || "",
       boardFamily: board.boardFamily || "",
       productionFirmware: false
     },
-    pinMap: assignments.flatMap((assignment) => assignment.pins || []),
-    interfaceMap: assignments.map((assignment) => ({
-      assignmentId: assignment.assignmentId,
-      componentId: assignment.componentId,
-      interfaceType: assignment.interfaceType,
-      bus: assignment.bus || "",
-      status: assignment.status
-    })),
-    files: [
-      {
-        path: "firmware/bringup/pin_map.json",
-        purpose: "Pin and interface map for internal bring-up only."
-      },
-      {
-        path: "firmware/bringup/main.cpp",
-        purpose: "Module init scaffold and smoke-test entrypoint."
-      },
-      {
-        path: "firmware/bringup/bringup_checklist.md",
-        purpose: "Manual bench checklist for power-on and module tests."
-      }
-    ],
-    moduleInitScaffold: assignments.map((assignment) => moduleInitForAssignment(assignment)),
-    testEntrypoints: [
-      "boot_serial_log",
-      "display_test_pattern",
-      "button_gpio_event",
-      "ambient_sensor_read",
-      "usb_power_stability_check"
-    ],
-    checklist: [
-      "Power board from current-limited USB-C bench supply.",
-      "Confirm 3.3V rail before attaching display or sensor modules.",
-      "Flash bring-up scaffold and read serial boot log.",
-      "Run display test pattern and button event smoke tests.",
-      "Record any pin or cable-route mismatch back into ProductPlan evidence."
-    ],
+    pinMap: bringUpConfig.pinMap,
+    interfaceMap: bringUpConfig.interfaceMap,
+    powerPath: bringUpConfig.powerPath,
+    bringUpConfig,
+    files,
+    generatedFiles,
+    moduleInitScaffold,
+    testEntrypoints,
+    behaviorRules,
+    checklist,
+    checks,
+    blockedReasons,
     boundaries: {
       fullFirmwareRuntime: false,
       ota: false,
@@ -1008,7 +1025,12 @@ export function createPrototypeReadinessReport({
     developmentBoardScaffold: {
       status: developmentBoardScaffold.status || "",
       targetBoard: developmentBoardScaffold.targetBoard || {},
-      fileCount: (developmentBoardScaffold.files || []).length
+      fileCount: (developmentBoardScaffold.files || []).length,
+      generatedFileCount: (developmentBoardScaffold.generatedFiles || []).length,
+      checkStatuses: Object.fromEntries((developmentBoardScaffold.checks || []).map((check) => [check.name, check.status])),
+      testEntrypointCount: (developmentBoardScaffold.testEntrypoints || []).length,
+      behaviorPlaceholderCount: (developmentBoardScaffold.behaviorRules || []).length,
+      blockedReasonCount: (developmentBoardScaffold.blockedReasons || []).length
     },
     electronicsLayoutSummary: electronicsLayout
       ? {
@@ -2054,4 +2076,454 @@ function moduleInitForAssignment(assignment = {}) {
     status: assignment.status === "blocked" ? "blocked" : "stub",
     productionReady: false
   };
+}
+
+function createBringUpConfig({
+  productPlan = {},
+  electronicsSpec = {},
+  board = {},
+  assignments = [],
+  moduleInitScaffold = [],
+  testEntrypoints = [],
+  behaviorRules = []
+} = {}) {
+  return {
+    version: "bringup_config_v1",
+    source: "ProductPlan and ElectronicsSpec derived bring-up scaffold",
+    sourceOfTruth: {
+      productPlan: "ProductPlan",
+      electronicsSpec: "ElectronicsSpec",
+      directEditingAllowed: false
+    },
+    productPlan: {
+      productType: productPlan.productType || "",
+      userIntent: productPlan.userIntent || electronicsSpec.productPlan?.userIntent || "",
+      requirements: clone(productPlan.requirements || electronicsSpec.productPlan?.requirements || {})
+    },
+    targetBoard: {
+      componentId: board.componentId || "",
+      boardFamily: board.boardFamily || "",
+      productionFirmware: false
+    },
+    powerPath: {
+      sourceComponentId: electronicsSpec.powerPath?.sourceComponentId || "",
+      controllerComponentId: electronicsSpec.powerPath?.controllerComponentId || "",
+      controllerInputRail: electronicsSpec.powerPath?.controllerInputRail || "",
+      routeId: electronicsSpec.powerPath?.routeId || "",
+      status: electronicsSpec.powerPath?.status || ""
+    },
+    powerBudget: clone(electronicsSpec.powerBudget || {}),
+    pinMap: assignments.flatMap((assignment) => (assignment.pins || []).map((pin) => ({
+      assignmentId: assignment.assignmentId || "",
+      componentId: pin.componentId || assignment.componentId || "",
+      interfaceType: assignment.interfaceType || "",
+      bus: assignment.bus || "",
+      signal: pin.signal || "",
+      pin: pin.pin || "",
+      status: assignment.status || "",
+      sharedBus: assignment.sharedBus === true
+    }))),
+    interfaceMap: assignments.map((assignment) => ({
+      assignmentId: assignment.assignmentId || "",
+      componentId: assignment.componentId || "",
+      interfaceType: assignment.interfaceType || "",
+      bus: assignment.bus || "",
+      connectorId: assignment.connectorId || "",
+      pinCount: (assignment.pins || []).length,
+      status: assignment.status || "",
+      note: assignment.note || ""
+    })),
+    moduleInit: clone(moduleInitScaffold),
+    testEntrypoints: clone(testEntrypoints),
+    behaviorRules: clone(behaviorRules),
+    boundaries: {
+      internalBringUpOnly: true,
+      productionFirmware: false,
+      fullFirmwareRuntime: false,
+      ota: false,
+      deviceRuntime: false,
+      longTermUserProgramming: false
+    },
+    directEditingAllowed: false
+  };
+}
+
+function bringUpFileManifest() {
+  return [
+    {
+      path: "firmware/bringup/pin_map.json",
+      kind: "config",
+      purpose: "Pin and interface map for internal bring-up only."
+    },
+    {
+      path: "firmware/bringup/main.cpp",
+      kind: "source_stub",
+      purpose: "Module init scaffold and smoke-test entrypoint."
+    },
+    {
+      path: "firmware/bringup/bringup_checklist.md",
+      kind: "checklist",
+      purpose: "Manual bench checklist for power-on and module tests."
+    },
+    {
+      path: "firmware/bringup/behavior_rules.placeholder.json",
+      kind: "behavior_placeholder",
+      purpose: "ProductPlan-derived behavior placeholders for internal bring-up."
+    }
+  ];
+}
+
+function generatedBringUpFiles({ bringUpConfig = {}, checklist = [] } = {}) {
+  return [
+    {
+      path: "firmware/bringup/pin_map.json",
+      kind: "config",
+      status: "generated",
+      contentEncoding: "utf8",
+      content: pinMapJsonContent(bringUpConfig)
+    },
+    {
+      path: "firmware/bringup/main.cpp",
+      kind: "source_stub",
+      status: "generated",
+      contentEncoding: "utf8",
+      content: mainCppContent(bringUpConfig)
+    },
+    {
+      path: "firmware/bringup/bringup_checklist.md",
+      kind: "checklist",
+      status: "generated",
+      contentEncoding: "utf8",
+      content: checklistMarkdownContent({ bringUpConfig, checklist })
+    },
+    {
+      path: "firmware/bringup/behavior_rules.placeholder.json",
+      kind: "behavior_placeholder",
+      status: "generated",
+      contentEncoding: "utf8",
+      content: behaviorRulesJsonContent(bringUpConfig)
+    }
+  ];
+}
+
+function pinMapJsonContent(bringUpConfig = {}) {
+  return `${JSON.stringify({
+    version: bringUpConfig.version || "bringup_config_v1",
+    source: "ElectronicsSpec",
+    productionReady: false,
+    targetBoard: bringUpConfig.targetBoard || {},
+    powerPath: bringUpConfig.powerPath || {},
+    pinMap: bringUpConfig.pinMap || [],
+    interfaceMap: bringUpConfig.interfaceMap || [],
+    boundaries: bringUpConfig.boundaries || {}
+  }, null, 2)}\n`;
+}
+
+function mainCppContent(bringUpConfig = {}) {
+  const moduleInit = Array.isArray(bringUpConfig.moduleInit) ? bringUpConfig.moduleInit : [];
+  const testEntrypoints = Array.isArray(bringUpConfig.testEntrypoints) ? bringUpConfig.testEntrypoints : [];
+  const initCalls = moduleInit
+    .filter((item) => item.status !== "blocked")
+    .map((item) => sanitizeFunctionName(item.functionName))
+    .filter(Boolean);
+  const testCalls = testEntrypoints
+    .map((item) => sanitizeFunctionName(item.functionName))
+    .filter(Boolean);
+  const functionNames = [...new Set([...initCalls, ...testCalls])];
+  const prototypes = [
+    ...functionNames.map((name) => `void ${name}();`),
+    "void run_bringup_smoke_tests();"
+  ];
+  const stubs = functionNames.flatMap((name) => [
+    `void ${name}() {`,
+    `  Serial.println("stub:${escapeCString(name)}");`,
+    "}",
+    ""
+  ]);
+  return [
+    "// Generated by Forge for internal prototype bring-up only.",
+    "// This scaffold is not production firmware or a device runtime.",
+    "#include <Arduino.h>",
+    "",
+    ...prototypes,
+    "",
+    "void setup() {",
+    "  Serial.begin(115200);",
+    "  delay(200);",
+    `  Serial.println("Forge bring-up scaffold: ${escapeCString(bringUpConfig.targetBoard?.componentId || "unknown_board")}");`,
+    ...(initCalls.length
+      ? initCalls.map((name) => `  ${name}();`)
+      : ["  Serial.println(\"No module init assignments are available.\");"]),
+    "}",
+    "",
+    "void loop() {",
+    "  run_bringup_smoke_tests();",
+    "  delay(1000);",
+    "}",
+    "",
+    ...stubs,
+    "void run_bringup_smoke_tests() {",
+    ...(testCalls.length
+      ? testCalls.map((name) => `  ${name}();`)
+      : ["  Serial.println(\"No smoke test entrypoints are available.\");"]),
+    "}",
+    ""
+  ].join("\n");
+}
+
+function checklistMarkdownContent({ bringUpConfig = {}, checklist = [] } = {}) {
+  const lines = [
+    "# Forge internal bring-up checklist",
+    "",
+    "- Scope: internal prototype bring-up only.",
+    `- Target board: ${bringUpConfig.targetBoard?.componentId || "missing"}`,
+    `- Power path route: ${bringUpConfig.powerPath?.routeId || "missing"}`,
+    "- Production firmware: false",
+    ""
+  ];
+  for (const item of checklist) {
+    lines.push(`- ${item}`);
+  }
+  lines.push("");
+  return `${lines.join("\n")}\n`;
+}
+
+function behaviorRulesJsonContent(bringUpConfig = {}) {
+  return `${JSON.stringify({
+    version: "behavior_rules_placeholder_v1",
+    source: "ProductPlan behavior placeholder",
+    productionReady: false,
+    rules: bringUpConfig.behaviorRules || [],
+    boundaries: {
+      behaviorPlaceholderOnly: true,
+      fullFirmwareRuntime: false,
+      deviceRuntime: false,
+      ota: false
+    }
+  }, null, 2)}\n`;
+}
+
+function uniqueModuleInitScaffold(records = []) {
+  const seen = new Map();
+  return records.map((record) => {
+    const baseName = sanitizeFunctionName(record.functionName || "init_module");
+    const count = (seen.get(baseName) || 0) + 1;
+    seen.set(baseName, count);
+    return {
+      ...record,
+      functionName: count === 1 ? baseName : `${baseName}_${count}`
+    };
+  });
+}
+
+function testEntrypointsFor(assignments = []) {
+  const entrypoints = [
+    testEntrypoint("boot_serial_log", "test_boot_serial_log", "Confirm serial boot log and board reset behavior."),
+    testEntrypoint("usb_power_stability_check", "test_usb_power_stability_check", "Confirm current-limited USB-C power remains stable.")
+  ];
+  if (assignments.some((assignment) => assignment.interfaceType === "spi")) {
+    entrypoints.push(testEntrypoint("display_test_pattern", "test_display_test_pattern", "Show a display test pattern."));
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "gpio")) {
+    entrypoints.push(testEntrypoint("button_gpio_event", "test_button_gpio_event", "Log button GPIO transitions."));
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "i2c")) {
+    entrypoints.push(testEntrypoint("ambient_sensor_read", "test_ambient_sensor_read", "Read one I2C ambient sensor sample."));
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "gpio_pwm")) {
+    entrypoints.push(testEntrypoint("speaker_pwm_beep", "test_speaker_pwm_beep", "Emit a short PWM speaker test tone."));
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "camera_parallel")) {
+    entrypoints.push(testEntrypoint(
+      "camera_frame_probe_human_review",
+      "test_camera_frame_probe_human_review",
+      "Probe camera frame wiring only after human review approval."
+    ));
+  }
+  return entrypoints;
+}
+
+function testEntrypoint(testId, functionName, purpose) {
+  return {
+    testId,
+    functionName,
+    purpose,
+    status: "stub",
+    productionReady: false
+  };
+}
+
+function behaviorRulePlaceholders(productPlan = {}, assignments = []) {
+  const requirements = productPlan.requirements || {};
+  const hasDisplay = requirements.display === true || assignments.some((assignment) => assignment.interfaceType === "spi");
+  const hasButton = Number(requirements.buttons || 0) > 0
+    || assignments.some((assignment) => assignment.interfaceType === "gpio");
+  const hasAmbientSensor = requirements.ambientSensor === true
+    || assignments.some((assignment) => assignment.interfaceType === "i2c");
+  const hasSpeaker = requirements.speaker === true
+    || assignments.some((assignment) => assignment.interfaceType === "gpio_pwm");
+  const rules = [
+    behaviorRule("boot_ready_signal", "boot", hasDisplay ? "show_display_test_pattern" : "print_serial_ready_log")
+  ];
+  if (hasButton) {
+    rules.push(behaviorRule("button_smoke_event", "button_press", "print_button_event_to_serial"));
+  }
+  if (hasAmbientSensor) {
+    rules.push(behaviorRule("ambient_sensor_sample", "test_interval", "print_one_ambient_sensor_sample"));
+  }
+  if (hasSpeaker) {
+    rules.push(behaviorRule("speaker_smoke_tone", "manual_test", "emit_short_pwm_test_tone"));
+  }
+  return rules;
+}
+
+function behaviorRule(ruleId, trigger, action) {
+  return {
+    ruleId,
+    trigger,
+    action,
+    source: "ProductPlan behavior placeholder",
+    status: "placeholder",
+    productionReady: false
+  };
+}
+
+function bringUpChecklistFor({ electronicsSpec = {}, assignments = [], behaviorRules = [] } = {}) {
+  const checklist = [
+    "Power board from current-limited USB-C bench supply.",
+    "Confirm 3.3V rail before attaching display or sensor modules.",
+    "Flash bring-up scaffold and read serial boot log."
+  ];
+  if (electronicsSpec.powerPath?.routeId) {
+    checklist.push(`Verify power route ${electronicsSpec.powerPath.routeId} before closing the shell.`);
+  } else {
+    checklist.push("Confirm the USB-C to controller power route before flashing.");
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "spi")) {
+    checklist.push("Run display test pattern and confirm screen orientation.");
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "gpio")) {
+    checklist.push("Press each button and confirm one serial event per press.");
+  }
+  if (assignments.some((assignment) => assignment.interfaceType === "i2c")) {
+    checklist.push("Read one I2C sensor sample and record the observed value.");
+  }
+  if (behaviorRules.length > 0) {
+    checklist.push("Review behavior placeholder rules before any firmware expansion.");
+  }
+  checklist.push("Record any pin or cable-route mismatch back into ProductPlan evidence.");
+  return checklist;
+}
+
+function scaffoldChecksFor({
+  board = {},
+  assignments = [],
+  electronicsSpec = {},
+  electronicsValidation = {},
+  generatedFiles = []
+} = {}) {
+  const validationChecks = Object.fromEntries((electronicsValidation.checks || []).map((check) => [check.name, check.status]));
+  const blockedAssignments = assignments.filter((assignment) => assignment.status === "blocked");
+  const pinCount = assignments.reduce((sum, assignment) => sum + (assignment.pins || []).length, 0);
+  const fileManifestCount = bringUpFileManifest().length;
+  const generatedFileContentsReady = generatedFiles.length === fileManifestCount
+    && generatedFiles.every((file) => typeof file.content === "string" && file.content.trim().length > 0);
+  return [
+    {
+      name: "target_board_present",
+      status: board.componentId ? "pass" : "blocked",
+      componentId: board.componentId || ""
+    },
+    {
+      name: "pin_map_available",
+      status: pinCount > 0 && blockedAssignments.length === 0 ? "pass" : "blocked",
+      pinCount,
+      blockedAssignmentCount: blockedAssignments.length
+    },
+    {
+      name: "interfaces_ready",
+      status: blockedAssignments.length > 0
+        || validationChecks.interface_assignment === "blocked"
+        || validationChecks.interface_route_alignment === "blocked"
+        || validationChecks.pin_conflicts === "blocked"
+        ? "blocked"
+        : "pass",
+      assignmentCount: assignments.length,
+      blockedAssignmentCount: blockedAssignments.length
+    },
+    {
+      name: "power_path_ready",
+      status: validationChecks.power_path === "blocked" || !electronicsSpec.powerPath?.routeId ? "blocked" : "pass",
+      routeId: electronicsSpec.powerPath?.routeId || ""
+    },
+    {
+      name: "generated_file_contents",
+      status: generatedFileContentsReady ? "pass" : "blocked",
+      generatedFileCount: generatedFiles.length,
+      expectedFileCount: fileManifestCount
+    }
+  ];
+}
+
+function scaffoldBlockedReasons({
+  board = {},
+  assignments = [],
+  electronicsValidation = {},
+  checks = []
+} = {}) {
+  const reasons = [];
+  if (!board.componentId) {
+    reasons.push({
+      type: "missing_target_board",
+      message: "Development board scaffold requires a Forge-controlled main controller.",
+      componentId: ""
+    });
+  }
+  for (const error of electronicsValidation.errors || []) {
+    reasons.push({
+      type: error.type || "electronics_validation_error",
+      message: error.message || "Electronics validation blocked bring-up scaffold generation.",
+      componentId: error.componentId || "",
+      assignmentId: error.assignmentId || ""
+    });
+  }
+  for (const assignment of assignments.filter((item) => item.status === "blocked")) {
+    reasons.push({
+      type: "interface_assignment_blocked",
+      message: assignment.note || "Interface assignment is blocked.",
+      componentId: assignment.componentId || "",
+      assignmentId: assignment.assignmentId || ""
+    });
+  }
+  for (const check of checks.filter((item) => item.status === "blocked")) {
+    reasons.push({
+      type: `scaffold_check_${check.name}`,
+      message: `${check.name} did not pass for development-board bring-up scaffold.`,
+      componentId: check.componentId || "",
+      assignmentId: ""
+    });
+  }
+  const seen = new Set();
+  return reasons.filter((reason) => {
+    const key = `${reason.type}:${reason.componentId || ""}:${reason.assignmentId || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sanitizeFunctionName(value) {
+  const name = String(value || "stub")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!name) return "stub";
+  return /^[0-9]/.test(name) ? `_${name}` : name;
+}
+
+function escapeCString(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, "\\\"");
 }

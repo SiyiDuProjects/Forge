@@ -616,6 +616,8 @@ Prototype readiness is currently produced as an internal `prototype_readiness` r
 
 `assembly_plan.json` includes ordered prototype build steps with sequence dependencies, GeometrySpec route/feature/placement refs, service/access-volume refs, manual-confirmation flags, and compact assembly checks. It blocks missing required assembly evidence but does not claim full DFA, robotic assembly, production assembly optimization, injection molding, or manufacturing readiness.
 
+`development_board_scaffold.json` includes a Supporting V1 `bringUpConfig`, generated internal bring-up file contents, module init stubs, test entrypoints, ProductPlan-derived behavior placeholders, manual checklist items, compact scaffold checks, and blocked reasons. Generated source stubs are evidence for internal bring-up only; they do not claim OTA, full firmware runtime, production firmware, or long-term device behavior programming.
+
 ### `POST /api/quote/estimate`
 
 Convenience route for a `quote_estimate` job. v1 returns a pre-review estimate with assumptions and no low/mid/high tiers.

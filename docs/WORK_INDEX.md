@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - Development Board Scaffold V1
+
+- Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Supporting V1 development-board scaffold hardening slice. `development_board_scaffold.json` now carries a derived `bringUpConfig`, generated internal bring-up file contents for `pin_map.json`, `main.cpp`, `bringup_checklist.md`, and `behavior_rules.placeholder.json`, ProductPlan-derived behavior placeholders, module init stubs, smoke-test entrypoints, compact scaffold checks, and blocked reasons when electronics validation prevents safe bring-up generation.
+- Status: implemented in the current working tree; this is not completion of the full V1 goal.
+- Source note: `docs/source-materials/2026-06-07-development-board-scaffold-v1.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/prototype_readiness.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: development board scaffold, bring-up config, pin_map.json, main.cpp, behavior_rules.placeholder.json, module init stubs, scaffold checks, blocked reasons, prototype readiness.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes with 34 tests; full `npm run check` passes with 113 tests.
+- Boundary: Supporting V1 only. This does not add custom PCB, schematic generation, OTA, full firmware runtime, production firmware, device runtime, long-term user behavior programming, manufacturing readiness, supplier ordering, certification, robotics, complex mechanisms, arbitrary user component import, or frontend redesign.
+
 ### 2026-06-07 - AssemblyPlan Feasibility V1
 
 - Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 AssemblyPlan hardening slice. `AssemblyPlan` steps now carry sequence numbers, dependency ids, GeometrySpec route/feature/placement refs, access-volume refs, and manual confirmation flags. `AssemblyPlan.checks` validates GeometrySpec linkage, step dependency ordering, required step evidence refs, and manual-confirmation requirements; missing required assembly evidence can block `AssemblyPlan` and `PrototypeReadinessReport`.

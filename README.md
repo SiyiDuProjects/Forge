@@ -34,7 +34,7 @@ Current order boundary: `提交审核下单` writes a local human review packet 
 - ComponentDescriptor selection through `forge-tool descriptor-select` and the workspace select API so a ready descriptor can create a pending ProductPlan revision without hand-written patch JSON or generated artifacts
 - ComponentDescriptor retirement through Forge actions, `forge-tool descriptor-retire`, and the workspace retire API so ProductPlan-scoped promoted descriptors can be excluded from future selection while historical revision evidence remains intact
 - Generation evidence reports with source-chain, validation coverage, SHA-256 file integrity metadata, and post-write artifact audit for confirmed GLB/STL/STEP outputs
-- Prototype readiness Core V1 under `src/core/prototype_readiness.mjs`: Forge-controlled ElectronicsDescriptor seed evidence and trust report, derived `ElectronicsSpec`, prototype-level electronics validation for voltage, power path, and connector-route alignment, GeometrySpec-linked `AssemblyPlan` feasibility checks, development-board bring-up scaffold, and `PrototypeReadinessReport` persisted with each ProductPlan revision
+- Prototype readiness Core V1 under `src/core/prototype_readiness.mjs`: Forge-controlled ElectronicsDescriptor seed evidence and trust report, derived `ElectronicsSpec`, prototype-level electronics validation for voltage, power path, and connector-route alignment, GeometrySpec-linked `AssemblyPlan` feasibility checks, development-board bring-up config plus generated bring-up file contents, and `PrototypeReadinessReport` persisted with each ProductPlan revision
 - Shared contracts under `src/contracts`
 - Project and architecture docs under `docs`
 - Lightweight work and source-material indexes for future context recovery

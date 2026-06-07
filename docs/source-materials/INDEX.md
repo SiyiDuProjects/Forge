@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### Development Board Scaffold V1
+
+- File: `docs/source-materials/2026-06-07-development-board-scaffold-v1.md`
+- Status: implemented by adding Supporting V1 bring-up config, generated `pin_map.json`, `main.cpp`, `bringup_checklist.md`, behavior placeholder content, compact scaffold checks, blocked reasons, PrototypeReadinessReport summary fields, and regression coverage.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/CONTRACTS.md`
+- Key handles: development board scaffold, bring-up config, pin_map.json, main.cpp, behavior_rules.placeholder.json, module init stubs, scaffold checks, prototype readiness.
+
 ### AssemblyPlan Feasibility V1
 
 - File: `docs/source-materials/2026-06-07-assembly-plan-feasibility-v1.md`
