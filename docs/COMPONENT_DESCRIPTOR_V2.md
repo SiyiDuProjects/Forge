@@ -86,7 +86,7 @@ Current seed descriptors are registry-ready with `trustLevel: proxy_seed` and `r
 
 Forge exposes a no-side-effect draft intake report through `inspectComponentDescriptorDraft`, `forge-tool descriptor-draft --descriptor-file <descriptor.json> --sources-file <sources.md> --expected-id <component_id>`, and `POST /api/workspaces/:workspaceId/components/draft-package`.
 
-Use this before adding a new same-type part to the loaded descriptor library. It validates a proposed `ComponentDescriptor v2` object plus source-note text using the same schema and connector/mating checks as loaded descriptors, then returns:
+Use this before adding a Forge-controlled same-type part to the loaded descriptor library. This is an internal/operator or vetted supplier-source workflow, not a user upload surface. It validates a proposed `ComponentDescriptor v2` object plus source-note text using the same schema and connector/mating checks as loaded descriptors, then returns:
 
 - `readyForLibraryPromotion`: whether the draft is structured enough to become a reviewable library package.
 - `readyForSelection: false`: the draft is not selectable by `ProductPlan` until it is actually added to the loaded descriptor library.
@@ -98,7 +98,7 @@ This draft intake step does not convert arbitrary datasheets, supplier pages, PD
 
 ## Workspace Draft Packages
 
-A Forge project workspace can hold drop-in descriptor drafts under:
+A Forge project workspace can hold controlled descriptor drafts under:
 
 ```text
 component-drafts/<draftId>/descriptor.json
@@ -107,7 +107,7 @@ component-drafts/<draftId>/sources.md
 
 Forge exposes read-only workspace draft discovery through `inspectWorkspaceComponentDescriptorDrafts`, `forge-tool descriptor-drafts --draft-id <draftId>`, and `POST /api/workspaces/:workspaceId/components/drafts`.
 
-Forge exposes confirmation-required draft scaffolding through `scaffoldWorkspaceComponentDescriptorDraft`, `forge-tool descriptor-scaffold --draft-id <draftId> --component-type <type>`, and `POST /api/workspaces/:workspaceId/components/drafts/scaffold`. This creates `descriptor.json` and `sources.md` authoring files with TODO fields so a same-type replacement package can be filled without guessing the descriptor shape.
+Forge exposes confirmation-required draft scaffolding through `scaffoldWorkspaceComponentDescriptorDraft`, `forge-tool descriptor-scaffold --draft-id <draftId> --component-type <type>`, and `POST /api/workspaces/:workspaceId/components/drafts/scaffold`. This creates `descriptor.json` and `sources.md` authoring files with TODO fields so an internal or vetted same-type replacement package can be filled without guessing the descriptor shape.
 
 Scaffolded descriptors intentionally start with `reviewStatus: "draft"`, zero dimensions, manual-review risk flags, and source/mechanical TODOs. `reviewStatus: "draft"` is a package-blocking state: the draft can be scanned for feedback, but it cannot be promoted, selected, or used for GeometrySpec/GLB/STL/STEP generation until the supported fields are filled and the descriptor is marked `reviewable`.
 
@@ -139,7 +139,7 @@ Regression coverage now exercises the full workspace source-spec path for both C
 
 Forge exposes confirmation-required workspace draft promotion through `promoteWorkspaceComponentDescriptorDraft`, `forge-tool descriptor-promote --draft-id <draftId>`, and `POST /api/workspaces/:workspaceId/components/drafts/:draftId/promote`.
 
-Workspace draft promotion reuses the same descriptor draft validation and ProductPlan-scoped promotion path as direct `descriptorJson` promotion. A dropped-in package is not selectable until it passes inspection, is promoted, and is then selected through a normal ProductPlan component patch.
+Workspace draft promotion reuses the same descriptor draft validation and ProductPlan-scoped promotion path as direct `descriptorJson` promotion. A controlled package is not selectable until it passes inspection, is promoted, and is then selected through a normal ProductPlan component patch.
 
 Workspace draft reports include compact `packageIntegrity` metadata: descriptor/source SHA-256 hashes and byte counts. Promotion stores the same fields under `source.workspaceDraft` so future package evidence, ContextPack, revision ledger, and generation evidence can identify the exact descriptor/source content used without embedding raw source text.
 
@@ -149,7 +149,7 @@ To intentionally use a changed workspace draft, re-promote it with replacement, 
 
 When a workspace draft is promoted, Forge preserves compact origin metadata from `component-drafts/<draftId>/` in the ProductPlan component library entry. If that descriptor is selected and generated, the origin appears in package/source evidence, mechanical constraint summaries, `generation_evidence_report.json` `descriptorEvidence.componentOrigins`, ContextPack summaries, and the revision ledger. Raw `sources.md` text is not embedded into compact summaries.
 
-This is the current supported shape for "put a new part package into the project." It still requires a structured `ComponentDescriptor v2` plus source notes; arbitrary spec prose or PDFs are source material, not trusted generation input by themselves.
+This is the current supported shape for "onboard a controlled part package into the project." It still requires a structured `ComponentDescriptor v2` plus source notes; arbitrary user uploads, arbitrary spec prose, or PDFs are source material only and are not trusted generation input by themselves.
 
 ## ProductPlan Library Promotion
 

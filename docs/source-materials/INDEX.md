@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### Controlled Parts Only Boundary
+
+- File: `docs/source-materials/2026-06-07-controlled-parts-only-boundary.md`
+- Status: implemented by tightening docs and generated project guidance so ComponentDescriptor draft/spec onboarding is treated as a Forge-controlled internal/supplier-vetted library pipeline, not a user-uploaded-parts product surface.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/WORK_INDEX.md`
+- Key handles: controlled parts only, no user uploaded parts, ComponentDescriptor, workspace draft, vetted supplier source, Forge-controlled library.
+
 ### 3D GLB Thin Mesh Audit Diagnostics V3 P55
 
 - File: `docs/source-materials/2026-06-07-3d-glb-thin-mesh-audit-diagnostics-v3-p55.md`

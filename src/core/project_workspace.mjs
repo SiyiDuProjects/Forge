@@ -891,11 +891,11 @@ function writeSkillFiles({ workspacePath }) {
 
 - Search ComponentDescriptor-backed modules before adding parts.
 - Inspect a component package when changing to a specific descriptor id.
-- Use descriptor-scaffold to create a workspace draft package skeleton when a same-type component is missing and the user wants to provide specs.
-- Use descriptor-specs to apply explicit source-spec text to an existing workspace draft package. Prefer --specs-file for source notes placed inside the project workspace, such as component-drafts/<draftId>/source-specs.md; this writes draft files only and must still be followed by inspection, promotion, selection, and explicit generation.
+- Use descriptor-scaffold to create a workspace draft package skeleton only for Forge-controlled or vetted supplier/internal same-type component specs, not arbitrary user uploads.
+- Use descriptor-specs to apply explicit source-spec text from controlled source notes to an existing workspace draft package. Prefer --specs-file for source notes placed inside the project workspace, such as component-drafts/<draftId>/source-specs.md; this writes draft files only and must still be followed by inspection, promotion, selection, and explicit generation.
 - Do not directly edit component-drafts/<draftId>/descriptor.json or sources.md; those canonical draft files are guarded and must be written through descriptor-scaffold or descriptor-specs.
-- Inspect a descriptor draft before asking to add a new same-type component package.
-- Promote a valid descriptor draft only when the user wants it available in this ProductPlan's component library.
+- Inspect a descriptor draft before adding a controlled same-type component package.
+- Promote a valid descriptor draft only when the Forge-controlled library pipeline should make it available in this ProductPlan's component library.
 - Use supported components when possible.
 - Do not invent mechanical metadata, holes, connectors, keepouts, or cable exits.
 - If a component is missing from the loaded library, treat a valid draft as ready for library promotion only; it is not selectable until promoted into the ProductPlan component library or added to the global ComponentDescriptor library.

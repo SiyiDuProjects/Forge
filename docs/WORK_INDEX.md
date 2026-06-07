@@ -20,6 +20,18 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - Controlled Parts Only Boundary
+
+- Scope: tighten the Forge component onboarding product boundary after user correction. ComponentDescriptor draft/spec/scaffold/promote/select remains a controlled internal/operator/Codex product-agent or vetted supplier-source library pipeline. It must not be described as a user-facing arbitrary part upload workflow, because Forge intends to produce physical prototypes from Forge-controlled parts.
+- Status: implemented in docs and generated project guidance.
+- Source note: `docs/source-materials/2026-06-07-controlled-parts-only-boundary.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/3D_TRUSTED_GENERATION_V3_COMPLETION_AUDIT.md`, `README.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/project_workspace.mjs`
+- Retrieval handles: controlled parts only, no user uploaded parts, ComponentDescriptor, workspace draft, source-specs.md, vetted supplier source, Forge-controlled library, frontend no upload surface.
+- Verification: full `npm run check` passes with 107 tests after this documentation and generated-guidance update.
+- Boundary: this is a product-boundary correction only. It does not remove descriptor draft tooling, broaden manufacturing behavior, add user upload, or change generated artifact behavior.
+
 ### 2026-06-07 - 3D Trusted Generation V3 Completion Audit
 
 - Scope: record the final requirement-by-requirement audit for the bounded Forge 3D trusted generation loop V3 goal. The audit maps ProductPlan source of truth, ComponentDescriptor v2 constraints, source-spec onboarding, explainable layout, GeometrySpec validation, explicit generation confirmation, GLB/STL/STEP artifacts, generation evidence, zero-thickness safeguards, compact runtime evidence, safe action contracts, guarded files, and read-only preview boundaries to current code, docs, and regression tests.
@@ -493,7 +505,7 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ### 2026-06-06 - 3D Workspace Descriptor Drafts V3 P26
 
-- Scope: add a workspace drop-in draft package path for new same-type parts. Forge now scans `component-drafts/<draftId>/descriptor.json` plus `sources.md` through read-only `inspectWorkspaceComponentDescriptorDrafts`, promotes a checked package through confirmation-required `promoteWorkspaceComponentDescriptorDraft`, supports `forge-tool descriptor-drafts --draft-id <id>` and `forge-tool descriptor-promote --draft-id <id>`, exposes `/api/workspaces/:workspaceId/components/drafts` and `/api/workspaces/:workspaceId/components/drafts/:draftId/promote`, and documents the commands in generated project `FORGE_TOOLS.md`.
+- Scope: add a workspace controlled draft package path for same-type parts in the Forge-controlled library pipeline. Forge now scans `component-drafts/<draftId>/descriptor.json` plus `sources.md` through read-only `inspectWorkspaceComponentDescriptorDrafts`, promotes a checked package through confirmation-required `promoteWorkspaceComponentDescriptorDraft`, supports `forge-tool descriptor-drafts --draft-id <id>` and `forge-tool descriptor-promote --draft-id <id>`, exposes `/api/workspaces/:workspaceId/components/drafts` and `/api/workspaces/:workspaceId/components/drafts/:draftId/promote`, and documents the commands in generated project `FORGE_TOOLS.md`.
 - Status: implemented in the current working tree.
 - Source note: `docs/source-materials/2026-06-06-3d-workspace-descriptor-drafts-v3-p26.md`
 - Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
