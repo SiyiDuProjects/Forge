@@ -1933,6 +1933,24 @@ function descriptorFromReferenceAndSpecs({
     extracted.fieldNames ||= [];
     extracted.fieldNames.push("externalFeaturePositionLocalMm");
   }
+  const keepoutPatch = volumesWithExtractedSpecs({
+    volumes: descriptor.keepouts || [],
+    volumeSpecs: extracted.keepoutVolumeSpecs
+  });
+  descriptor.keepouts = keepoutPatch.volumes;
+  if (keepoutPatch.appliedIds.length > 0 && !extracted.fieldNames?.includes("keepoutVolumeSpec")) {
+    extracted.fieldNames ||= [];
+    extracted.fieldNames.push("keepoutVolumeSpec");
+  }
+  const accessVolumePatch = volumesWithExtractedSpecs({
+    volumes: descriptor.accessVolumes || [],
+    volumeSpecs: extracted.accessVolumeSpecs
+  });
+  descriptor.accessVolumes = accessVolumePatch.volumes;
+  if (accessVolumePatch.appliedIds.length > 0 && !extracted.fieldNames?.includes("accessVolumeSpec")) {
+    extracted.fieldNames ||= [];
+    extracted.fieldNames.push("accessVolumeSpec");
+  }
   descriptor.sourceNotes = {
     ...(descriptor.sourceNotes || {}),
     summary: extracted.summary || `Workspace descriptor draft ${draftId} filled from explicit user-provided specs.`,
@@ -2048,6 +2066,30 @@ function externalFeaturePositionSpecFromMatch(match = []) {
   };
 }
 
+function volumesWithExtractedSpecs({
+  volumes = [],
+  volumeSpecs = []
+} = {}) {
+  const patched = Array.isArray(volumes) ? clone(volumes) : [];
+  const appliedIds = [];
+  for (const spec of volumeSpecs || []) {
+    const id = String(spec?.id || "").trim();
+    if (!id) continue;
+    const index = patched.findIndex((volume) => volume.id === id || volume.type === id);
+    if (index < 0) continue;
+    const next = { ...patched[index] };
+    if (Array.isArray(spec.sizeMm) && spec.sizeMm.length === 3) {
+      next.sizeMm = spec.sizeMm.map((value) => Number(value));
+    }
+    if (Array.isArray(spec.positionLocalMm) && spec.positionLocalMm.length === 3) {
+      next.positionLocalMm = spec.positionLocalMm.map((value) => Number(value));
+    }
+    patched[index] = next;
+    appliedIds.push(next.id || id);
+  }
+  return { volumes: patched, appliedIds };
+}
+
 function mountingHolesWithExtractedSpecs({
   mountingHoles = [],
   pitchMm = null,
@@ -2133,6 +2175,12 @@ function extractDescriptorSpecs(specsText = "") {
   ]);
   const connectorPositionSpecs = extractConnectorPositionSpecs(text);
   const externalFeaturePositionSpecs = extractExternalFeaturePositionSpecs(text);
+  const keepoutVolumeSpecs = extractVolumeSpecs(text, {
+    labelPattern: "keepout(?:\\s+volume)?|keepout\\s+zone|clearance\\s+keepout|避让区|避让空间"
+  });
+  const accessVolumeSpecs = extractVolumeSpecs(text, {
+    labelPattern: "access(?:\\s+volume)?|service\\s+access|wire\\s+access|connector\\s+access|维修空间|接入空间|服务空间|走线空间"
+  });
   const extracted = {
     dimensionsMm,
     openingSizeMm,
@@ -2140,6 +2188,8 @@ function extractDescriptorSpecs(specsText = "") {
     mountingHoleDiameterMm,
     connectorPositionSpecs,
     externalFeaturePositionSpecs,
+    keepoutVolumeSpecs,
+    accessVolumeSpecs,
     manufacturer: extractLabeledValue(text, ["manufacturer", "maker", "vendor", "厂商", "制造商"]),
     partNumber: extractLabeledValue(text, ["part number", "part no", "pn", "型号", "料号"]),
     displayName: extractLabeledValue(text, ["display name", "name", "名称"]),
@@ -2148,12 +2198,46 @@ function extractDescriptorSpecs(specsText = "") {
   };
   const fieldNames = [];
   for (const [field, value] of Object.entries(extracted)) {
-    if (["fieldNames", "connectorPositionSpecs", "externalFeaturePositionSpecs"].includes(field)) continue;
+    if (["fieldNames", "connectorPositionSpecs", "externalFeaturePositionSpecs", "keepoutVolumeSpecs", "accessVolumeSpecs"].includes(field)) continue;
     if (Array.isArray(value) ? value.length > 0 : Boolean(value)) fieldNames.push(field);
   }
   return {
     ...extracted,
     fieldNames
+  };
+}
+
+function extractVolumeSpecs(text = "", { labelPattern = "" } = {}) {
+  const specsById = new Map();
+  const chunks = String(text || "").split(/[;\n]+/);
+  for (const chunk of chunks) {
+    const parsed = parseVolumeSpecChunk(chunk, { labelPattern });
+    if (!parsed) continue;
+    const existing = specsById.get(parsed.id) || { id: parsed.id };
+    specsById.set(parsed.id, {
+      ...existing,
+      ...parsed,
+      sizeMm: parsed.sizeMm || existing.sizeMm,
+      positionLocalMm: parsed.positionLocalMm || existing.positionLocalMm
+    });
+  }
+  return [...specsById.values()].filter((spec) => spec.sizeMm || spec.positionLocalMm);
+}
+
+function parseVolumeSpecChunk(chunk = "", { labelPattern = "" } = {}) {
+  const text = String(chunk || "").trim();
+  if (!text || !labelPattern) return null;
+  const idPattern = new RegExp(`(?:${labelPattern})\\s+([A-Za-z0-9_.-]+)`, "i");
+  const idMatch = text.match(idPattern);
+  if (!idMatch?.[1]) return null;
+  const sizeMm = parseThreeAxisMm(text, [
+    /(?:sizeMm|size|volume|clearance|尺寸|大小|空间)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm?/i
+  ]);
+  const positionLocalMm = parsePositionTriplet(text);
+  return {
+    id: idMatch[1].trim(),
+    ...(sizeMm ? { sizeMm: [sizeMm.width, sizeMm.height, sizeMm.depth] } : {}),
+    ...(positionLocalMm ? { positionLocalMm } : {})
   };
 }
 
@@ -2165,6 +2249,15 @@ function extractConnectorPositionSpecs(text = "") {
     if (parsed) specs.push(parsed);
   }
   return specs;
+}
+
+function parsePositionTriplet(text = "") {
+  const compact = String(text || "");
+  const labeled = compact.match(/(?:positionLocalMm|position|pos|位置|坐标)\s*[:：=]?\s*\[?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (labeled) return [Number(labeled[1]), Number(labeled[2]), Number(labeled[3])];
+  const axes = compact.match(/x\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?y\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?z\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (axes) return [Number(axes[1]), Number(axes[2]), Number(axes[3])];
+  return null;
 }
 
 function parseConnectorPositionChunk(chunk = "") {

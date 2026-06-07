@@ -423,6 +423,75 @@ test("workspace descriptor specs extract external feature positions and gate bad
   )));
 });
 
+test("workspace descriptor specs extract keepout and access volumes and gate thin sizes", async () => {
+  const plan = createActionPlan();
+  const scaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "button_volume_specs",
+    componentType: "button",
+    displayName: "Spec Button With Volume Constraints"
+  });
+  assert.equal(scaffold.ok, true);
+
+  const patch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "button_volume_specs",
+    specsText: [
+      "dimensions 10 x 10 x 6 mm",
+      "opening 8 x 8 mm",
+      "keepout button_travel_keepout size 12 x 12 x 9 mm position 0, 0, 6 mm",
+      "access volume button_wire_access size 12 x 9 x 7 mm position 0, -9, -2 mm",
+      "manufacturer Forge Test",
+      "part number BTN-VOLUME-SPECS",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(patch.ok, true);
+  assert.equal(patch.specsApplied, true);
+  assert.equal(patch.readyForLibraryPromotion, true);
+  assert.ok(patch.extractedFields.includes("keepoutVolumeSpec"));
+  assert.ok(patch.extractedFields.includes("accessVolumeSpec"));
+
+  const descriptorPath = join(projectWorkspacePath(plan.planId), "component-drafts", "button_volume_specs", "descriptor.json");
+  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  const travelKeepout = descriptor.keepouts.find((keepout) => keepout.id === "button_travel_keepout");
+  const wireAccess = descriptor.accessVolumes.find((access) => access.id === "button_wire_access");
+  assert.deepEqual(travelKeepout.sizeMm, [12, 12, 9]);
+  assert.deepEqual(travelKeepout.positionLocalMm, [0, 0, 6]);
+  assert.deepEqual(wireAccess.sizeMm, [12, 9, 7]);
+  assert.deepEqual(wireAccess.positionLocalMm, [0, -9, -2]);
+  assert.equal(wireAccess.connectorId, "signal");
+
+  const badScaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "button_bad_access_volume_specs",
+    componentType: "button",
+    displayName: "Spec Button With Thin Access Volume"
+  });
+  assert.equal(badScaffold.ok, true);
+  const badPatch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "button_bad_access_volume_specs",
+    specsText: [
+      "dimensions 10 x 10 x 6 mm",
+      "opening 8 x 8 mm",
+      "access volume button_wire_access size 12 x 0.5 x 7 mm position 0, -9, -2 mm",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(badPatch.ok, true);
+  assert.equal(badPatch.specsApplied, true);
+  assert.equal(badPatch.readyForLibraryPromotion, false);
+  assert.ok(badPatch.blockingIssues.some((issue) => (
+    issue.code === "descriptor_preview_solid_dimension_too_thin"
+      && issue.source === "accessVolumes.button_wire_access.sizeMm"
+      && issue.axis === "height"
+      && issue.actualMm === 0.5
+  )));
+});
+
 test("descriptor draft promotion makes a same-type part selectable through ProductPlan", () => {
   const plan = createActionPlan();
   const seed = listComponentDescriptors().find((item) => item.id === "button_6mm");

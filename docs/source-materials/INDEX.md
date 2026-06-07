@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### 3D Descriptor Keepout And Access Volume Spec Extraction V3 P52
+
+- File: `docs/source-materials/2026-06-07-3d-descriptor-volume-spec-extraction-v3-p52.md`
+- Status: implemented by extending `descriptor-specs` extraction to capture explicitly labeled existing keepout/access-volume size and position from workspace source specs, while leaving volume creation, access-volume connector ids, promotion, selection, and artifact generation separate.
+- Related docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, keepout volume, access volume, sizeMm, positionLocalMm, descriptor_preview_solid_dimension_too_thin.
+
 ### 3D Descriptor External Feature Position Spec Extraction V3 P51
 
 - File: `docs/source-materials/2026-06-07-3d-descriptor-external-feature-position-spec-extraction-v3-p51.md`

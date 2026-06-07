@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Descriptor Keepout And Access Volume Spec Extraction V3 P52
+
+- Scope: extend workspace descriptor spec patching so explicit keepout/access-volume size and position constraints in `source-specs.md` can update existing `keepouts[]` and `accessVolumes[]` entries in a draft descriptor. `descriptor-specs` now recognizes bounded forms such as `keepout button_travel_keepout size 12 x 12 x 9 mm position 0, 0, 6 mm` and `access volume button_wire_access size 12 x 9 x 7 mm position 0, -9, -2 mm`, updates only known same-type reference ids or types, and leaves volume creation plus access-volume `connectorId` unchanged. Thin dimensions still produce `descriptor_preview_solid_dimension_too_thin` and block promotion.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-volume-spec-extraction-v3-p52.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, keepout volume, access volume, sizeMm, positionLocalMm, descriptor_preview_solid_dimension_too_thin.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs` passes with 19 tests, including valid keepout/access-volume extraction and a bad thin access-volume size blocked by descriptor readiness. Full `npm run check` passes with 104 tests.
+- Boundary: this updates reviewable prototype descriptor volume metadata only. It does not create volume ids or connector bindings, parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate production tolerances, claim production readiness, or enable CAD/model editing.
+
 ### 2026-06-07 - 3D Descriptor External Feature Position Spec Extraction V3 P51
 
 - Scope: extend workspace descriptor spec patching so explicit external feature local-position constraints in `source-specs.md` can update existing `externalFeatures[].positionLocalMm` fields in a draft descriptor. `descriptor-specs` now recognizes bounded English and Chinese forms such as `feature button_hole position 1, 0, 3 mm`, updates only external feature ids/types inherited from the same-type reference descriptor, and leaves feature type/face/layout support unchanged. Bad anchors still produce `descriptor_local_position_outside_body_envelope` and block promotion.
