@@ -15,6 +15,7 @@ import { confirmForgeChatTool, resolveChatRuntime, runForgeChatTurn } from "./sr
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn } from "./src/core/product_plan.mjs";
+import { runProductConversationTurn } from "./src/core/product_conversation.mjs";
 import { listProjectWorkspaces, readProjectWorkspacePlan, readRevisionLedger } from "./src/core/project_workspace.mjs";
 import { createProductPlanForRuntime } from "./src/core/runtime_plan_creation.mjs";
 import { getRuntimeStatus } from "./src/core/runtime_status.mjs";
@@ -119,6 +120,22 @@ async function handleApi(request, response, url) {
     sendJson(response, 200, {
       ok: true,
       workspaces: listProjectWorkspaces({ limit })
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/conversations/turn/stream") {
+    const body = await readJsonBody(request);
+    const runtime = runtimeForRequest(body);
+    await sendProductConversationStream(request, response, {
+      workspaceId: body.workspaceId || "",
+      sessionId: body.sessionId || "session_default",
+      userMessage: body.userMessage || body.message || "",
+      language: body.language || "zh",
+      modelProvider: runtime.modelProvider,
+      runtimeProvider: runtime.runtimeProvider,
+      mode: body.mode || "normal",
+      confirmation: body.confirmation || null
     });
     return;
   }
@@ -907,6 +924,43 @@ async function sendChatTurnStream(request, response, options = {}) {
       error: {
         code: "CHAT_STREAM_FAILED",
         message: error instanceof Error ? error.message : "Chat stream failed."
+      }
+    });
+  } finally {
+    if (!response.writableEnded && !response.destroyed) response.end();
+  }
+}
+
+async function sendProductConversationStream(request, response, options = {}) {
+  const abortController = streamAbortController(request, response);
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-store, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no"
+  });
+  writeSse(response, "trace", {
+    type: "stream_started",
+    at: new Date().toISOString(),
+    workspaceId: options.workspaceId || "",
+    sessionId: options.sessionId || "session_default",
+    runtimeProvider: options.runtimeProvider || "",
+    modelProvider: options.modelProvider || "",
+    conversationOnly: true
+  });
+  try {
+    const result = await runProductConversationTurn({
+      ...options,
+      abortSignal: abortController.signal,
+      onTraceEvent: (event) => writeSse(response, "trace", event)
+    });
+    writeSse(response, result?.ok ? "final" : "error", result);
+  } catch (error) {
+    writeSse(response, "error", {
+      ok: false,
+      error: {
+        code: "CONVERSATION_STREAM_FAILED",
+        message: error instanceof Error ? error.message : "Conversation stream failed."
       }
     });
   } finally {

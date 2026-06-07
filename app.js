@@ -74,6 +74,7 @@ const copy = {
     emptyComposer: "请先输入硬件需求",
     rerunNotice: "已更新 ProductPlan revision",
     chatRuntimeNotice: "Forge 工具链已更新项目",
+    chatConversationNotice: "Codex 已回复，尚未创建 ProductPlan",
     chatConfirmationRequired: "需要确认后执行",
     chatTraceTitle: "Codex 工作流",
     chatTraceRunning: "正在执行",
@@ -153,7 +154,7 @@ const copy = {
     modelLoading: "正在加载 3D 模型",
     modelLoaded: "真实 3D 预览已加载",
     modelLoadFailed: "3D 模型加载失败",
-    modelSketchPreview: "结构草图预览",
+    modelSketchPreview: "等待真实 3D 生成",
     generateModelCta: "生成模型",
     generateModelCommand: "生成模型",
     generationPending: "待确认生成",
@@ -199,7 +200,7 @@ const copy = {
     reviewSubmitCta: "生成本地审核资料",
     reviewContactCta: "填写审核联系信息",
     noManufacturing: "不付款、不生产、不联系供应商",
-    noPlan: "输入第一条硬件想法后生成方案。",
+    noPlan: "可以先聊天确认细节；明确要创建方案时再生成 ProductPlan。",
     standardShell: "标准 3D 打印外壳",
     settingsRows: [
       ["内部原型模式", "提交只生成本地人工审核资料，不付款、不生产、不接供应商。"],
@@ -251,6 +252,7 @@ const copy = {
     emptyComposer: "Enter a hardware request first",
     rerunNotice: "ProductPlan revision updated",
     chatRuntimeNotice: "Forge tool runtime updated the project",
+    chatConversationNotice: "Codex replied; no ProductPlan created",
     chatConfirmationRequired: "Confirmation required",
     chatTraceTitle: "Codex transcript",
     chatTraceRunning: "Running",
@@ -330,7 +332,7 @@ const copy = {
     modelLoading: "Loading 3D model",
     modelLoaded: "Real 3D preview loaded",
     modelLoadFailed: "3D model failed to load",
-    modelSketchPreview: "Structure sketch preview",
+    modelSketchPreview: "Waiting for real 3D generation",
     generateModelCta: "Generate model",
     generateModelCommand: "generate model",
     generationPending: "waiting for generation",
@@ -376,7 +378,7 @@ const copy = {
     reviewSubmitCta: "Generate local review material",
     reviewContactCta: "Fill review contact details",
     noManufacturing: "No payment, production, or supplier contact",
-    noPlan: "Send the first hardware idea to generate a plan.",
+    noPlan: "Start with conversation and clarification; create a ProductPlan only when explicitly requested.",
     standardShell: "Standard 3D printed shell",
     settingsRows: [
       ["Internal prototype mode", "Submission writes local human review material; no payment, production, or supplier order starts."],
@@ -415,6 +417,7 @@ const state = {
   loading: false,
   submittingReview: false,
   chatSessionId: "session_default",
+  chatSessionMessages: [],
   lastChatTurn: null,
   activeTrace: null,
   pendingConfirmation: null,
@@ -575,6 +578,7 @@ function createProjectRecord({
     title: title || projectTitleFromPlan(productPlan) || t("newDraftTitle"),
     productPlan,
     chatSessionId: createSessionId(projectId),
+    chatSessionMessages: [],
     lastChatTurn: null,
     activeTrace: null,
     pendingConfirmation: null,
@@ -628,6 +632,7 @@ function saveActiveProject() {
   project.runtimeError = state.runtimeError;
   project.runtimeProvider = state.runtimeProvider;
   project.runtimeBinding = state.activeTrace?.runtimeBinding || project.runtimeBinding || null;
+  project.chatSessionMessages = state.chatSessionMessages || project.chatSessionMessages || [];
   project.contactInfo = { ...state.contactInfo };
   project.title = state.productPlan ? projectTitleFromPlan(state.productPlan) : (project.title || t("newDraftTitle"));
 }
@@ -639,6 +644,7 @@ function activateProject(projectId) {
   state.activeProjectId = project.projectId;
   state.productPlan = project.productPlan || null;
   state.chatSessionId = project.chatSessionId || createSessionId(project.projectId);
+  state.chatSessionMessages = project.chatSessionMessages || [];
   state.lastChatTurn = project.lastChatTurn || null;
   state.activeTrace = project.activeTrace || null;
   state.pendingConfirmation = project.pendingConfirmation || null;
@@ -666,6 +672,7 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
   project.productPlan = productPlan;
   project.title = projectTitleFromPlan(productPlan);
   project.chatSessionId = fields.chatSessionId || (wasDraft ? createSessionId(productPlan.planId) : project.chatSessionId) || createSessionId(productPlan.planId);
+  project.chatSessionMessages = fields.chatSessionMessages || project.chatSessionMessages || [];
   project.lastChatTurn = fields.lastChatTurn ?? project.lastChatTurn ?? null;
   project.activeTrace = fields.activeTrace ?? project.activeTrace ?? null;
   project.pendingConfirmation = fields.pendingConfirmation ?? project.pendingConfirmation ?? null;
@@ -677,6 +684,7 @@ function upsertProjectFromPlan(productPlan, fields = {}) {
   state.activeProjectId = project.projectId;
   state.productPlan = productPlan;
   state.chatSessionId = project.chatSessionId;
+  state.chatSessionMessages = project.chatSessionMessages;
   state.lastChatTurn = project.lastChatTurn;
   state.activeTrace = project.activeTrace;
   state.pendingConfirmation = project.pendingConfirmation;
@@ -700,6 +708,19 @@ function mergeConversationFromSession(productPlan, messages = []) {
       createdAt: message.createdAt || ""
     }))
   };
+}
+
+function chatSessionMessagesForDisplay(messages = []) {
+  return (messages || [])
+    .filter((message) => message?.role === "user" || message?.role === "assistant")
+    .map((message) => ({
+      turnId: message.messageId || message.metadata?.turnId || "",
+      role: message.role === "assistant" ? "assistant" : "user",
+      text: message.content || message.text || "",
+      assetIds: [],
+      createdAt: message.createdAt || ""
+    }))
+    .filter((message) => message.text);
 }
 
 function restoredTurnFromChatSession({ payload = {}, project = {}, productPlan = null, pendingConfirmation = null } = {}) {
@@ -851,6 +872,7 @@ function removeProjectFromList(projectId) {
     } else {
       state.activeProjectId = "";
       state.productPlan = null;
+      state.chatSessionMessages = [];
       state.lastChatTurn = null;
       state.activeTrace = null;
       state.pendingConfirmation = null;
@@ -926,27 +948,6 @@ function isAbortError(error) {
   return error?.name === "AbortError";
 }
 
-function planCreationTrace(response = {}, message = "") {
-  return {
-    ok: true,
-    traceState: "done",
-    traceKind: "plan_create",
-    userMessage: message,
-    runtimeProvider: response.runtimeProvider || currentRuntimeProvider(),
-    modelProvider: response.modelProvider || response.runtimeProvider || currentRuntimeProvider(),
-    runtimeBinding: response.runtimeBinding || null,
-    bindingId: response.bindingId || response.runtimeBinding?.bindingId || "",
-    assistantMessage: response.assistantMessage || t("rerunNotice"),
-    toolCalls: [],
-    toolResults: [],
-    modelResponses: response.runtimeBinding ? [{ ok: true, toolCallCount: 0, runtimeBinding: response.runtimeBinding, bindingId: response.runtimeBinding.bindingId || "" }] : [],
-    traceEvents: response.traceEvents || [],
-    eventsAppended: [],
-    revision: response.revision || response.productPlan?.revisions?.at?.(-1) || null,
-    productPlan: response.productPlan || null
-  };
-}
-
 function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
   if (token !== state.workspaceToken || !state.activeTrace) return;
   const traceEvent = {
@@ -984,6 +985,8 @@ function applyStreamTraceEvent(event = {}, token = state.workspaceToken) {
 async function sendTurn(message) {
   const token = ++state.workspaceToken;
   const hasRealPlan = state.productPlan?.planId && !state.productPlan.planId.startsWith("fallback");
+  const project = activeProject() || createDraftProject();
+  const conversationWorkspaceId = hasRealPlan ? state.productPlan.planId : project.projectId;
   const controller = new AbortController();
   state.loading = true;
   state.activeRequestController = controller;
@@ -1001,35 +1004,62 @@ async function sendTurn(message) {
         modelProvider: currentRuntimeProvider(),
         runtimeProvider: currentRuntimeProvider()
       }, (event) => applyStreamTraceEvent(event, token), { signal: controller.signal })
-      : await apiPostStream("/api/plans/stream", {
-        initialMessage: message,
+      : await apiPostStream("/api/conversations/turn/stream", {
+        workspaceId: conversationWorkspaceId,
+        sessionId: state.chatSessionId,
+        userMessage: message,
         language: state.lang,
         runtime: currentRuntimeProvider(),
         modelProvider: currentRuntimeProvider(),
         runtimeProvider: currentRuntimeProvider()
       }, (event) => applyStreamTraceEvent(event, token), { signal: controller.signal });
     if (token !== state.workspaceToken) return;
-    if (!response.productPlan) throw new Error("ProductPlan was not returned.");
     const streamTraceEvents = state.activeTrace?.traceEvents || [];
     const completedTrace = normalizeTranscriptTurn(
-      hasRealPlan ? response : planCreationTrace(response, message),
+      response.productPlan ? response : { ...response, userMessage: message },
       {
         traceEvents: streamTraceEvents,
         workspaceEvents: response.eventsAppended || []
       }
     );
-    upsertProjectFromPlan(response.productPlan, {
-      lastChatTurn: completedTrace,
-      activeTrace: null,
-      pendingConfirmation: response.pendingConfirmation || null,
-      runtimeError: "",
-      runtimeBinding: response.runtimeBinding || completedTrace.runtimeBinding || null
-    });
+    if (response.productPlan) {
+      upsertProjectFromPlan(response.productPlan, {
+        lastChatTurn: completedTrace,
+        activeTrace: null,
+        pendingConfirmation: response.pendingConfirmation || null,
+        runtimeError: "",
+        runtimeBinding: response.runtimeBinding || completedTrace.runtimeBinding || null,
+        chatSessionMessages: response.messages || state.chatSessionMessages || []
+      });
+    } else {
+      const active = activeProject();
+      if (active && response.workspaceId && active.projectId !== response.workspaceId) {
+        active.projectId = response.workspaceId;
+        active.chatSessionId = response.sessionId || active.chatSessionId || createSessionId(response.workspaceId);
+        state.activeProjectId = active.projectId;
+      }
+      state.chatSessionId = response.sessionId || state.chatSessionId;
+      state.chatSessionMessages = response.messages || state.chatSessionMessages || [];
+      state.lastChatTurn = completedTrace;
+      state.activeTrace = null;
+      state.pendingConfirmation = response.pendingConfirmation || null;
+      state.runtimeError = "";
+      syncActiveProject({
+        chatSessionId: state.chatSessionId,
+        chatSessionMessages: state.chatSessionMessages,
+        lastChatTurn: completedTrace,
+        activeTrace: null,
+        pendingConfirmation: state.pendingConfirmation,
+        runtimeError: "",
+        runtimeBinding: response.runtimeBinding || completedTrace.runtimeBinding || null,
+        runtimeProvider: state.runtimeProvider
+      });
+    }
     state.lastChatTurn = completedTrace;
     state.activeTrace = null;
     state.pendingConfirmation = response.pendingConfirmation || null;
     state.activeSidebar = "chat";
-    setNotice(response.pendingConfirmation ? t("chatConfirmationRequired") : (hasRealPlan ? t("chatRuntimeNotice") : t("rerunNotice")));
+    setNotice(response.pendingConfirmation ? t("chatConfirmationRequired") : (response.productPlan ? t("chatRuntimeNotice") : t("chatConversationNotice")));
     refreshRuntimeStatus({ renderAfter: true }).catch(() => {});
     return true;
   } catch (error) {
@@ -1500,12 +1530,16 @@ function renderConversation() {
 function renderChatWorkspace() {
   const processedTranscript = processedTranscriptViewModel(state.activeTrace || state.lastChatTurn, state.pendingConfirmation);
   if (!state.productPlan) {
+    const messages = visibleConversationMessages(chatSessionMessagesForDisplay(state.chatSessionMessages), processedTranscript);
     dom.workspaceView.innerHTML = `
-      <section class="workspace-card">
-        <p>${escapeHtml(t("noPlan"))}</p>
-        ${state.runtimeError ? `<p class="error-message">${escapeHtml(state.runtimeError)}</p>` : ""}
-      </section>
+      ${messages.length ? `<div class="message-stack">${messages.map((turn) => renderMessage(turn)).join("")}</div>` : `
+        <section class="workspace-card">
+          <p>${escapeHtml(t("noPlan"))}</p>
+          ${state.runtimeError ? `<p class="error-message">${escapeHtml(state.runtimeError)}</p>` : ""}
+        </section>
+      `}
       ${renderTranscriptSection(processedTranscript)}
+      ${messages.length && state.runtimeError ? `<section class="inline-panel runtime-error-panel"><p class="error-message">${escapeHtml(state.runtimeError)}</p></section>` : ""}
     `;
     return;
   }
@@ -2672,6 +2706,7 @@ function startNewProject() {
   state.activeSidebar = "chat";
   state.loading = false;
   state.submittingReview = false;
+  state.chatSessionMessages = [];
   state.lastChatTurn = null;
   state.activeTrace = null;
   state.pendingConfirmation = null;
@@ -2681,6 +2716,7 @@ function startNewProject() {
     activeTrace: null,
     pendingConfirmation: null,
     runtimeError: "",
+    chatSessionMessages: [],
     runtimeProvider: state.runtimeProvider
   });
   if (dom.ideaInput) dom.ideaInput.value = "";
@@ -2698,7 +2734,7 @@ function modelGlbUrl(revision) {
 }
 
 function previewEngineForRevision(revision) {
-  return modelGlbUrl(revision) ? "three" : "canvas2d";
+  return modelGlbUrl(revision) ? "three" : "none";
 }
 
 function renderPreviewStatus(revision) {
@@ -2718,11 +2754,30 @@ function drawPreview() {
     }
     if (canvas.dataset.previewEngine === "three") {
       drawThreePreview(canvas, revision);
+    } else if (canvas.dataset.previewEngine === "none") {
+      disposeThreePreview(canvas.dataset.previewId);
+      clearPreviewCanvas(canvas);
     } else {
       disposeThreePreview(canvas.dataset.previewId);
       drawDevicePreview(canvas, revision);
     }
   });
+}
+
+function clearPreviewCanvas(canvas) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, "#f7f7f4");
+  gradient.addColorStop(1, "#ebeee8");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(55, 62, 59, .62)";
+  ctx.font = `${Math.max(18, Math.round(canvas.width / 34))}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(renderPreviewStatus(currentRevision()), canvas.width / 2, canvas.height / 2);
 }
 
 function drawThreePreview(canvas, revision) {
@@ -3353,7 +3408,7 @@ document.addEventListener("pointerdown", (event) => {
   const target = event.target instanceof Element ? event.target : null;
   const canvas = target?.closest("[data-device-canvas]");
   if (!canvas) return;
-  if (canvas.dataset.previewEngine === "three") return;
+  if (canvas.dataset.previewEngine !== "canvas2d") return;
   state.viewer.dragging = true;
   state.viewer.dragMode = event.shiftKey ? "pan" : "orbit";
   state.viewer.lastX = event.clientX;
@@ -3384,7 +3439,7 @@ document.addEventListener("pointerup", () => {
 document.addEventListener("wheel", (event) => {
   const target = event.target instanceof Element ? event.target : null;
   const canvas = target?.closest("[data-device-canvas]");
-  if (!canvas || canvas.dataset.previewEngine === "three") return;
+  if (!canvas || canvas.dataset.previewEngine !== "canvas2d") return;
   event.preventDefault();
   const nextZoom = state.viewer.zoom + (event.deltaY > 0 ? -0.08 : 0.08);
   state.viewer.zoom = Math.max(0.72, Math.min(1.42, nextZoom));

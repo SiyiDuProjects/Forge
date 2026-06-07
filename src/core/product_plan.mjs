@@ -16,11 +16,11 @@ import { applyWorkspacePatches, clone, createEmptyProductPlan, createRevisionDif
 
 const plans = new Map();
 
-export function createProductPlan({ message, initialMessage, assets = [], language = "zh" } = {}) {
+export function createProductPlan({ planId: requestedPlanId = "", message, initialMessage, assets = [], language = "zh" } = {}) {
   const text = String(message || initialMessage || "").trim();
   const lang = SUPPORTED_LANGUAGES.includes(language) ? language : "zh";
   const now = new Date().toISOString();
-  const planId = makeId("plan");
+  const planId = String(requestedPlanId || "").trim() || makeId("plan");
   const assetRefs = registerAssets(assets);
   const workspaceState = createWorkspaceState({
     workspaceId: planId,

@@ -13,10 +13,11 @@ import { runForgeChatTurn, confirmForgeChatTool, resolveChatRuntime } from "../s
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
 import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
+import { runProductConversationTurn } from "../src/core/product_conversation.mjs";
 import { createProductPlanForRuntime } from "../src/core/runtime_plan_creation.mjs";
 import { getRuntimeStatus } from "../src/core/runtime_status.mjs";
 import { exportToolsForModel } from "../src/core/tool_schema_exporter.mjs";
-import { projectWorkspacePath, readProjectManifest, readRuntimeBinding, readWorkspaceEvents, updateRuntimeBinding } from "../src/core/project_workspace.mjs";
+import { projectWorkspacePath, readProjectManifest, readRuntimeBinding, readRuntimePlan as readWorkspaceRuntimePlan, readWorkspaceEvents, updateRuntimeBinding } from "../src/core/project_workspace.mjs";
 import { getToolMetadata, listToolMetadata } from "../src/core/tool_registry.mjs";
 
 function createChatPlan() {
@@ -77,6 +78,177 @@ function writeWorkspaceButtonDraft(plan, draftId = "button_8mm_chat") {
     "Status: reviewable proxy, not production verified."
   ].join("\n"));
 }
+
+test("Codex-native empty conversation keeps greeting out of ProductPlan state", async () => {
+  const workspaceId = "conversation-greeting-no-plan";
+  const codexFactory = async () => ({
+    startThread() {
+      return {
+        id: "conversation-greeting-thread",
+        async run() {
+          return codexJson("你好，我在。我们可以先讨论你的硬件想法。");
+        }
+      };
+    },
+    resumeThread(threadId) {
+      return {
+        id: threadId,
+        async run() {
+          return codexJson("你好，我在。");
+        }
+      };
+    }
+  });
+
+  const result = await runProductConversationTurn({
+    workspaceId,
+    sessionId: "test_greeting_no_plan",
+    userMessage: "你好",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.workspaceId, workspaceId);
+  assert.equal(result.productPlan, null);
+  assert.equal(getProductPlan(workspaceId), undefined);
+  assert.equal(readWorkspaceRuntimePlan({ workspaceId }), null);
+  assert.ok(result.messages.some((message) => message.role === "user" && message.content === "你好"));
+  assert.ok(result.messages.some((message) => message.role === "assistant" && /你好/.test(message.content)));
+  const manifest = readProjectManifest({ workspaceId });
+  assert.equal(manifest.conversationOnly, true);
+  assert.equal(manifest.currentRevisionId, "");
+  const events = readWorkspaceEvents({ workspaceId });
+  assert.ok(events.some((event) => event.type === "conversation_workspace_created"));
+  assert.equal(events.some((event) => event.type === "revision_created"), false);
+  assert.equal(events.some((event) => event.type === "artifacts_generated"), false);
+});
+
+test("Forge gate rejects mistaken ProductPlan creation tool call for greeting", async () => {
+  const workspaceId = "conversation-greeting-tool-denied";
+  let runCount = 0;
+  const codexFactory = async () => ({
+    startThread() {
+      return {
+        id: "conversation-greeting-denied-thread",
+        async run() {
+          runCount += 1;
+          if (runCount === 1) {
+            return {
+              finalResponse: JSON.stringify({
+                assistantMessage: "",
+                toolCalls: [
+                  {
+                    name: "createProductPlan",
+                    inputJson: JSON.stringify({
+                      initialMessage: "你好",
+                      language: "zh"
+                    })
+                  }
+                ]
+              })
+            };
+          }
+          return codexJson("你好，我不会因为问候创建硬件方案。");
+        }
+      };
+    }
+  });
+
+  const result = await runProductConversationTurn({
+    workspaceId,
+    sessionId: "test_greeting_tool_denied",
+    userMessage: "你好",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.productPlan, null);
+  assert.equal(getProductPlan(workspaceId), undefined);
+  assert.equal(result.toolCalls[0].name, "createProductPlan");
+  assert.equal(result.toolCalls[0].permission.decision, "deny");
+  assert.equal(result.toolResults[0].result.error.code, "MISSING_PRODUCT_PLAN_INTENT");
+  assert.equal(readWorkspaceRuntimePlan({ workspaceId }), null);
+});
+
+test("Product conversation refuses non-Codex fallback chat", async () => {
+  const workspaceId = "conversation-requires-codex";
+  const result = await runProductConversationTurn({
+    workspaceId,
+    sessionId: "test_requires_codex",
+    userMessage: "你好",
+    runtimeProvider: "mock"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "CODEX_RUNTIME_REQUIRED");
+  assert.equal(getProductPlan(workspaceId), undefined);
+  assert.equal(readWorkspaceRuntimePlan({ workspaceId }), null);
+  const manifest = readProjectManifest({ workspaceId });
+  assert.equal(manifest.conversationOnly, true);
+});
+
+test("Codex-native conversation creates ProductPlan only through explicit Forge tool", async () => {
+  const workspaceId = "conversation-explicit-plan";
+  let runCount = 0;
+  const codexFactory = async () => ({
+    startThread() {
+      return fakeConversationPlanThread("conversation-plan-thread");
+    },
+    resumeThread(threadId) {
+      return fakeConversationPlanThread(threadId);
+    }
+  });
+
+  function fakeConversationPlanThread(id) {
+    return {
+      id,
+      async run() {
+        runCount += 1;
+        if (runCount === 1) {
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "",
+              toolCalls: [
+                {
+                  name: "createProductPlan",
+                  inputJson: JSON.stringify({
+                    initialMessage: "做一个 3.5 英寸木纹桌面屏，USB-C 供电，显示天气和照片。",
+                    language: "zh"
+                  })
+                }
+              ]
+            })
+          };
+        }
+        return codexJson("已创建方案草案，3D 模型仍等待你确认生成。");
+      }
+    };
+  }
+
+  const result = await runProductConversationTurn({
+    workspaceId,
+    sessionId: "test_explicit_plan",
+    userMessage: "帮我创建一个方案：做一个 3.5 英寸木纹桌面屏，USB-C 供电，显示天气和照片。",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.productPlan.planId, workspaceId);
+  assert.equal(result.toolCalls.map((call) => call.name).includes("createProductPlan"), true);
+  assert.equal(result.productPlan.revisions.length, 1);
+  const revision = result.productPlan.revisions[0];
+  assert.equal(revision.generationStatus, "pending_confirmation");
+  assert.equal(revision.modelArtifacts.status, "pending_confirmation");
+  assert.equal(revision.modelArtifacts.artifacts.glb, null);
+  assert.equal(revision.modelArtifacts.artifacts.stl, null);
+  assert.equal(revision.modelArtifacts.artifacts.step, null);
+  const persisted = readWorkspaceRuntimePlan({ workspaceId });
+  assert.equal(persisted.planId, workspaceId);
+  assert.equal(persisted.revisions.length, 1);
+});
 
 test("QueryEngine runs a direct model tool loop through Forge actions", async () => {
   const plan = createChatPlan();

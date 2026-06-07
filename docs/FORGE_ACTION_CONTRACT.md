@@ -2,7 +2,7 @@
 
 Status: implemented for the current local Forge prototype.
 
-This contract defines the controlled backend actions that Forge QueryEngine, chat runtimes, agents, or tool-calling layers can use to inspect and update a Forge workspace. Chat systems must call these actions instead of directly mutating files, meshes, GLB/STL artifacts, or raw `GeometrySpec`.
+This contract defines the controlled backend actions that Codex, Forge QueryEngine, chat runtimes, agents, or tool-calling layers can use to inspect and update a Forge workspace. Codex is the conversation brain: it decides whether to chat, ask clarifying questions, or call a Forge method/tool/interface. Forge backend actions only execute controlled state changes and guardrails; they must not become a separate conversation brain. Chat systems must call these actions instead of directly mutating files, meshes, GLB/STL artifacts, or raw `GeometrySpec`.
 
 ## Boundary
 
@@ -19,6 +19,8 @@ Chat / AI runtime
 ```
 
 The action layer does not add a chatbot framework, live LLM calls, memory, RAG, CAD editing, drag-to-edit geometry, supplier ordering, PCB design, or electrical validation.
+
+Blank/new projects begin as Codex-native conversation workspaces. They have a project manifest, chat session, and optional runtime binding, but no ProductPlan, revision, GeometrySpec, or generated artifacts until Codex explicitly calls `createProductPlan`.
 
 The local file-backed workspace is written under `data/workspaces/<planId>/`. It contains `project_manifest.json`, `product_plan.json`, read-only `revision_ledger.json`, append-only `events.jsonl`, `proposals/`, `revisions/`, `source-materials/`, `review/`, and generated markdown indexes. ProductPlan remains the authoritative product object; JSON/events remain authoritative for project state; markdown indexes are summaries.
 
@@ -137,6 +139,50 @@ Creates revision: no.
 Requires confirmation: no.
 
 Common errors: `UNKNOWN_WORKSPACE`.
+
+### `createProductPlan(input)`
+
+Purpose: create the first ProductPlan for a clean conversation workspace from an explicit hardware plan request.
+
+Input:
+
+```json
+{
+  "workspaceId": "conversation-...",
+  "initialMessage": "做一个 3.5 英寸木纹桌面屏，USB-C 供电",
+  "language": "zh"
+}
+```
+
+Output includes:
+
+- `created`
+- `planId`
+- `revisionId`
+- `currentRevisionId`
+- `generationStatus`
+- `modelArtifactsStatus`
+- `artifactPaths`
+- `productPlan`
+
+Side effects:
+
+- Writes `runtime_plan.json` and `product_plan.json`.
+- Writes the first revision folder.
+- Appends ProductPlan user/assistant events.
+
+Creates revision: yes, pending generation only.
+
+Requires confirmation: requires explicit ProductPlan creation intent or approved confirmation.
+
+Boundary:
+
+- Does not generate GLB/STL/STEP artifacts.
+- Converts the conversation workspace into a ProductPlan workspace using the same workspace id, preserving the Codex runtime binding.
+- Should only be called when Codex decides the user explicitly wants to create/start/generate a hardware ProductPlan.
+- Ordinary chat, greetings, meta questions, or unclear ideas should be answered or clarified without this tool.
+
+Common errors: `UNKNOWN_WORKSPACE`, `EMPTY_MESSAGE`, `PRODUCT_PLAN_EXISTS`, `MISSING_PRODUCT_PLAN_INTENT`.
 
 ### `searchComponentLibrary(input)`
 

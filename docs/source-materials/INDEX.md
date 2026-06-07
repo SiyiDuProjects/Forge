@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### Codex-Native Conversation Orchestration V1
+
+- File: `docs/source-materials/2026-06-07-codex-native-conversation-orchestration-v1.md`
+- Status: implemented by adding a Codex-only blank conversation entry, explicit `createProductPlan` tool, no-plan greeting guardrail, clean conversation workspace docs, and removal/hiding of misleading 2D fake preview behavior.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`
+- Key handles: Codex-native conversation, Codex as brain, no ProductPlan from greeting, clean new project, createProductPlan tool, no Forge backend chat fallback, 2D fake preview.
+
 ### Prototype Readiness Report Gate V1
 
 - File: `docs/source-materials/2026-06-07-prototype-readiness-report-gate-v1.md`

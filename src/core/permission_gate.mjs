@@ -160,15 +160,23 @@ export function checkToolPermission({
     return allow("Approved confirmation.");
   }
 
+  if (toolName === "createProductPlan" && !hasProductPlanCreationIntent(userMessage)) {
+    return deny("MISSING_PRODUCT_PLAN_INTENT", "Creating a ProductPlan requires an explicit hardware plan request.");
+  }
+
   if (!toolMetadata.permission?.requiresConfirmation) {
     return allow(toolMetadata.permission?.reason || "Tool does not require confirmation.");
+  }
+
+  if (toolName === "createProductPlan" && hasProductPlanCreationIntent(userMessage)) {
+    return allow("User explicitly requested a new hardware ProductPlan.");
   }
 
   if (toolName === "commitStagedChange" && hasConfirmationIntent(userMessage)) {
     return allow("User explicitly confirmed committing the staged change.");
   }
 
-  if (["applyDesignPatch", "applyWorkspaceDescriptorDraftSpecs", "promoteWorkspaceComponentDescriptorDraft", "selectComponentDescriptor", "revertRevision", "regenerateRevision", "submitReviewPacket"].includes(toolName) && hasExplicitMutationIntent(userMessage)) {
+  if (["createProductPlan", "applyDesignPatch", "applyWorkspaceDescriptorDraftSpecs", "promoteWorkspaceComponentDescriptorDraft", "selectComponentDescriptor", "revertRevision", "regenerateRevision", "submitReviewPacket"].includes(toolName) && hasExplicitMutationIntent(userMessage)) {
     return allow("User explicitly requested this workspace mutation.");
   }
 
@@ -187,6 +195,23 @@ export function hasConfirmationIntent(message = "") {
   if (!text) return false;
   if (QUESTION_PATTERNS.some((pattern) => pattern.test(text)) && !/\byes\b/i.test(text)) return false;
   return CONFIRMATION_INTENT_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function hasProductPlanCreationIntent(message = "") {
+  const text = String(message || "").trim();
+  if (!text) return false;
+  if (QUESTION_PATTERNS.some((pattern) => pattern.test(text))) return false;
+  return [
+    /\bcreate\b.*\b(plan|product|prototype|hardware)\b/i,
+    /\bbuild\b.*\b(product|prototype|device|hardware)\b/i,
+    /\bmake\b.*\b(product|prototype|device|hardware)\b/i,
+    /\bstart\b.*\b(plan|project|prototype)\b/i,
+    /创建.*(方案|项目|原型|硬件)/,
+    /生成.*(方案|项目|原型|硬件)/,
+    /开始.*(方案|项目|原型|硬件)/,
+    /(我想|我要|帮我|给我).*(做|设计|生成|创建).*(硬件|设备|原型|桌面屏|相框|显示屏|屏幕|按钮|传感器|外壳)/,
+    /(做|设计|生成|创建)(一个|个)?.*(硬件|设备|原型|桌面屏|相框|显示屏|屏幕|按钮|传感器|外壳)/
+  ].some((pattern) => pattern.test(text));
 }
 
 export function containsRawMutationTarget(value) {

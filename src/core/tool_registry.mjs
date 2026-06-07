@@ -29,6 +29,44 @@ const TOOL_DEFINITIONS = [
     rollback: noneRollback()
   }),
   tool({
+    name: "createProductPlan",
+    description: "Create the first ProductPlan for a clean Forge conversation workspace from an explicit hardware request. Does not generate GLB/STL/STEP artifacts.",
+    inputSchema: objectSchema({
+      workspaceId: stringSchema(),
+      initialMessage: stringSchema(),
+      language: stringSchema()
+    }, ["workspaceId", "initialMessage"]),
+    outputSchema: objectSchema({
+      ok: booleanSchema(),
+      created: booleanSchema(),
+      planId: stringSchema(),
+      revisionId: stringSchema(),
+      generationStatus: stringSchema(),
+      artifactPaths: objectSchema()
+    }),
+    permission: confirmation("Creates the first ProductPlan and a pending revision. It does not write GLB/STL/STEP artifacts."),
+    behavior: {
+      readOnly: false,
+      destructive: false,
+      createsProposal: false,
+      createsRevision: true,
+      writesArtifacts: false,
+      mutatesCurrentState: true
+    },
+    concurrency: workspaceWriteLock(),
+    sideEffects: [
+      "write runtime_plan.json",
+      "write product_plan.json",
+      "write revisions/{revisionId}/...",
+      "append events.jsonl user_message",
+      "append events.jsonl assistant_message"
+    ],
+    rollback: {
+      strategy: "start_new_clean_conversation_or_revert_revision",
+      automatic: false
+    }
+  }),
+  tool({
     name: "searchComponentLibrary",
     description: "Search supported ComponentDescriptor v2 records without mutating the workspace.",
     inputSchema: objectSchema({

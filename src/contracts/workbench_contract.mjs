@@ -103,6 +103,11 @@ export const API_CONTRACT = [
     response: ["ok", "workspaces"]
   },
   {
+    method: "POST",
+    path: "/api/conversations/turn/stream",
+    response: ["ok", "workspaceId", "sessionId", "assistantMessage", "messages", "productPlan"]
+  },
+  {
     method: "GET",
     path: "/api/workspaces/:workspaceId/plan",
     response: ["ok", "workspaceId", "productPlan"]

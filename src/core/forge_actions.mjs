@@ -13,6 +13,7 @@ import {
 import { createGeometrySpec, validateGeometrySpec } from "./geometry_generation.mjs";
 import {
   artifactPathsForRevision,
+  createProductPlan,
   createProductPlanRevisionFromPatches,
   currentRevision,
   getProductPlan,
@@ -150,6 +151,35 @@ export function getWorkspaceSummary({ workspaceId } = {}) {
     artifactStatus: artifactStatusForRevision(revision),
     proposalCount: proposalStore(plan).length,
     directEditingAllowed: false
+  });
+}
+
+export function createProductPlanFromConversation({
+  workspaceId = "",
+  initialMessage = "",
+  message = "",
+  language = "zh"
+} = {}) {
+  const id = String(workspaceId || "").trim();
+  if (!id) return fail("UNKNOWN_WORKSPACE", "workspaceId is required.");
+  if (getProductPlan(id)) return fail("PRODUCT_PLAN_EXISTS", `ProductPlan already exists for workspace: ${id}`);
+  const text = String(initialMessage || message || "").trim();
+  if (!text) return fail("EMPTY_MESSAGE", "initialMessage is required.");
+  const result = createProductPlan({
+    planId: id,
+    initialMessage: text,
+    language
+  });
+  return ok({
+    created: true,
+    workspaceId: result.productPlan.planId,
+    planId: result.productPlan.planId,
+    revisionId: result.revision?.revisionId || "",
+    currentRevisionId: result.productPlan.currentRevisionId || "",
+    generationStatus: result.revision?.generationStatus || "",
+    modelArtifactsStatus: result.revision?.modelArtifacts?.status || "",
+    artifactPaths: actionArtifactPaths(result.revision),
+    productPlan: clone(result.productPlan)
   });
 }
 

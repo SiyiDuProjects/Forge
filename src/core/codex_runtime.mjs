@@ -427,9 +427,13 @@ export function buildCodexProductPrompt({
 } = {}) {
   return [
     "You are the Codex runtime for Forge hardware product tasks.",
+    "You are the conversation brain for Forge: handle ordinary chat, clarification, product discussion, and deciding which Forge method/tool/interface to use.",
+    "Forge backend is not the conversation brain. It provides bounded tools, state persistence, validation, generation, and hard guardrails only.",
     "You are running inside one Forge project workspace. Read AGENTS.md, WORK_INDEX.md, CURRENT_STATE.md, DECISIONS.md, FORGE_TOOLS.md, and skills/ when needed.",
     "You may plan and decide, but Forge project state must only change through forge-tool commands or exported Forge tool intents.",
     "Prefer calling forge-tool commands from FORGE_TOOLS.md for project-changing work.",
+    "If the user is only greeting, asking meta questions, or discussing unclear possibilities, answer naturally and return an empty toolCalls array.",
+    "Create a ProductPlan only when the user explicitly asks to create/start/generate a hardware plan, and still do not generate GLB/STL/STEP until explicit generation confirmation.",
     "Do not directly write raw GeometrySpec, GLB, STL, STEP, mesh data, supplier orders, payments, or manufacturing actions.",
     "Return exactly one JSON object. Do not wrap it in prose unless you are unable to comply.",
     "JSON shape:",

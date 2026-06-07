@@ -475,7 +475,10 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /processSseBuffer/);
   assert.match(app, /applyStreamTraceEvent/);
   assert.match(app, /\/api\/workspaces\/\$\{state\.productPlan\.planId\}\/chat\/turn\/stream/);
-  assert.match(app, /"\/api\/plans\/stream"/);
+  assert.match(app, /"\/api\/conversations\/turn\/stream"/);
+  assert.doesNotMatch(app, /apiPostStream\("\/api\/plans\/stream"/);
+  assert.match(app, /chatConversationNotice: "Codex 已回复，尚未创建 ProductPlan"/);
+  assert.match(app, /chatConversationNotice: "Codex replied; no ProductPlan created"/);
   assert.match(app, /async function restorePersistedProjects/);
   assert.match(app, /compactRestoredProjectList\(\(response\.workspaces \|\| \[\]\)/);
   assert.match(app, /function compactRestoredProjectList/);
@@ -553,7 +556,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /event\.hasFinalMessage === undefined \? "" : event\.hasFinalMessage/);
   assert.match(app, /turnsWithCodexAgentMessage/);
   assert.match(app, /event\.type === "assistant_message" && turnsWithCodexAgentMessage\.has/);
-  assert.match(app, /normalizeTranscriptTurn\(\s*hasRealPlan \? response : planCreationTrace/);
+  assert.match(app, /normalizeTranscriptTurn\(\s*response\.productPlan \? response : \{ \.\.\.response, userMessage: message \}/);
   assert.match(app, /normalizeTranscriptTurn\(response, \{\s*workspaceEvents: response\.eventsAppended \|\| \[\]/);
   assert.match(app, /mergeTranscriptEvents\(\s*state\.activeTrace\.traceEvents \|\| \[\]/);
   assert.match(app, /Codex 工作流/);
@@ -563,6 +566,7 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.doesNotMatch(app, /function traceRows/);
   assert.doesNotMatch(app, /function traceEventRows/);
   assert.doesNotMatch(app, /function renderCodexNativeItem/);
+  assert.doesNotMatch(app, /function planCreationTrace/);
   assert.doesNotMatch(app, /data-trace-toggle/);
   assert.doesNotMatch(app, /data-trace-copy/);
   assert.doesNotMatch(app, /label: t\("traceRuntimeBinding"\)/);

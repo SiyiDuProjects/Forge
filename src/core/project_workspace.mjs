@@ -148,6 +148,71 @@ export function updateProjectManifest({ workspaceId, patch = {}, rootDir = defau
   return manifest;
 }
 
+export function ensureConversationWorkspace({
+  workspaceId = "",
+  title = "New Forge conversation",
+  language = "zh",
+  rootDir = defaultProjectWorkspaceRoot()
+} = {}) {
+  const id = safePathSegment(workspaceId || makeId("conversation"));
+  const workspacePath = projectWorkspacePath(id, { rootDir });
+  ensureWorkspaceDirs(workspacePath);
+  const previous = readJsonIfExists(join(workspacePath, "project_manifest.json")) || {};
+  const now = new Date().toISOString();
+  const manifest = {
+    version: PROJECT_WORKSPACE_VERSION,
+    projectId: previous.projectId || id,
+    workspaceId: previous.workspaceId || id,
+    title: previous.title || title,
+    status: previous.status || "conversation",
+    conversationOnly: true,
+    language,
+    currentRevisionId: previous.currentRevisionId || "",
+    currentProductPlanPath: previous.currentProductPlanPath || "product_plan.json",
+    runtimePlanPath: previous.runtimePlanPath || "runtime_plan.json",
+    revisionLedgerPath: previous.revisionLedgerPath || "revision_ledger.json",
+    eventsPath: previous.eventsPath || "events.jsonl",
+    proposalsPath: previous.proposalsPath || "proposals/",
+    revisionsPath: previous.revisionsPath || "revisions/",
+    sourceMaterialsPath: previous.sourceMaterialsPath || "source-materials/",
+    reviewPath: previous.reviewPath || "review/",
+    ...(runtimeBindingFromSources({ manifest: previous }) ? { runtimeBinding: runtimeBindingFromSources({ manifest: previous }) } : {}),
+    createdAt: previous.createdAt || now,
+    updatedAt: now
+  };
+  writeJson(join(workspacePath, "project_manifest.json"), manifest);
+  if (!existsSync(join(workspacePath, "product_plan.json"))) {
+    writeJson(join(workspacePath, "product_plan.json"), {});
+  }
+  if (!existsSync(join(workspacePath, "revision_ledger.json"))) {
+    writeJson(join(workspacePath, "revision_ledger.json"), {
+      version: "forge_revision_ledger_v1",
+      workspaceId: id,
+      revisions: [],
+      proposals: [],
+      rollbackHistory: []
+    });
+  }
+  writeConversationMarkdownIndexes({ workspacePath, manifest });
+  if (!previous.workspaceId && !previous.projectId) {
+    appendWorkspaceEvent({
+      workspaceId: id,
+      rootDir,
+      type: "conversation_workspace_created",
+      actor: "system",
+      payload: {
+        title: manifest.title,
+        productPlanCreated: false
+      }
+    });
+  }
+  return {
+    workspaceId: id,
+    workspacePath,
+    manifest
+  };
+}
+
 export function ensureProjectWorkspace({ plan, rootDir = defaultProjectWorkspaceRoot() } = {}) {
   const workspaceId = plan?.planId || plan?.workspaceState?.workspaceId;
   if (!workspaceId) throw new Error("ensureProjectWorkspace requires a ProductPlan.");
@@ -713,6 +778,55 @@ function writeMarkdownIndexes({ workspacePath, plan, manifest }) {
   writeFileSync(join(workspacePath, "WORK_INDEX.md"), workIndexMarkdown(plan, manifest));
   writeFileSync(join(workspacePath, "FORGE_TOOLS.md"), forgeToolsMarkdown(plan, manifest));
   writeFileSync(join(workspacePath, "DECISIONS.md"), decisionsMarkdown(plan));
+  writeSkillFiles({ workspacePath, manifest });
+}
+
+function writeConversationMarkdownIndexes({ workspacePath, manifest }) {
+  writeFileSync(join(workspacePath, "AGENTS.md"), `# Forge Conversation Agent Rules
+
+This directory is a Forge conversation workspace before a ProductPlan exists.
+
+## Role
+
+- Codex owns natural conversation, clarification, and the decision to call a Forge tool.
+- Forge owns ProductPlan, revisions, GeometrySpec, generated artifacts, validation, and guarded files.
+
+## Required Boundary
+
+- Ordinary conversation must not create ProductPlan, revisions, GeometrySpec, GLB, STL, STEP, or artifacts.
+- Create a ProductPlan only through the \`createProductPlan\` Forge tool when the user clearly asks to create or start a hardware plan.
+- If details are missing, ask follow-up questions instead of guessing a default frame, desktop display, or demo project.
+- After ProductPlan creation, 3D generation still requires an explicit generation tool/confirmation.
+`);
+  writeFileSync(join(workspacePath, "CURRENT_STATE.md"), `# Current State
+
+- Workspace: ${manifest.workspaceId}
+- Status: conversation only
+- ProductPlan: not created
+- Current revision: none
+- Generated artifacts: none
+
+Use normal conversation until a Forge tool is needed.
+`);
+  writeFileSync(join(workspacePath, "WORK_INDEX.md"), `# Work Index
+
+- ProductPlan has not been created yet.
+- No GeometrySpec, revision, GLB, STL, STEP, prototype readiness report, or generated artifact exists.
+- Continue discussion or ask clarifying questions until the user wants a Forge hardware plan.
+`);
+  writeFileSync(join(workspacePath, "FORGE_TOOLS.md"), `# Forge Tools
+
+Available first state-changing tool:
+
+- \`createProductPlan\`: creates the first ProductPlan for this workspace from an explicit hardware request. It does not generate GLB/STL/STEP artifacts.
+
+After a ProductPlan exists, use the generated project tool guide written by Forge.
+`);
+  writeFileSync(join(workspacePath, "DECISIONS.md"), `# Decisions
+
+- No product decision has been confirmed yet.
+- Do not infer a default product type from demos or old projects.
+`);
   writeSkillFiles({ workspacePath, manifest });
 }
 

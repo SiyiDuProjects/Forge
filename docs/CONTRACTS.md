@@ -58,7 +58,7 @@ Post-write artifact audit is format-specific: GLB checks semantic node coverage,
 
 User preview uses the same `GeometrySpec` as the generated GLB and supports rotate, zoom, pan, and appearance/component layer switching. Direct geometry edits, part dragging, hole edits, and user CAD export are outside the public interface.
 
-ProductPlan conversation turns default to `generateArtifacts: false`, so they validate geometry but do not write GLB/STL/STEP until the user confirms generation. Direct model APIs default to generating artifacts unless `generateArtifacts` is explicitly false.
+Codex-native conversation turns enter the project-bound Codex thread first. A blank/new project starts as a conversation workspace without ProductPlan state; Codex decides whether to answer, ask questions, or call a Forge tool. ProductPlan creation and revision changes happen only through Forge tools. ProductPlan/revision turns default to `generateArtifacts: false`, so they validate geometry but do not write GLB/STL/STEP until the user confirms generation. Direct model APIs default to generating artifacts unless `generateArtifacts` is explicitly false.
 
 ## Forge Project Folder Runtime
 
@@ -101,7 +101,7 @@ Derived artifacts:
 - `generation_evidence_report.json`
 - `design_summary.md`
 
-Important events include `workspace_created`, `user_message`, `assistant_message`, `tool_called`, `tool_failed`, `proposal_created`, `proposal_staged`, `proposal_committed`, `proposal_rejected`, `revision_created`, `revision_reverted`, `validation_completed`, `artifacts_generated`, `review_submitted`, and `review_submission_failed`.
+Important events include `conversation_workspace_created`, `workspace_created`, `user_message`, `assistant_message`, `tool_called`, `tool_failed`, `proposal_created`, `proposal_staged`, `proposal_committed`, `proposal_rejected`, `revision_created`, `revision_reverted`, `validation_completed`, `artifacts_generated`, `review_submitted`, and `review_submission_failed`.
 
 Context packs are built by `src/core/context_pack_builder.mjs`. They summarize the project folder, include a compact `revisionLedgerSummary`, and explicitly exclude raw GLB/STL/STEP bytes, full `events.jsonl`, arbitrary file contents, and direct GeometrySpec mutation instructions.
 
@@ -124,6 +124,8 @@ Chat session files live under `data/workspaces/<planId>/chat_sessions/<sessionId
 
 When the Codex runtime is active, `project_manifest.json` stores provider-neutral `runtimeBinding`. The Codex thread id is provider state inside that binding, not a ProductPlan or WorkspaceState field. Legacy `codexThreadId` fields can be read for migration, but new code must not write them. Durable Forge state still comes from ProductPlan, revisions, proposals, events, and artifact manifests.
 
+Blank/new project conversation workspaces can have `project_manifest.json`, chat session JSONL, and Codex `runtimeBinding` before `runtime_plan.json` exists. They are conversation-only until Codex explicitly calls the `createProductPlan` Forge tool. Forge does not answer ordinary conversation itself; if Codex runtime is unavailable, the product conversation should fail clearly instead of fabricating a ProductPlan or backend-authored chat response.
+
 Project workspaces also contain `runtime_plan.json`, generated project `AGENTS.md`, `FORGE_TOOLS.md`, `CURRENT_STATE.md`, `WORK_INDEX.md`, `DECISIONS.md`, and `skills/*.md` so Codex can read the project like a compact file-backed workbench. The `forge-tool` CLI wraps Forge actions for Codex-side tool calls; it must not be bypassed for ProductPlan, GeometrySpec, revision, artifact, review state changes, or canonical workspace descriptor draft package files.
 
 Important chat/runtime events include `chat_turn_started`, `context_pack_built`, `model_request`, `model_response`, `tool_call`, `tool_result`, `tool_failed`, `confirmation_required`, `confirmation_resolved`, and `chat_turn_completed`.
@@ -143,6 +145,7 @@ Future chat, agent, or LLM tool-calling layers should call these actions instead
 Action names:
 
 - `getWorkspaceSummary`
+- `createProductPlan`
 - `searchComponentLibrary`
 - `proposeDesignChange`
 - `stageDesignPatch`
@@ -529,9 +532,23 @@ Switches the current workspace back to a previous revision without AI involvemen
 
 Validates the current state, a proposal, or explicit patch set without writing model files.
 
+### `POST /api/conversations/turn/stream`
+
+Streams a Codex-native conversation turn for a blank/new project or conversation-only workspace.
+
+This is the default web composer entry before ProductPlan exists. The route creates or reuses a conversation workspace and sends the user message to the Codex runtime. Forge does not decide whether the message is chat, clarification, plan creation, or revision work; Codex decides and can call Forge tools when needed.
+
+Response content type is `text/event-stream`.
+
+- `trace`: bounded Codex/thread/runtime events projected for the processed transcript.
+- `final`: chat result with `workspaceId`, `sessionId`, `assistantMessage`, `messages`, optional `productPlan`, and tool summaries.
+- `error`: structured `{ "ok": false, "error": ... }` payload if Codex runtime cannot handle the turn.
+
+If the runtime request resolves to anything other than Codex, the route returns `CODEX_RUNTIME_REQUIRED` for product conversation turns instead of falling back to a Forge-authored chat response.
+
 ### `POST /api/plans/stream`
 
-Streams ProductPlan creation from an initial conversation turn.
+Streams ProductPlan creation from an initial conversation turn. This is retained for direct/API compatibility; the web composer default for blank/new projects should use `/api/conversations/turn/stream` so Codex decides whether a ProductPlan should be created.
 
 Body is the same as `/api/plans`.
 
@@ -543,7 +560,7 @@ Response content type is `text/event-stream`.
 
 ### `POST /api/plans`
 
-Creates a ProductPlan from an initial conversation turn.
+Creates a ProductPlan from an initial conversation turn. This route is not the Codex-native web conversation entry; product UI turns should let Codex call the `createProductPlan` tool instead.
 
 ```json
 {

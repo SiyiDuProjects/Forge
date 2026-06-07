@@ -20,6 +20,27 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - Codex-Native Conversation Orchestration V1
+
+- Scope: make Codex SDK/thread the default product conversation entry before ProductPlan exists. Blank/new projects now create a conversation workspace and stream through `/api/conversations/turn/stream`; Forge does not create ProductPlan/revision/GeometrySpec/artifacts from ordinary messages. ProductPlan creation is exposed as an explicit `createProductPlan` Forge tool, guarded so greetings/meta chat cannot create product state. Codex prompt/project guidance now states that Codex is the conversation brain and Forge only provides tools, state, validation, generation, and guardrails. The misleading 2D/fake preview path is hidden when no real GLB is loaded.
+- Status: implemented and verified in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-codex-native-conversation-orchestration-v1.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/product_conversation.mjs`
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_registry.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/permission_gate.mjs`
+  - `src/core/codex_runtime.mjs`
+  - `src/core/prompt_sections.mjs`
+  - `server.mjs`
+  - `app.js`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: Codex-native conversation, Codex as brain, conversation workspace, no ProductPlan from greeting, createProductPlan tool, clean new project, no stale context leakage, no Forge backend chat fallback, misleading 2D preview.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 34 tests, including greeting no-plan, mistaken createProductPlan denied, non-Codex fallback refusal, and explicit Codex tool creation without GLB/STL/STEP artifacts. Full `npm run check` passes with 120 tests. Browser verification on `http://127.0.0.1:8766/?cacheBust=codex-native-conversation-v1-final` confirmed blank/new project state has no ProductPlan/right-inspector model/no fake 2D preview, and sending `hello` returns a Codex conversation answer, clears the input, creates no ProductPlan state, does not hit the old missing `/api/conversations/turn/stream` route, and logs no console warnings/errors.
+- Boundary: this fixes conversation entry, tool boundary, clean new-project state, creation guardrails, and fake-preview hiding. It does not add new 3D generation capability, electronics readiness, AssemblyPlan features, PCB, firmware runtime, OTA, manufacturing, supplier ordering, or a Forge-owned intent classifier.
+
 ### 2026-06-07 - Prototype Readiness Report Gate V1
 
 - Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 report/audit hardening slice. `prototype_readiness_report.json` now includes `readinessGate`, a machine-readable decision layer covering component trust, ElectronicsSpec derivation, electronics validation, AssemblyPlan, development-board scaffold, revision evidence context, and V1 boundaries. The top-level report status now blocks if scaffold gate checks fail, even when electronics and assembly inputs otherwise pass. ContextPack carries compact readiness-gate decision and item statuses without raw electronics/source evidence.

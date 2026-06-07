@@ -2,6 +2,7 @@ import {
   applyWorkspaceDescriptorDraftSpecs,
   applyDesignPatch,
   commitStagedChange,
+  createProductPlanFromConversation,
   getRevisionArtifacts,
   getWorkspaceSummary,
   inspectComponentDescriptorDraft,
@@ -28,6 +29,7 @@ import { clone } from "./workspace_state.mjs";
 
 const ACTIONS = {
   getWorkspaceSummary,
+  createProductPlan: createProductPlanFromConversation,
   searchComponentLibrary,
   applyWorkspaceDescriptorDraftSpecs,
   inspectComponentDescriptorDraft,

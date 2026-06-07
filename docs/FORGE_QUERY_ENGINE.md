@@ -55,15 +55,16 @@ runForgeChatTurn({
 
 HTTP routes:
 
+- `POST /api/conversations/turn/stream`
 - `POST /api/plans/stream`
 - `POST /api/workspaces/:workspaceId/chat/turn/stream`
 - `POST /api/workspaces/:workspaceId/chat/turn`
 - `GET /api/workspaces/:workspaceId/chat/:sessionId`
 - `POST /api/workspaces/:workspaceId/chat/confirm`
 
-The frontend creates the initial `ProductPlan` with `/api/plans/stream`, then uses `/api/workspaces/:workspaceId/chat/turn/stream` for later composer turns. The non-streaming `/api/plans` and `/api/workspaces/:workspaceId/chat/turn` routes remain available for tests, scripts, and fallback integrations. The plan creation route uses the same runtime boundary as chat turns: if `runtimeProvider: "codex"` is selected, it initializes and persists provider-neutral `runtimeBinding` before returning the final payload.
+The frontend sends blank/new-project composer turns to `/api/conversations/turn/stream`, which creates or reuses a conversation workspace and sends the message to Codex. Forge does not create the initial ProductPlan unless Codex calls `createProductPlan`. Existing ProductPlan projects use `/api/workspaces/:workspaceId/chat/turn/stream` for later composer turns. The non-streaming `/api/plans` and `/api/workspaces/:workspaceId/chat/turn` routes remain available for tests, scripts, and compatibility integrations, but `/api/plans/stream` is no longer the web composer default for blank projects.
 
-The default frontend runtime is Codex (`runtimeProvider: "codex"`), so normal product conversations start by creating or resuming the project-bound Codex thread. The deterministic local Forge adapter remains available as an explicit fallback/test mode and still exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths without requiring external Codex execution.
+The default frontend runtime is Codex (`runtimeProvider: "codex"`), so normal product conversations start by creating or resuming the project-bound Codex thread. Product conversation must not fall back to a Forge-authored backend chat response; if Codex is unavailable, the UI should fail clearly and preserve the draft input. The deterministic local Forge adapter remains available as an explicit test/tool-runtime mode for existing ProductPlan work and still exercises real Forge actions, ProductPlan revisions, GeometrySpec validation, and generated artifact paths without requiring external Codex execution.
 
 Runtime/provider options:
 
@@ -224,6 +225,6 @@ QueryEngine returns:
 - `runtimeBinding` and `bindingId` when a runtime provider has a bound session/thread
 
 The current UI renders a compact streaming QueryEngine trace and pending confirmation controls in the right inspector so the center thread stays focused on conversation.
-The streaming trace uses server-sent events over `fetch` and shows ProductPlan creation, ContextPack preparation, model requests/responses, bounded Codex SDK thread/turn/item summaries, Forge tool selection/execution/results, explicit confirmation requirements, runtime binding id when available, and artifact generation status. It is not a token-level transcript of Codex internals; Forge emits safe summaries such as command name, file-change count, MCP tool name, item status, and usage numbers, while avoiding raw command output, file contents, or reasoning text. The final authoritative ProductPlan payload still arrives at the end. The browser can stop the current in-flight turn with `AbortController`; the server forwards that abort signal into OpenAI/Codex SDK calls when those providers support it, keeps the draft input available, and records the UI state as cancelled rather than failed.
+The streaming trace uses server-sent events over `fetch` and shows conversation workspace setup, ContextPack preparation, model requests/responses, bounded Codex SDK thread/turn/item summaries, Forge tool selection/execution/results, explicit confirmation requirements, runtime binding id when available, and artifact generation status. It is not a token-level transcript of Codex internals; Forge emits safe summaries such as command name, file-change count, MCP tool name, item status, and usage numbers, while avoiding raw command output, file contents, or reasoning text. The final authoritative payload may be conversation-only or include ProductPlan if Codex called the creation tool. The browser can stop the current in-flight turn with `AbortController`; the server forwards that abort signal into OpenAI/Codex SDK calls when those providers support it, keeps the draft input available, and records the UI state as cancelled rather than failed.
 
 `GET /api/runtime/status` is a read-only runtime preflight used by the settings dialog. It reports local Forge/QueryEngine readiness, Codex SDK availability, and the current project's `runtimeBinding` when a workspace id is provided. It does not create Codex threads or mutate Forge project files.
