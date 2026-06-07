@@ -751,18 +751,21 @@ export function createAssemblyPlan({
   const placements = Array.isArray(geometrySpec.placements) ? geometrySpec.placements : [];
   const routes = Array.isArray(geometrySpec.routes) ? geometrySpec.routes : [];
   const features = Array.isArray(geometrySpec.features) ? geometrySpec.features : [];
+  const componentDescriptors = Array.isArray(geometrySpec.componentDescriptors) ? geometrySpec.componentDescriptors : [];
   const selectedComponentIds = electronicsSpec.selectedComponentIds || [];
-  const steps = [
+  const steps = withAssemblyStepMetadata([
     step("prep_shell_back", "Inspect printed rear tray, standoffs, and cable exits.", {
       geometryRefs: featureIds(features, ["standoff", "usb_cutout", "split_line"])
     }),
     step("install_core_board", "Install the core board on descriptor-backed standoffs before plugging external modules.", {
       componentId: "core_board_esp32_s3",
-      geometryRefs: placementIds(placements, ["core_board_esp32_s3"])
+      geometryRefs: placementIds(placements, ["core_board_esp32_s3"]),
+      accessRefs: accessVolumeIds(placements, componentDescriptors, ["core_board_esp32_s3"])
     }),
     step("connect_display", "Connect the display ribbon before closing the front shell.", {
       componentId: displayComponentId(selectedComponentIds),
-      routeRefs: routeIdsFor(routes, displayComponentId(selectedComponentIds))
+      routeRefs: routeIdsFor(routes, displayComponentId(selectedComponentIds)),
+      accessRefs: accessVolumeIds(placements, componentDescriptors, [displayComponentId(selectedComponentIds), "core_board_esp32_s3"])
     }),
     step("seat_display", "Seat the display against the captured-panel retention geometry.", {
       componentId: displayComponentId(selectedComponentIds),
@@ -771,17 +774,28 @@ export function createAssemblyPlan({
     step("install_usb_c", "Install USB-C breakout and verify rear plug insertion clearance.", {
       componentId: "usb_c_breakout",
       routeRefs: routeIdsFor(routes, "usb_c_breakout"),
-      geometryRefs: featureIds(features, ["usb_cutout", "edge_capture_retention"])
+      geometryRefs: featureIds(features, ["usb_cutout", "edge_capture_retention"]),
+      accessRefs: accessVolumeIds(placements, componentDescriptors, ["usb_c_breakout", "core_board_esp32_s3"])
     }),
-    ...optionalAssemblySteps({ selectedComponentIds, placements, routes, features }),
+    ...optionalAssemblySteps({ selectedComponentIds, placements, routes, features, componentDescriptors }),
     step("close_shell", "Close front and rear shells only after cable slack and service access are checked.", {
       geometryRefs: featureIds(features, ["split_line"])
     }),
     step("bring_up_check", "Run development-board bring-up tests before any internal review handoff.", {
       electronicsRefs: (electronicsSpec.interfaceAssignments || []).map((assignment) => assignment.assignmentId)
     })
-  ];
+  ]);
+  const assemblyChecks = assemblyChecksFor({
+    steps,
+    placements,
+    routes,
+    features,
+    componentDescriptors,
+    selectedComponentIds,
+    geometrySpec
+  });
   const riskItems = [
+    ...assemblyChecks.flatMap((check) => check.riskItems || []),
     ...routeWarnings(electronicsSpec, geometrySpec).map((warning) => ({
       type: warning.type,
       level: "warning",
@@ -804,7 +818,7 @@ export function createAssemblyPlan({
   return {
     version: ASSEMBLY_PLAN_VERSION,
     scopeClassification: CORE_V1,
-    status: electronicsValidation.status === "blocked"
+    status: electronicsValidation.status === "blocked" || riskItems.some((item) => item.level === "blocked")
       ? "blocked"
       : riskItems.length ? "needs_review" : "feasible",
     sourceOfTruth: {
@@ -818,9 +832,11 @@ export function createAssemblyPlan({
       placementCount: placements.length,
       routeCount: routes.length,
       featureCount: features.length,
+      accessVolumeCount: countAccessVolumes(placements, componentDescriptors),
       routeIds: routes.map((route) => route.id).filter(Boolean)
     },
     steps,
+    checks: assemblyChecks,
     riskItems,
     boundaries: {
       fullDfa: false,
@@ -985,6 +1001,7 @@ export function createPrototypeReadinessReport({
     assemblyPlan: {
       status: assemblyPlan.status || "",
       stepCount: (assemblyPlan.steps || []).length,
+      checkStatuses: Object.fromEntries((assemblyPlan.checks || []).map((check) => [check.name, check.status])),
       riskItemCount: (assemblyPlan.riskItems || []).length,
       geometryLinked: Boolean(geometrySpec?.version)
     },
@@ -1701,6 +1718,184 @@ function fixSuggestionForIssue(issueRecord = {}) {
   };
 }
 
+function withAssemblyStepMetadata(steps = []) {
+  const stepIds = new Set(steps.map((item) => item.stepId));
+  return steps.map((item, index) => {
+    const dependsOn = assemblyDependenciesFor(item.stepId, stepIds);
+    return {
+      sequence: index + 1,
+      dependsOn,
+      manualConfirmationRequired: item.manualConfirmationRequired === true
+        || item.humanReviewRequired === true
+        || String(item.stepId || "").endsWith("_review"),
+      ...item,
+      dependsOn,
+      directEditingAllowed: false
+    };
+  });
+}
+
+function assemblyDependenciesFor(stepId = "", stepIds = new Set()) {
+  if (stepId === "prep_shell_back") return [];
+  if (stepId === "install_core_board") return ["prep_shell_back"].filter((id) => stepIds.has(id));
+  if (stepId === "connect_display") return ["install_core_board"].filter((id) => stepIds.has(id));
+  if (stepId === "seat_display") return ["connect_display"].filter((id) => stepIds.has(id));
+  if (stepId === "install_usb_c") return ["install_core_board"].filter((id) => stepIds.has(id));
+  if (stepId === "close_shell") {
+    return [
+      "seat_display",
+      "install_usb_c",
+      "install_ambient_sensor",
+      "install_buttons",
+      "install_speaker",
+      "install_camera_review",
+      "install_battery_review"
+    ].filter((id) => stepIds.has(id));
+  }
+  if (stepId === "bring_up_check") return ["close_shell"].filter((id) => stepIds.has(id));
+  if (stepId.startsWith("install_")) return ["install_core_board"].filter((id) => stepIds.has(id));
+  return [];
+}
+
+function assemblyChecksFor({
+  steps = [],
+  placements = [],
+  routes = [],
+  features = [],
+  componentDescriptors = [],
+  selectedComponentIds = [],
+  geometrySpec = {}
+} = {}) {
+  const checks = [];
+  checks.push(geometryLinkageCheck({ geometrySpec, placements, routes, features, componentDescriptors }));
+  checks.push(assemblyDependencyCheck(steps));
+  checks.push(assemblyEvidenceCheck(steps, selectedComponentIds));
+  checks.push(manualConfirmationCheck(steps, selectedComponentIds));
+  return checks;
+}
+
+function geometryLinkageCheck({ geometrySpec = {}, placements = [], routes = [], features = [], componentDescriptors = [] } = {}) {
+  const riskItems = [];
+  if (!geometrySpec?.version) {
+    riskItems.push(assemblyRisk("assembly_geometry_spec_missing", "blocked", "AssemblyPlan requires a V3 GeometrySpec reference."));
+  }
+  if (placements.length === 0) {
+    riskItems.push(assemblyRisk("assembly_placements_missing", "blocked", "AssemblyPlan requires descriptor-backed component placements."));
+  }
+  if (features.length === 0) {
+    riskItems.push(assemblyRisk("assembly_features_missing", "blocked", "AssemblyPlan requires shell features and retention geometry."));
+  }
+  return {
+    name: "geometry_linkage",
+    status: riskItems.some((item) => item.level === "blocked") ? "blocked" : "pass",
+    placementCount: placements.length,
+    routeCount: routes.length,
+    featureCount: features.length,
+    accessVolumeCount: countAccessVolumes(placements, componentDescriptors),
+    riskItems,
+    directEditingAllowed: false
+  };
+}
+
+function assemblyDependencyCheck(steps = []) {
+  const sequenceById = new Map(steps.map((item) => [item.stepId, item.sequence]));
+  const riskItems = [];
+  for (const item of steps) {
+    for (const dependency of item.dependsOn || []) {
+      if (!sequenceById.has(dependency)) {
+        riskItems.push(assemblyRisk("assembly_dependency_missing", "blocked", `${item.stepId} depends on missing ${dependency}.`, {
+          stepId: item.stepId,
+          dependency
+        }));
+      } else if (Number(sequenceById.get(dependency)) >= Number(item.sequence)) {
+        riskItems.push(assemblyRisk("assembly_dependency_order_invalid", "blocked", `${item.stepId} must occur after ${dependency}.`, {
+          stepId: item.stepId,
+          dependency
+        }));
+      }
+    }
+  }
+  return {
+    name: "assembly_sequence_dependencies",
+    status: riskItems.length ? "blocked" : "pass",
+    stepCount: steps.length,
+    dependencyCount: steps.reduce((sum, item) => sum + (item.dependsOn || []).length, 0),
+    riskItems,
+    directEditingAllowed: false
+  };
+}
+
+function assemblyEvidenceCheck(steps = [], selectedComponentIds = []) {
+  const riskItems = [];
+  const addMissing = (item, field, level, message) => {
+    if (!Array.isArray(item[field]) || item[field].length === 0) {
+      riskItems.push(assemblyRisk(`assembly_${field}_missing`, level, message, {
+        stepId: item.stepId,
+        componentId: item.componentId || ""
+      }));
+    }
+  };
+  for (const item of steps) {
+    if (["prep_shell_back", "install_core_board", "seat_display", "install_usb_c", "close_shell"].includes(item.stepId)) {
+      addMissing(item, "geometryRefs", "blocked", `${item.stepId} requires GeometrySpec feature or placement refs.`);
+    }
+    if (["connect_display", "install_usb_c", "install_ambient_sensor", "install_buttons", "install_speaker", "install_camera_review", "install_battery_review"].includes(item.stepId)) {
+      addMissing(item, "routeRefs", "blocked", `${item.stepId} requires a GeometrySpec cable route ref.`);
+    }
+    if (["install_core_board", "connect_display", "install_usb_c"].includes(item.stepId)) {
+      addMissing(item, "accessRefs", "blocked", `${item.stepId} requires service/access-volume refs for internal prototype assembly.`);
+    } else if (["install_ambient_sensor", "install_buttons", "install_speaker", "install_camera_review", "install_battery_review"].includes(item.stepId)) {
+      addMissing(item, "accessRefs", "warning", `${item.stepId} should keep service/access-volume refs visible for manual build.`);
+    }
+    if (item.stepId === "bring_up_check") {
+      addMissing(item, "electronicsRefs", "blocked", "bring_up_check requires ElectronicsSpec assignment refs.");
+    }
+  }
+  if (selectedComponentIds.some((id) => id.startsWith("display_")) && !steps.some((item) => item.stepId === "connect_display")) {
+    riskItems.push(assemblyRisk("assembly_display_connection_step_missing", "blocked", "Display builds require a display connection step."));
+  }
+  return {
+    name: "step_evidence_refs",
+    status: riskItems.some((item) => item.level === "blocked") ? "blocked" : riskItems.length ? "warning" : "pass",
+    missingEvidenceCount: riskItems.length,
+    riskItems,
+    directEditingAllowed: false
+  };
+}
+
+function manualConfirmationCheck(steps = [], selectedComponentIds = []) {
+  const reviewSteps = steps.filter((item) => item.manualConfirmationRequired);
+  const reviewComponents = selectedComponentIds.filter((id) => (
+    id === "camera_module_basic"
+    || id === "battery_lipo_2000"
+    || id === "battery_18650_holder"
+    || id === "speaker_20mm"
+  ));
+  const riskItems = [
+    ...reviewSteps.map((item) => assemblyRisk("assembly_manual_confirmation_required", "warning", `${item.stepId} requires human confirmation during prototype assembly.`, {
+      stepId: item.stepId,
+      componentId: item.componentId || ""
+    }))
+  ];
+  return {
+    name: "manual_confirmation",
+    status: riskItems.length ? "warning" : "pass",
+    reviewStepCount: reviewSteps.length,
+    reviewComponents,
+    riskItems,
+    directEditingAllowed: false
+  };
+}
+
+function assemblyRisk(type, level, message, extra = {}) {
+  return {
+    type,
+    level,
+    message,
+    ...extra
+  };
+}
+
 function step(stepId, instruction, refs = {}) {
   return {
     stepId,
@@ -1714,7 +1909,13 @@ function displayComponentId(selectedComponentIds = []) {
   return selectedComponentIds.find((componentId) => componentId.startsWith("display_")) || "";
 }
 
-function optionalAssemblySteps({ selectedComponentIds = [], placements = [], routes = [], features = [] } = {}) {
+function optionalAssemblySteps({
+  selectedComponentIds = [],
+  placements = [],
+  routes = [],
+  features = [],
+  componentDescriptors = []
+} = {}) {
   const steps = [];
   if (selectedComponentIds.includes("ambient_sensor_basic")) {
     steps.push(step("install_ambient_sensor", "Install ambient sensor behind the front window and route I2C cable to the core board.", {
@@ -1723,7 +1924,8 @@ function optionalAssemblySteps({ selectedComponentIds = [], placements = [], rou
       geometryRefs: [
         ...placementIds(placements, ["ambient_sensor_basic"]),
         ...featureIds(features, ["sensor_window"])
-      ]
+      ],
+      accessRefs: accessVolumeIds(placements, componentDescriptors, ["ambient_sensor_basic"])
     }));
   }
   if (selectedComponentIds.includes("speaker_20mm")) {
@@ -1733,7 +1935,9 @@ function optionalAssemblySteps({ selectedComponentIds = [], placements = [], rou
       geometryRefs: [
         ...placementIds(placements, ["speaker_20mm"]),
         ...featureIds(features, ["speaker_vents", "grille_mount_retention"])
-      ]
+      ],
+      accessRefs: accessVolumeIds(placements, componentDescriptors, ["speaker_20mm"]),
+      manualConfirmationRequired: true
     }));
   }
   if (selectedComponentIds.includes("button_6mm") || selectedComponentIds.some((id) => id.includes("button"))) {
@@ -1744,7 +1948,8 @@ function optionalAssemblySteps({ selectedComponentIds = [], placements = [], rou
       geometryRefs: [
         ...placementIds(placements, [buttonId]),
         ...featureIds(features, ["button_hole", "panel_button_retention"])
-      ]
+      ],
+      accessRefs: accessVolumeIds(placements, componentDescriptors, [buttonId])
     }));
   }
   if (selectedComponentIds.includes("camera_module_basic")) {
@@ -1755,6 +1960,8 @@ function optionalAssemblySteps({ selectedComponentIds = [], placements = [], rou
         ...placementIds(placements, ["camera_module_basic"]),
         ...featureIds(features, ["camera_window", "optical_window_retention"])
       ],
+      accessRefs: accessVolumeIds(placements, componentDescriptors, ["camera_module_basic"]),
+      manualConfirmationRequired: true,
       humanReviewRequired: true
     }));
   }
@@ -1767,6 +1974,8 @@ function optionalAssemblySteps({ selectedComponentIds = [], placements = [], rou
         ...placementIds(placements, [batteryId]),
         ...featureIds(features, ["review_battery_bay", "battery_access_and_thermal"])
       ],
+      accessRefs: accessVolumeIds(placements, componentDescriptors, [batteryId]),
+      manualConfirmationRequired: true,
       humanReviewRequired: true
     }));
   }
@@ -1796,6 +2005,38 @@ function featureIds(features = [], typeTokens = []) {
     )))
     .map((feature) => feature.id)
     .filter(Boolean);
+}
+
+function accessVolumeIds(placements = [], componentDescriptors = [], componentIds = []) {
+  const ids = new Set(componentIds.filter(Boolean));
+  const refs = [];
+  for (const placement of placements) {
+    const componentId = placement.componentId || placement.moduleId;
+    if (!ids.has(componentId)) continue;
+    for (const access of placement.accessVolumes || []) {
+      refs.push(`${componentId}.${access.id || access.connectorId || "access"}`);
+    }
+  }
+  for (const descriptor of componentDescriptors) {
+    const componentId = descriptor.id || descriptor.identity?.id;
+    if (!ids.has(componentId)) continue;
+    for (const access of descriptor.accessVolumes || []) {
+      refs.push(`${componentId}.${access.id || access.connectorId || "access"}`);
+    }
+  }
+  return [...new Set(refs)].filter(Boolean);
+}
+
+function countAccessVolumes(placements = [], componentDescriptors = []) {
+  const refs = accessVolumeIds(
+    placements,
+    componentDescriptors,
+    [
+      ...placements.map((placement) => placement.componentId || placement.moduleId),
+      ...componentDescriptors.map((descriptor) => descriptor.id || descriptor.identity?.id)
+    ]
+  );
+  return refs.length;
 }
 
 function moduleInitForAssignment(assignment = {}) {

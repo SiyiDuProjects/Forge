@@ -614,6 +614,8 @@ Prototype readiness is currently produced as an internal `prototype_readiness` r
 
 `electronics_spec.json` includes derived `powerPath` and `connectionRequirements` records. `electronics_validation_report.json` checks obvious prototype-level conflicts such as voltage/rail mismatch, missing USB-C controller power route, unsupported or exhausted pin/interface assignment, and connector-route mismatch. It does not claim PCB, schematic, EMI, high-speed signal, certification, or manufacturing readiness.
 
+`assembly_plan.json` includes ordered prototype build steps with sequence dependencies, GeometrySpec route/feature/placement refs, service/access-volume refs, manual-confirmation flags, and compact assembly checks. It blocks missing required assembly evidence but does not claim full DFA, robotic assembly, production assembly optimization, injection molding, or manufacturing readiness.
+
 ### `POST /api/quote/estimate`
 
 Convenience route for a `quote_estimate` job. v1 returns a pre-review estimate with assumptions and no low/mid/high tiers.

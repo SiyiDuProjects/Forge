@@ -1372,6 +1372,12 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.ok(revision.electronicsSpec.interfaceAssignments.some((assignment) => assignment.interfaceType === "spi"));
   assert.ok(revision.electronicsSpec.interfaceAssignments.some((assignment) => assignment.interfaceType === "i2c"));
   assert.ok(revision.assemblyPlan.steps.some((step) => step.stepId === "connect_display" && step.routeRefs.length > 0));
+  assert.ok(revision.assemblyPlan.steps.every((step) => Number(step.sequence) > 0 && Array.isArray(step.dependsOn)));
+  const assemblyChecks = Object.fromEntries(revision.assemblyPlan.checks.map((check) => [check.name, check.status]));
+  assert.equal(assemblyChecks.geometry_linkage, "pass");
+  assert.equal(assemblyChecks.assembly_sequence_dependencies, "pass");
+  assert.equal(assemblyChecks.step_evidence_refs, "pass");
+  assert.ok(revision.assemblyPlan.steps.find((step) => step.stepId === "install_usb_c").accessRefs.length > 0);
   assert.equal(revision.developmentBoardScaffold.status, "generated");
   assert.ok(revision.developmentBoardScaffold.files.some((file) => file.path === "firmware/bringup/pin_map.json"));
   assert.ok(productPlan.jobs.some((job) => job.capability === JOB_CAPABILITY.PROTOTYPE_READINESS));
@@ -1387,6 +1393,7 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.equal(readinessReport.electronicsDescriptorTrust.status, "pass");
   assert.equal(readinessReport.electronicsValidation.checkStatuses.power_path, "pass");
   assert.equal(readinessReport.electronicsSpecSummary.powerPath.routeId, "route.usb_c_to_core_board");
+  assert.equal(readinessReport.assemblyPlan.checkStatuses.step_evidence_refs, "pass");
   assert.equal(descriptorTrustReport.status, "pass");
   assert.equal(electronicsSpec.sourceOfTruth.productPlan, "ProductPlan");
   assert.equal(assemblyPlan.sourceOfTruth.geometrySpec.includes("GeometrySpec"), true);
@@ -1545,6 +1552,39 @@ test("prototype readiness validation blocks obvious GPIO exhaustion", () => {
   assert.ok(readiness.electronicsValidation.errors.some((error) => error.type === "interface_assignment_blocked"));
   assert.equal(readiness.prototypeReadinessReport.status, "Blocked");
   assert.equal(readiness.developmentBoardScaffold.status, "missing_information");
+});
+
+test("assembly plan blocks missing required GeometrySpec feature evidence", () => {
+  const productPlan = createEmptyProductPlan();
+  productPlan.userIntent = "Desktop display internal prototype.";
+  productPlan.requirements = {
+    ...productPlan.requirements,
+    display: true,
+    displaySizeInches: 3.5,
+    usbC: true,
+    ambientSensor: true
+  };
+  const geometrySpec = createGeometrySpec({ productPlan });
+  const readiness = createPrototypeReadinessPackage({
+    productPlan,
+    geometrySpec: {
+      ...geometrySpec,
+      features: geometrySpec.features.filter((feature) => !["screen_opening", "captured_panel_retention"].includes(feature.type))
+    },
+    revisionId: "test_missing_assembly_feature_refs"
+  });
+  assert.equal(readiness.electronicsValidation.status, "pass");
+  assert.equal(readiness.assemblyPlan.status, "blocked");
+  assert.ok(readiness.assemblyPlan.checks.some((check) => (
+    check.name === "step_evidence_refs"
+    && check.status === "blocked"
+  )));
+  assert.ok(readiness.assemblyPlan.riskItems.some((item) => (
+    item.type === "assembly_geometryRefs_missing"
+    && item.stepId === "seat_display"
+  )));
+  assert.equal(readiness.prototypeReadinessReport.status, "Blocked");
+  assert.equal(readiness.prototypeReadinessReport.assemblyPlan.checkStatuses.step_evidence_refs, "blocked");
 });
 
 test("geometry spec is deterministic and blocks missing module geometry", async () => {

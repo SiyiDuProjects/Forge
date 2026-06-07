@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### AssemblyPlan Feasibility V1
+
+- File: `docs/source-materials/2026-06-07-assembly-plan-feasibility-v1.md`
+- Status: implemented by adding Core V1 AssemblyPlan sequence dependencies, GeometrySpec evidence refs, access-volume refs, manual confirmation flags, compact checks, PrototypeReadinessReport check statuses, and regression coverage for missing assembly evidence.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/CONTRACTS.md`
+- Key handles: AssemblyPlan, assembly sequence dependencies, GeometrySpec feature refs, route refs, access volumes, manual confirmation, prototype readiness.
+
 ### Electronics Validation Power And Route V1
 
 - File: `docs/source-materials/2026-06-07-electronics-validation-power-route-v1.md`

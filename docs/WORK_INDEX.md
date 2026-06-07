@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - AssemblyPlan Feasibility V1
+
+- Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 AssemblyPlan hardening slice. `AssemblyPlan` steps now carry sequence numbers, dependency ids, GeometrySpec route/feature/placement refs, access-volume refs, and manual confirmation flags. `AssemblyPlan.checks` validates GeometrySpec linkage, step dependency ordering, required step evidence refs, and manual-confirmation requirements; missing required assembly evidence can block `AssemblyPlan` and `PrototypeReadinessReport`.
+- Status: implemented in the current working tree; this is not completion of the full V1 goal.
+- Source note: `docs/source-materials/2026-06-07-assembly-plan-feasibility-v1.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/prototype_readiness.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: AssemblyPlan, assembly sequence dependencies, GeometrySpec feature refs, route refs, access volumes, manual confirmation, prototype readiness.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes with 34 tests; full `npm run check` passes with 113 tests.
+- Boundary: Core V1 only. This does not add full DFA, injection molding design, snap lifecycle analysis, robotic assembly, production assembly optimization, manufacturing readiness, supplier ordering, OTA, full firmware runtime, arbitrary user component import, or frontend redesign.
+
 ### 2026-06-07 - Electronics Validation Power And Route V1
 
 - Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 Electronics Validation hardening slice. `ElectronicsSpec` now derives `powerPath` and `connectionRequirements` records from ElectronicsDescriptor facts and GeometrySpec routes; `electronics_validation_report.json` blocks obvious voltage/rail mismatches, missing USB-C-to-controller power routes, power-source voltage mismatches, missing interface routes, and connector-route mismatches. `PrototypeReadinessReport` exposes compact `checkStatuses` plus power-path and connection requirement counts.
