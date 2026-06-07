@@ -1922,12 +1922,16 @@ function descriptorFromReferenceAndSpecs({
     extracted.fieldNames ||= [];
     extracted.fieldNames.push("connectorPositionLocalMm");
   }
-  if (extracted.openingSizeMm) {
-    descriptor.externalFeatures = externalFeaturesWithOpeningSize({
-      externalFeatures: descriptor.externalFeatures || [],
-      openingSizeMm: extracted.openingSizeMm,
-      depthMm: Number(descriptor.dimensionsMm?.depth || 0)
-    });
+  const externalFeaturePatch = externalFeaturesWithExtractedSpecs({
+    externalFeatures: descriptor.externalFeatures || [],
+    openingSizeMm: extracted.openingSizeMm,
+    externalFeaturePositionSpecs: extracted.externalFeaturePositionSpecs,
+    depthMm: Number(descriptor.dimensionsMm?.depth || 0)
+  });
+  descriptor.externalFeatures = externalFeaturePatch.externalFeatures;
+  if (externalFeaturePatch.appliedPositionIds.length > 0 && !extracted.fieldNames?.includes("externalFeaturePositionLocalMm")) {
+    extracted.fieldNames ||= [];
+    extracted.fieldNames.push("externalFeaturePositionLocalMm");
   }
   descriptor.sourceNotes = {
     ...(descriptor.sourceNotes || {}),
@@ -1963,30 +1967,85 @@ function descriptorFromReferenceAndSpecs({
   return descriptor;
 }
 
-function externalFeaturesWithOpeningSize({
+function externalFeaturesWithExtractedSpecs({
   externalFeatures = [],
   openingSizeMm = [],
+  externalFeaturePositionSpecs = [],
   depthMm = 0
 } = {}) {
   const features = Array.isArray(externalFeatures) ? clone(externalFeatures) : [];
-  const firstOpeningIndex = features.findIndex((feature) => Array.isArray(feature.openingSizeMm));
-  if (firstOpeningIndex >= 0) {
-    features[firstOpeningIndex] = {
-      ...features[firstOpeningIndex],
-      openingSizeMm
-    };
-    return features;
-  }
-  return [
-    ...features,
-    {
-      id: "draft_opening",
-      type: "component_opening",
-      face: "front",
-      positionLocalMm: [0, 0, Number(depthMm || 0) / 2],
-      openingSizeMm
+  let patched = features;
+  if (Array.isArray(openingSizeMm) && openingSizeMm.length === 2) {
+    const firstOpeningIndex = patched.findIndex((feature) => Array.isArray(feature.openingSizeMm));
+    if (firstOpeningIndex >= 0) {
+      patched[firstOpeningIndex] = {
+        ...patched[firstOpeningIndex],
+        openingSizeMm
+      };
+    } else {
+      patched = [
+        ...patched,
+        {
+          id: "draft_opening",
+          type: "component_opening",
+          face: "front",
+          positionLocalMm: [0, 0, Number(depthMm || 0) / 2],
+          openingSizeMm
+        }
+      ];
     }
-  ];
+  }
+  const appliedPositionIds = [];
+  for (const spec of externalFeaturePositionSpecs || []) {
+    const id = String(spec?.id || "").trim();
+    const positionLocalMm = spec?.positionLocalMm;
+    if (!id || !Array.isArray(positionLocalMm) || positionLocalMm.length !== 3) continue;
+    const index = patched.findIndex((feature) => feature.id === id || feature.type === id);
+    if (index < 0) continue;
+    patched[index] = {
+      ...patched[index],
+      positionLocalMm: positionLocalMm.map((value) => Number(value))
+    };
+    appliedPositionIds.push(patched[index].id || id);
+  }
+  return {
+    externalFeatures: patched,
+    appliedPositionIds
+  };
+}
+
+function extractExternalFeaturePositionSpecs(text = "") {
+  const specs = [];
+  const chunks = String(text || "").split(/[;\n]+/);
+  for (const chunk of chunks) {
+    const parsed = parseExternalFeaturePositionChunk(chunk);
+    if (parsed) specs.push(parsed);
+  }
+  return specs;
+}
+
+function parseExternalFeaturePositionChunk(chunk = "") {
+  const text = String(chunk || "").trim();
+  if (!text) return null;
+  const labeled = text.match(/(?:external\s+feature|feature|opening|cutout|window|hole|开孔|窗口|孔位|外部特征)\s+([A-Za-z0-9_.-]+).{0,80}?(?:positionLocalMm|position|pos|位置|坐标)\s*[:：=]?\s*\[?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (labeled) return externalFeaturePositionSpecFromMatch(labeled);
+
+  const reverse = text.match(/([A-Za-z0-9_.-]+)\s+(?:external\s+feature|feature|opening|cutout|window|hole|开孔|窗口|孔位|外部特征).{0,80}?(?:positionLocalMm|position|pos|位置|坐标)\s*[:：=]?\s*\[?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (reverse) return externalFeaturePositionSpecFromMatch(reverse);
+
+  const axes = text.match(/(?:external\s+feature|feature|opening|cutout|window|hole|开孔|窗口|孔位|外部特征)\s+([A-Za-z0-9_.-]+).{0,80}?x\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?y\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?z\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (axes) return externalFeaturePositionSpecFromMatch(axes);
+  return null;
+}
+
+function externalFeaturePositionSpecFromMatch(match = []) {
+  const id = String(match[1] || "").trim();
+  const positionLocalMm = [Number(match[2]), Number(match[3]), Number(match[4])];
+  if (!id || positionLocalMm.some((value) => !Number.isFinite(value))) return null;
+  return {
+    id,
+    positionLocalMm
+  };
 }
 
 function mountingHolesWithExtractedSpecs({
@@ -2073,12 +2132,14 @@ function extractDescriptorSpecs(specsText = "") {
     /(?:孔径|直径|ø|Ø)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*mm.{0,40}?(?:安装孔|螺丝孔|固定孔)/i
   ]);
   const connectorPositionSpecs = extractConnectorPositionSpecs(text);
+  const externalFeaturePositionSpecs = extractExternalFeaturePositionSpecs(text);
   const extracted = {
     dimensionsMm,
     openingSizeMm,
     mountingHolePitchMm,
     mountingHoleDiameterMm,
     connectorPositionSpecs,
+    externalFeaturePositionSpecs,
     manufacturer: extractLabeledValue(text, ["manufacturer", "maker", "vendor", "厂商", "制造商"]),
     partNumber: extractLabeledValue(text, ["part number", "part no", "pn", "型号", "料号"]),
     displayName: extractLabeledValue(text, ["display name", "name", "名称"]),
@@ -2087,7 +2148,7 @@ function extractDescriptorSpecs(specsText = "") {
   };
   const fieldNames = [];
   for (const [field, value] of Object.entries(extracted)) {
-    if (field === "fieldNames" || field === "connectorPositionSpecs") continue;
+    if (["fieldNames", "connectorPositionSpecs", "externalFeaturePositionSpecs"].includes(field)) continue;
     if (Array.isArray(value) ? value.length > 0 : Boolean(value)) fieldNames.push(field);
   }
   return {

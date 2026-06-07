@@ -361,6 +361,68 @@ test("workspace descriptor specs extract connector positions and gate bad anchor
   )));
 });
 
+test("workspace descriptor specs extract external feature positions and gate bad anchors", async () => {
+  const plan = createActionPlan();
+  const scaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "button_feature_position_specs",
+    componentType: "button",
+    displayName: "Spec Button With Feature Position"
+  });
+  assert.equal(scaffold.ok, true);
+
+  const patch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "button_feature_position_specs",
+    specsText: [
+      "dimensions 10 x 10 x 6 mm",
+      "opening 8 x 8 mm",
+      "feature button_hole position 1, 0, 3 mm",
+      "manufacturer Forge Test",
+      "part number BTN-FEATURE-POS-SPECS",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(patch.ok, true);
+  assert.equal(patch.specsApplied, true);
+  assert.equal(patch.readyForLibraryPromotion, true);
+  assert.ok(patch.extractedFields.includes("openingSizeMm"));
+  assert.ok(patch.extractedFields.includes("externalFeaturePositionLocalMm"));
+
+  const descriptorPath = join(projectWorkspacePath(plan.planId), "component-drafts", "button_feature_position_specs", "descriptor.json");
+  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  const buttonHole = descriptor.externalFeatures.find((feature) => feature.id === "button_hole");
+  assert.deepEqual(buttonHole.openingSizeMm, [8, 8]);
+  assert.deepEqual(buttonHole.positionLocalMm, [1, 0, 3]);
+
+  const badScaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "button_bad_feature_position_specs",
+    componentType: "button",
+    displayName: "Spec Button With Bad Feature Position"
+  });
+  assert.equal(badScaffold.ok, true);
+  const badPatch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "button_bad_feature_position_specs",
+    specsText: [
+      "dimensions 10 x 10 x 6 mm",
+      "opening 8 x 8 mm",
+      "feature button_hole position 100, 0, 0 mm",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(badPatch.ok, true);
+  assert.equal(badPatch.specsApplied, true);
+  assert.equal(badPatch.readyForLibraryPromotion, false);
+  assert.ok(badPatch.blockingIssues.some((issue) => (
+    issue.code === "descriptor_local_position_outside_body_envelope"
+      && issue.source === "externalFeatures.button_hole.positionLocalMm"
+  )));
+});
+
 test("descriptor draft promotion makes a same-type part selectable through ProductPlan", () => {
   const plan = createActionPlan();
   const seed = listComponentDescriptors().find((item) => item.id === "button_6mm");

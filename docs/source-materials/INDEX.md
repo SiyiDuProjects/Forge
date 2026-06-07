@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### 3D Descriptor External Feature Position Spec Extraction V3 P51
+
+- File: `docs/source-materials/2026-06-07-3d-descriptor-external-feature-position-spec-extraction-v3-p51.md`
+- Status: implemented by extending `descriptor-specs` extraction to capture explicitly labeled existing external-feature local positions from workspace source specs, while leaving feature ids/types/layout support unchanged and relying on readiness gates before promotion.
+- Related docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, external feature position, opening position, positionLocalMm, externalFeaturePositionLocalMm, shell openings.
+
 ### 3D Descriptor Connector Position Spec Extraction V3 P50
 
 - File: `docs/source-materials/2026-06-07-3d-descriptor-connector-position-spec-extraction-v3-p50.md`

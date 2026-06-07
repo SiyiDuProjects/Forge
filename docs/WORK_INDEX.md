@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Descriptor External Feature Position Spec Extraction V3 P51
+
+- Scope: extend workspace descriptor spec patching so explicit external feature local-position constraints in `source-specs.md` can update existing `externalFeatures[].positionLocalMm` fields in a draft descriptor. `descriptor-specs` now recognizes bounded English and Chinese forms such as `feature button_hole position 1, 0, 3 mm`, updates only external feature ids/types inherited from the same-type reference descriptor, and leaves feature type/face/layout support unchanged. Bad anchors still produce `descriptor_local_position_outside_body_envelope` and block promotion.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-external-feature-position-spec-extraction-v3-p51.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, external feature position, opening position, positionLocalMm, externalFeaturePositionLocalMm, shell openings.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs` passes with 18 tests, including legal `button_hole` opening-position extraction and a bad external-feature anchor blocked by descriptor readiness.
+- Boundary: this updates reviewable prototype descriptor shell-feature anchor metadata only. It does not create feature ids or feature types, parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate production tolerances, claim production readiness, or enable CAD/model editing.
+
 ### 2026-06-07 - 3D Descriptor Connector Position Spec Extraction V3 P50
 
 - Scope: extend workspace descriptor spec patching so explicit connector local-position constraints in `source-specs.md` can update existing `connectors[].positionLocalMm` fields in a draft descriptor. `descriptor-specs` now recognizes bounded English and Chinese forms such as `connector usb_c position 0, -18, -3 mm`, updates only connector ids inherited from the same-type reference descriptor, and leaves connector type/mating metadata unchanged. Bad anchors still produce `descriptor_local_position_outside_body_envelope` and block promotion.
