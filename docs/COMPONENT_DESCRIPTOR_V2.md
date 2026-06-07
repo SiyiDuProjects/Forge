@@ -135,6 +135,8 @@ Mounting-hole diameters also get a planar envelope check because they drive gene
 
 Workspace draft scan reports include compact `specPatch` metadata for the most recent spec patch event: workspace-relative source spec path when available, extracted field names, readiness, blocking issue count, and no-direct-editing flags. ProductPlan-scoped promotion preserves that metadata under `source.workspaceDraft.specPatch`; if the descriptor is later selected and generated, the same compact metadata appears in ContextPack, revision ledger, and `generation_evidence_report.json` component origins without raw spec text.
 
+Regression coverage now exercises the full workspace source-spec path for both CLI and Codex-runtime flows: scaffold, apply `source-specs.md`, promote the workspace draft, select the promoted descriptor into ProductPlan, explicitly generate artifacts, and read the resulting `component_descriptors.json` plus generation evidence. The covered source-spec fields include body dimensions, mounting-hole spacing/diameter for core boards, connector positions/orientations, external-feature positions, keepout/access-volume size and position, cable-exit directions, source metadata, and reviewable proxy status.
+
 Forge exposes confirmation-required workspace draft promotion through `promoteWorkspaceComponentDescriptorDraft`, `forge-tool descriptor-promote --draft-id <draftId>`, and `POST /api/workspaces/:workspaceId/components/drafts/:draftId/promote`.
 
 Workspace draft promotion reuses the same descriptor draft validation and ProductPlan-scoped promotion path as direct `descriptorJson` promotion. A dropped-in package is not selectable until it passes inspection, is promoted, and is then selected through a normal ProductPlan component patch.

@@ -361,6 +361,12 @@ test("forge-tool restores a project workspace in a separate process", async () =
   writeFileSync(scaffoldSpecsPath, [
     "dimensions 10 x 10 x 6 mm",
     "opening 8 x 8 mm",
+    "connector signal position 0, -4, -2 mm",
+    "connector signal orientation -y",
+    "feature button_hole position 1, 0, 3 mm",
+    "keepout button_travel_keepout size 12 x 12 x 9 mm position 0, 0, 6 mm",
+    "access volume button_wire_access size 12 x 9 x 7 mm position 0, -9, -2 mm",
+    "cable exit signal direction -y_to_core_board",
     "manufacturer Forge Test",
     "part number BTN-8MM-CLI-SPECS",
     "measurement basis caliper measurement",
@@ -383,8 +389,29 @@ test("forge-tool restores a project workspace in a separate process", async () =
   assert.equal(specsPatch.json.readyForLibraryPromotion, true);
   assert.ok(specsPatch.json.extractedFields.includes("dimensionsMm"));
   assert.ok(specsPatch.json.extractedFields.includes("openingSizeMm"));
+  for (const field of [
+    "connectorPositionLocalMm",
+    "connectorOrientation",
+    "externalFeaturePositionLocalMm",
+    "keepoutVolumeSpec",
+    "accessVolumeSpec",
+    "cableExitDirection"
+  ]) {
+    assert.ok(specsPatch.json.extractedFields.includes(field), `expected extractedFields to include ${field}`);
+  }
   assert.match(readFileSync(join(workspacePath, "component-drafts", "button_scaffold_cli", "sources.md"), "utf8"), /Source path: component-drafts\/button_scaffold_cli\/source-specs\.md/);
   assert.equal(readFileSync(join(workspacePath, "component-drafts", "button_scaffold_cli", "sources.md"), "utf8").includes(rawSpecSentinel), true);
+
+  const patchedDescriptor = readJson(join(workspacePath, "component-drafts", "button_scaffold_cli", "descriptor.json"));
+  assert.deepEqual(patchedDescriptor.connectors.find((connector) => connector.id === "signal").positionLocalMm, [0, -4, -2]);
+  assert.equal(patchedDescriptor.connectors.find((connector) => connector.id === "signal").orientation, "-y");
+  assert.deepEqual(patchedDescriptor.externalFeatures.find((feature) => feature.id === "button_hole").positionLocalMm, [1, 0, 3]);
+  assert.deepEqual(patchedDescriptor.keepouts.find((keepout) => keepout.id === "button_travel_keepout").sizeMm, [12, 12, 9]);
+  assert.deepEqual(patchedDescriptor.keepouts.find((keepout) => keepout.id === "button_travel_keepout").positionLocalMm, [0, 0, 6]);
+  assert.deepEqual(patchedDescriptor.accessVolumes.find((access) => access.id === "button_wire_access").sizeMm, [12, 9, 7]);
+  assert.deepEqual(patchedDescriptor.accessVolumes.find((access) => access.id === "button_wire_access").positionLocalMm, [0, -9, -2]);
+  assert.equal(patchedDescriptor.accessVolumes.find((access) => access.id === "button_wire_access").connectorId, "signal");
+  assert.equal(patchedDescriptor.cableExitDirections.find((exit) => exit.connectorId === "signal").direction, "-y_to_core_board");
 
   const patchedScaffoldDraft = runForgeTool([
     "descriptor-drafts",
@@ -460,10 +487,16 @@ test("forge-tool restores a project workspace in a separate process", async () =
   hydrateProductPlanFromWorkspace({ planId: plan.planId, force: true });
   const patchedGeneratedRevision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === generatedPatchedScaffold.json.revisionId);
   assert.equal(patchedGeneratedRevision.modelArtifacts.status, "generated");
+  const generatedDescriptor = patchedGeneratedRevision.geometrySpec.componentDescriptors.find((item) => item.id === "button_scaffold_cli");
+  assert.equal(generatedDescriptor.connectors.find((connector) => connector.id === "signal").orientation, "-y");
+  assert.equal(generatedDescriptor.cableExitDirections.find((exit) => exit.connectorId === "signal").direction, "-y_to_core_board");
+  assert.deepEqual(generatedDescriptor.keepouts.find((keepout) => keepout.id === "button_travel_keepout").sizeMm, [12, 12, 9]);
+  assert.deepEqual(generatedDescriptor.accessVolumes.find((access) => access.id === "button_wire_access").sizeMm, [12, 9, 7]);
   const patchedOrigin = patchedGeneratedRevision.modelArtifacts.generationEvidence.descriptorEvidence.componentOrigins.find((item) => item.componentId === "button_scaffold_cli");
   assert.equal(patchedOrigin.workspaceDraft.specPatch.applied, true);
   assert.equal(patchedOrigin.workspaceDraft.specPatch.specsSourcePath, "component-drafts/button_scaffold_cli/source-specs.md");
   assert.ok(patchedOrigin.workspaceDraft.specPatch.extractedFields.includes("dimensionsMm"));
+  assert.ok(patchedOrigin.workspaceDraft.specPatch.extractedFields.includes("cableExitDirection"));
 
   const patchedArtifacts = runForgeTool([
     "artifacts",
@@ -821,6 +854,148 @@ test("forge-tool restores a project workspace in a separate process", async () =
   assert.equal(review.json.submitted, true);
   assert.ok(review.json.reviewId);
   assert.equal(existsSync(`${workspacePath}/review/review_request.json`), true);
+});
+
+test("workspace spec-file core board descriptor flows into generated artifacts with full mechanical fields", async () => {
+  const plan = createWorkspacePlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const draftId = "core_board_full_specs_cli";
+  const specPath = `component-drafts/${draftId}/source-specs.md`;
+
+  const scaffold = runForgeTool([
+    "descriptor-scaffold",
+    "--draft-id",
+    draftId,
+    "--component-type",
+    "core_board",
+    "--display-name",
+    "Full Specs CLI Core Board"
+  ], workspacePath);
+  assert.equal(scaffold.status, 0, scaffold.stderr);
+  assert.equal(scaffold.json.ok, true);
+
+  writeFileSync(join(workspacePath, specPath), [
+    "dimensions 64 x 38 x 8 mm",
+    "mounting hole spacing 54 x 28 mm",
+    "mounting hole diameter 2.2 mm",
+    "connector usb_c position 0, -18, -3 mm",
+    "connector display_port position 0, 18, -3 mm",
+    "connector usb_c orientation -y",
+    "connector display_port orientation +y",
+    "keepout component_height_keepout size 50 x 28 x 10 mm position 0, 0, -6 mm",
+    "access volume usb_c_service_access size 18 x 16 x 10 mm position 0, -22, -3 mm",
+    "cable exit usb_c direction -y_to_rear_power",
+    "manufacturer Forge Test",
+    "part number CORE-FULL-SPECS-CLI",
+    "measurement basis datasheet mechanical drawing",
+    "reviewable"
+  ].join("; "));
+
+  const specs = runForgeTool([
+    "descriptor-specs",
+    "--draft-id",
+    draftId,
+    "--specs-file",
+    specPath
+  ], workspacePath);
+  assert.equal(specs.status, 0, specs.stderr);
+  assert.equal(specs.json.ok, true);
+  assert.equal(specs.json.readyForLibraryPromotion, true);
+  for (const field of [
+    "dimensionsMm",
+    "mountingHolePitchMm",
+    "mountingHoleDiameterMm",
+    "connectorPositionLocalMm",
+    "connectorOrientation",
+    "keepoutVolumeSpec",
+    "accessVolumeSpec",
+    "cableExitDirection"
+  ]) {
+    assert.ok(specs.json.extractedFields.includes(field), `expected extractedFields to include ${field}`);
+  }
+
+  const patchedDescriptor = readJson(join(workspacePath, "component-drafts", draftId, "descriptor.json"));
+  assert.equal(patchedDescriptor.mountingHoles.length, 4);
+  assert.deepEqual(patchedDescriptor.mountingHoles.map((hole) => hole.diameterMm), [2.2, 2.2, 2.2, 2.2]);
+  assert.deepEqual(patchedDescriptor.mountingHoles.map((hole) => hole.positionLocalMm), [
+    [-27, 14, -4],
+    [27, 14, -4],
+    [-27, -14, -4],
+    [27, -14, -4]
+  ]);
+  assert.deepEqual(patchedDescriptor.connectors.find((connector) => connector.id === "usb_c").positionLocalMm, [0, -18, -3]);
+  assert.equal(patchedDescriptor.connectors.find((connector) => connector.id === "usb_c").orientation, "-y");
+  assert.equal(patchedDescriptor.connectors.find((connector) => connector.id === "display_port").orientation, "+y");
+  assert.deepEqual(patchedDescriptor.keepouts.find((keepout) => keepout.id === "component_height_keepout").sizeMm, [50, 28, 10]);
+  assert.deepEqual(patchedDescriptor.accessVolumes.find((access) => access.id === "usb_c_service_access").sizeMm, [18, 16, 10]);
+  assert.equal(patchedDescriptor.accessVolumes.find((access) => access.id === "usb_c_service_access").connectorId, "usb_c");
+  assert.equal(patchedDescriptor.cableExitDirections.find((exit) => exit.connectorId === "usb_c").direction, "-y_to_rear_power");
+
+  const promote = runForgeTool([
+    "descriptor-promote",
+    "--draft-id",
+    draftId
+  ], workspacePath);
+  assert.equal(promote.status, 0, promote.stderr);
+  assert.equal(promote.json.ok, true);
+  assert.equal(promote.json.readyForSelection, true);
+
+  const selected = runForgeTool([
+    "descriptor-select",
+    "--componentId",
+    draftId,
+    "--message",
+    "Use full-spec core board."
+  ], workspacePath);
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(selected.json.ok, true);
+  assert.equal(selected.json.componentPreferencePath, "componentPreferences.core_board");
+  hydrateProductPlanFromWorkspace({ planId: plan.planId, force: true });
+  const selectedRevision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === selected.json.newRevisionId);
+  assert.equal(selectedRevision.productPlanSnapshot.componentPreferences.core_board, draftId);
+  assert.equal(selectedRevision.modelArtifacts.status, "pending_confirmation");
+
+  const generated = runForgeTool([
+    "generate",
+    "--revisionId",
+    selected.json.newRevisionId,
+    "--reason",
+    "confirmed full-spec core board generation"
+  ], workspacePath);
+  assert.equal(generated.status, 0, generated.stderr);
+  assert.equal(generated.json.ok, true);
+  assert.ok(generated.json.artifactPaths.modelGlb);
+  hydrateProductPlanFromWorkspace({ planId: plan.planId, force: true });
+  const generatedRevision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === generated.json.revisionId);
+  assert.equal(generatedRevision.modelArtifacts.status, "generated");
+  const generatedDescriptor = generatedRevision.geometrySpec.componentDescriptors.find((item) => item.id === draftId);
+  assert.equal(generatedDescriptor.mountingHoles.length, 4);
+  assert.equal(generatedDescriptor.connectors.find((connector) => connector.id === "usb_c").orientation, "-y");
+  assert.deepEqual(generatedDescriptor.keepouts.find((keepout) => keepout.id === "component_height_keepout").sizeMm, [50, 28, 10]);
+  assert.deepEqual(generatedDescriptor.accessVolumes.find((access) => access.id === "usb_c_service_access").sizeMm, [18, 16, 10]);
+  assert.equal(generatedDescriptor.cableExitDirections.find((exit) => exit.connectorId === "usb_c").direction, "-y_to_rear_power");
+  const generatedOrigin = generatedRevision.modelArtifacts.generationEvidence.descriptorEvidence.componentOrigins.find((item) => item.componentId === draftId);
+  assert.equal(generatedOrigin.workspaceDraft.specPatch.specsSourcePath, specPath);
+  assert.ok(generatedOrigin.workspaceDraft.specPatch.extractedFields.includes("mountingHolePitchMm"));
+  assert.ok(generatedOrigin.workspaceDraft.specPatch.extractedFields.includes("cableExitDirection"));
+
+  const artifacts = runForgeTool([
+    "artifacts",
+    "--revisionId",
+    generated.json.revisionId
+  ], workspacePath);
+  assert.equal(artifacts.status, 0, artifacts.stderr);
+  assert.equal(artifacts.json.ok, true);
+  assert.equal(artifacts.json.artifactStatus.trustedGenerated, true);
+  assert.equal(artifacts.json.artifactStatus.artifactAuditStatus, "passed");
+  const descriptorSnapshot = JSON.parse(await readFile(artifacts.json.artifacts.componentDescriptors.localPath, "utf8"));
+  const artifactDescriptor = descriptorSnapshot.find((item) => item.id === draftId);
+  assert.equal(artifactDescriptor.mountingHoles.length, 4);
+  assert.equal(artifactDescriptor.connectors.find((connector) => connector.id === "usb_c").orientation, "-y");
+  const evidenceReport = JSON.parse(await readFile(artifacts.json.artifacts.generationEvidenceReport.localPath, "utf8"));
+  const evidenceOrigin = evidenceReport.descriptorEvidence.componentOrigins.find((item) => item.componentId === draftId);
+  assert.equal(evidenceOrigin.workspaceDraft.specPatch.specsSourcePath, specPath);
+  assert.ok(evidenceOrigin.workspaceDraft.specPatch.extractedFields.includes("accessVolumeSpec"));
 });
 
 test("guarded file detector catches direct source-of-truth writes", () => {

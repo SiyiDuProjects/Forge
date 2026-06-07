@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Source Spec Onboarding End-To-End V3 P54
+
+- Scope: strengthen the "new part from source document" path with end-to-end regression evidence. CLI coverage now runs a full core-board `source-specs.md` through `descriptor-scaffold`, `descriptor-specs`, `descriptor-promote`, `descriptor-select`, explicit `generate`, `artifacts`, generated `component_descriptors.json`, and `generation_evidence_report.json`. Codex-runtime coverage now uses a richer button `source-specs.md` through project-bound `forge-tool` calls and verifies the generated descriptor/evidence preserves connector, external-feature, keepout, access-volume, and cable-exit fields.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-source-spec-onboarding-e2e-v3-p54.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, source-specs.md, descriptor-scaffold, descriptor-specs, descriptor-promote, descriptor-select, confirmed generation, component_descriptors.json, generation_evidence_report.json, Codex runtime.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes with 22 tests. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 30 tests. Full `npm run check` passes with 106 tests.
+- Boundary: this is regression/evidence hardening for the controlled source-spec onboarding path. It does not create a new broad parser, parse arbitrary PDFs into trusted geometry, promote drafts automatically, select descriptors automatically, mutate GeometrySpec directly, generate artifacts before explicit confirmation, expose raw source text to compact runtime context, validate production readiness, or enable CAD/model editing.
+
 ### 2026-06-07 - 3D Descriptor Cable Exit And Connector Orientation Spec Extraction V3 P53
 
 - Scope: extend workspace descriptor spec patching so explicit connector orientation and cable-exit direction constraints in `source-specs.md` can update existing `connectors[].orientation` and `cableExitDirections[].direction` fields in a draft descriptor. `descriptor-specs` now recognizes bounded forms such as `connector usb_c orientation -z`, `cable exit usb_c direction external_rear`, and `线缆出口 signal 方向 -y_to_core_board`, updates only known same-type reference connector ids or existing cable-exit connector ids, and does not create connectors, cable exits, access volumes, or mating endpoints.

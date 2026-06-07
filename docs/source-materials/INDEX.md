@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### 3D Source Spec Onboarding End-To-End V3 P54
+
+- File: `docs/source-materials/2026-06-07-3d-source-spec-onboarding-e2e-v3-p54.md`
+- Status: implemented by strengthening CLI and Codex-runtime source-spec regression coverage from workspace `source-specs.md` through scaffold/spec/promote/select/explicit generation into generated descriptor snapshots and generation evidence.
+- Related docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: 3D trusted generation, source-specs.md, descriptor-scaffold, descriptor-specs, descriptor-promote, descriptor-select, confirmed generation, component_descriptors.json, generation_evidence_report.json, Codex runtime.
+
 ### 3D Descriptor Cable Exit And Connector Orientation Spec Extraction V3 P53
 
 - File: `docs/source-materials/2026-06-07-3d-descriptor-cable-exit-orientation-spec-extraction-v3-p53.md`

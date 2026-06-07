@@ -1132,6 +1132,12 @@ test("Codex runtime can onboard a workspace spec-file descriptor through forge-t
         writeFileSync(join(cwd, specPath), [
           "dimensions 10 x 10 x 6 mm",
           "opening 8 x 8 mm",
+          "connector signal position 0, -4, -2 mm",
+          "connector signal orientation -y",
+          "feature button_hole position 1, 0, 3 mm",
+          "keepout button_travel_keepout size 12 x 12 x 9 mm position 0, 0, 6 mm",
+          "access volume button_wire_access size 12 x 9 x 7 mm position 0, -9, -2 mm",
+          "cable exit signal direction -y_to_core_board",
           "manufacturer Forge Codex Test",
           "part number BTN-8MM-CODEX-SPECS",
           "measurement basis caliper measurement",
@@ -1196,11 +1202,22 @@ test("Codex runtime can onboard a workspace spec-file descriptor through forge-t
   const generatedRevision = updated.revisions.find((revision) => revision.revisionId === updated.currentRevisionId);
   assert.equal(generatedRevision.modelArtifacts.status, "generated");
   assert.ok(generatedRevision.modelArtifacts.artifacts.glb.localPath);
+  const generatedDescriptor = generatedRevision.geometrySpec.componentDescriptors.find((item) => item.id === "button_8mm_codex_specs");
+  assert.deepEqual(generatedDescriptor.connectors.find((connector) => connector.id === "signal").positionLocalMm, [0, -4, -2]);
+  assert.equal(generatedDescriptor.connectors.find((connector) => connector.id === "signal").orientation, "-y");
+  assert.deepEqual(generatedDescriptor.externalFeatures.find((feature) => feature.id === "button_hole").positionLocalMm, [1, 0, 3]);
+  assert.deepEqual(generatedDescriptor.keepouts.find((keepout) => keepout.id === "button_travel_keepout").sizeMm, [12, 12, 9]);
+  assert.deepEqual(generatedDescriptor.accessVolumes.find((access) => access.id === "button_wire_access").sizeMm, [12, 9, 7]);
+  assert.equal(generatedDescriptor.cableExitDirections.find((exit) => exit.connectorId === "signal").direction, "-y_to_core_board");
   const origin = generatedRevision.modelArtifacts.generationEvidence.descriptorEvidence.componentOrigins.find((item) => item.componentId === "button_8mm_codex_specs");
   assert.equal(origin.workspaceDraft.specPatch.specsSourcePath, "component-drafts/button_8mm_codex_specs/source-specs.md");
+  assert.ok(origin.workspaceDraft.specPatch.extractedFields.includes("connectorOrientation"));
+  assert.ok(origin.workspaceDraft.specPatch.extractedFields.includes("accessVolumeSpec"));
+  assert.ok(origin.workspaceDraft.specPatch.extractedFields.includes("cableExitDirection"));
   const evidenceReport = JSON.parse(readFileSync(generatedRevision.modelArtifacts.artifacts.generationEvidenceReport.localPath, "utf8"));
   const evidenceOrigin = evidenceReport.descriptorEvidence.componentOrigins.find((item) => item.componentId === "button_8mm_codex_specs");
   assert.equal(evidenceOrigin.workspaceDraft.specPatch.specsSourcePath, "component-drafts/button_8mm_codex_specs/source-specs.md");
+  assert.ok(evidenceOrigin.workspaceDraft.specPatch.extractedFields.includes("externalFeaturePositionLocalMm"));
   assert.ok(readWorkspaceEvents({ workspaceId: plan.planId }).some((event) => (
     event.type === "component_descriptor_draft_specs_applied"
       && event.payload?.draftId === "button_8mm_codex_specs"
