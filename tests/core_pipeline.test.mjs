@@ -1583,6 +1583,124 @@ test("prototype readiness validation blocks voltage and interface route mismatch
   assert.ok(voltageValidation.errors.some((error) => error.type === "voltage_mismatch"));
 });
 
+test("prototype readiness validation blocks non-shared pin conflicts", () => {
+  const electronicsSpec = {
+    mainController: {
+      componentId: "core_board_esp32_s3"
+    },
+    componentTrust: [],
+    powerInputs: [
+      { componentId: "usb_c_breakout", rail: "5v_usb", voltage: 5, availableMa: 1500 }
+    ],
+    powerBudget: {
+      rails: [
+        { rail: "5v_usb", voltage: 5, availableMa: 1500, peakLoadMa: 320 },
+        { rail: "3v3", voltage: 3.3, availableMa: 500, peakLoadMa: 0 }
+      ]
+    },
+    powerPath: {
+      controllerComponentId: "core_board_esp32_s3",
+      controllerInputRail: "5v_usb",
+      controllerVoltage: 5,
+      sourceComponentId: "usb_c_breakout",
+      sourceVoltage: 5,
+      routeId: "route.usb_c_to_core_board"
+    },
+    peripherals: [],
+    interfaceAssignments: [
+      {
+        assignmentId: "assignment.button_a.gpio",
+        componentId: "button_a",
+        interfaceType: "gpio",
+        status: "assigned",
+        sharedBus: false,
+        pins: [{ signal: "button_a", pin: "GPIO1", componentId: "button_a" }]
+      },
+      {
+        assignmentId: "assignment.button_b.gpio",
+        componentId: "button_b",
+        interfaceType: "gpio",
+        status: "assigned",
+        sharedBus: false,
+        pins: [{ signal: "button_b", pin: "GPIO1", componentId: "button_b" }]
+      }
+    ],
+    connectionRequirements: [],
+    cableLinks: []
+  };
+
+  const validation = validateElectronicsSpec({
+    electronicsSpec,
+    electronicsDescriptorTrustReport: {
+      status: "pass",
+      entries: []
+    },
+    geometrySpec: {
+      version: "geometry_spec_v1",
+      routes: []
+    }
+  });
+
+  assert.equal(validation.status, "blocked");
+  assert.ok(validation.errors.some((error) => (
+    error.type === "pin_conflict"
+    && error.pin === "GPIO1"
+    && error.uses.length === 2
+  )));
+  assert.equal(validation.checks.find((check) => check.name === "pin_conflicts").status, "blocked");
+});
+
+test("prototype readiness validation blocks rail current over budget", () => {
+  const electronicsSpec = {
+    mainController: {
+      componentId: "core_board_esp32_s3"
+    },
+    componentTrust: [],
+    powerInputs: [
+      { componentId: "usb_c_breakout", rail: "5v_usb", voltage: 5, availableMa: 1500 }
+    ],
+    powerBudget: {
+      rails: [
+        { rail: "5v_usb", voltage: 5, availableMa: 300, peakLoadMa: 650 },
+        { rail: "3v3", voltage: 3.3, availableMa: 500, peakLoadMa: 0 }
+      ]
+    },
+    powerPath: {
+      controllerComponentId: "core_board_esp32_s3",
+      controllerInputRail: "5v_usb",
+      controllerVoltage: 5,
+      sourceComponentId: "usb_c_breakout",
+      sourceVoltage: 5,
+      routeId: "route.usb_c_to_core_board"
+    },
+    peripherals: [],
+    interfaceAssignments: [],
+    connectionRequirements: [],
+    cableLinks: []
+  };
+
+  const validation = validateElectronicsSpec({
+    electronicsSpec,
+    electronicsDescriptorTrustReport: {
+      status: "pass",
+      entries: []
+    },
+    geometrySpec: {
+      version: "geometry_spec_v1",
+      routes: []
+    }
+  });
+
+  assert.equal(validation.status, "blocked");
+  assert.ok(validation.errors.some((error) => (
+    error.type === "rail_current_exceeded"
+    && error.rail === "5v_usb"
+    && error.peakLoadMa === 650
+    && error.availableMa === 300
+  )));
+  assert.equal(validation.checks.find((check) => check.name === "power_budget").status, "blocked");
+});
+
 test("prototype readiness validation blocks obvious GPIO exhaustion", () => {
   const productPlan = createEmptyProductPlan();
   productPlan.userIntent = "Six button desktop display internal prototype.";
