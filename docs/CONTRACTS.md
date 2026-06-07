@@ -76,7 +76,7 @@ Required top-level files and folders:
 - `review/`: local human-review request and notes.
 - `CURRENT_STATE.md`, `WORK_INDEX.md`, and `DECISIONS.md`: generated markdown summaries for human/AI context. They are not primary source of truth.
 
-Revision folders use `revision_manifest.json`, `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `validation_report.json`, `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, `prototype_readiness_report.json`, `generation_evidence_report.json` when generated or blocked artifact evidence exists, `design_summary.md`, `generation_inputs.json`, and derived files under `artifacts/`.
+Revision folders use `revision_manifest.json`, `product_plan.json`, `geometry-spec.json`, `component_selections.json`, `component_descriptors.json`, `component_asset_manifest.json`, `validation_report.json`, `electronics_descriptor_trust_report.json`, `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, `prototype_readiness_report.json`, `generation_evidence_report.json` when generated or blocked artifact evidence exists, `design_summary.md`, `generation_inputs.json`, and derived files under `artifacts/`.
 
 Source of truth:
 
@@ -610,7 +610,7 @@ Returns `{ "job": ..., "geometrySpec": ..., "modelArtifacts": ..., "geometryVali
 
 Convenience route for an `electronics_layout` job. v1 returns UI-only preview placements, interface directions, cable notes, and conflict checks.
 
-Prototype readiness is currently produced as an internal `prototype_readiness` revision job, not a standalone public route. It derives `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, and `prototype_readiness_report.json` from ProductPlan, ComponentDescriptor, ElectronicsDescriptor, and GeometrySpec evidence.
+Prototype readiness is currently produced as an internal `prototype_readiness` revision job, not a standalone public route. It derives `electronics_descriptor_trust_report.json`, `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, and `prototype_readiness_report.json` from ProductPlan, ComponentDescriptor, ElectronicsDescriptor, and GeometrySpec evidence.
 
 ### `POST /api/quote/estimate`
 

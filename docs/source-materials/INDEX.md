@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### ElectronicsDescriptor Trust Report V1
+
+- File: `docs/source-materials/2026-06-07-electronics-descriptor-trust-report-v1.md`
+- Status: implemented by hardening Core V1 component trust evidence with ElectronicsDescriptor required-field linting, alternative relationship records, `electronics_descriptor_trust_report.json` persistence, compact revision/context summaries, and failure coverage for missing controlled evidence.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/CONTRACTS.md`
+- Key handles: ElectronicsDescriptor trust report, controlled component evidence, MPN, supplier, datasheet, internal measurements, alternatives, review status, Forge-approved component.
+
 ### Controlled Prototype Readiness V1 Foundation
 
 - File: `docs/source-materials/2026-06-07-controlled-prototype-readiness-v1-foundation.md`

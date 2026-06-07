@@ -20,6 +20,23 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - ElectronicsDescriptor Trust Report V1
+
+- Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 Component Trust hardening slice. `ElectronicsDescriptor v1` seed records now include alternative/replacement relationships, and `src/core/prototype_readiness.mjs` derives `electronics_descriptor_trust_report.json` to lint selected electronic parts for required controlled evidence such as component id, MPN, controlled source, datasheet/spec source, internal measurement record, version, alternatives, trust level, review status, and Forge approval. Missing required evidence blocks electronics validation through `electronics_descriptor_evidence_incomplete`; evidence-complete reviewable parts remain `Needs Review`.
+- Status: implemented in the current working tree; this is not completion of the full V1 goal.
+- Source note: `docs/source-materials/2026-06-07-electronics-descriptor-trust-report-v1.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/prototype_readiness.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: ElectronicsDescriptor trust report, controlled component evidence, MPN, supplier, datasheet, internal measurements, alternatives, review status, Forge-approved component, electronics_descriptor_evidence_incomplete.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes with 31 tests; full `npm run check` passes with 110 tests.
+- Boundary: Core V1 only. This does not add arbitrary user component import, supplier crawling, datasheet/PDF auto-import, procurement ordering, PCB readiness, manufacturing readiness, production certification, OTA, full firmware runtime, robotics, complex mechanisms, or frontend redesign.
+
 ### 2026-06-07 - Controlled Prototype Readiness V1 Foundation
 
 - Scope: implement the first Core V1 backend slice for the active `Forge Controlled Prototype Readiness V1` goal. Added a `prototype_readiness` job and `src/core/prototype_readiness.mjs` to derive controlled `ElectronicsDescriptor` seed evidence, `ElectronicsSpec`, prototype-level electronics validation, GeometrySpec-linked `AssemblyPlan`, development-board bring-up scaffold, and `PrototypeReadinessReport` for each ProductPlan revision. Revision folders now persist `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, and `prototype_readiness_report.json`; revision manifest, revision ledger, and ContextPack expose compact status.

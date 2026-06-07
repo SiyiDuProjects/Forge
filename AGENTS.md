@@ -99,7 +99,7 @@ Current known local limitation:
 - `src/core/assets.mjs`: metadata-only asset registration for text, images, references, and generated placeholder assets.
 - `src/core/model_preview.mjs`: prototype structure preview output, generated model artifact references, and read-only viewer policy.
 - `src/core/electronics_layout.mjs`: placeholder electronics positions, interface directions, cable notes, and conflict checks.
-- `src/core/prototype_readiness.mjs`: Controlled Prototype Readiness V1 core; derives ElectronicsDescriptor-backed `ElectronicsSpec`, prototype-level electronics validation, GeometrySpec-linked `AssemblyPlan`, development-board bring-up scaffold, and `PrototypeReadinessReport` evidence without claiming PCB, manufacturing, OTA, full firmware runtime, certification, or arbitrary user component import.
+- `src/core/prototype_readiness.mjs`: Controlled Prototype Readiness V1 core; derives ElectronicsDescriptor trust reports, `ElectronicsSpec`, prototype-level electronics validation, GeometrySpec-linked `AssemblyPlan`, development-board bring-up scaffold, and `PrototypeReadinessReport` evidence without claiming PCB, manufacturing, OTA, full firmware runtime, certification, or arbitrary user component import.
 - `src/core/quote_plan.mjs`: pre-review estimate assumptions without fake low/mid/high tiers.
 - `src/core/text_interpreter.mjs`: natural-language request interpretation.
 - `src/core/module_catalog.mjs`: stocked/deferred module catalog and matching.

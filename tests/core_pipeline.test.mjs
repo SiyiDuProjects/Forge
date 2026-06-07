@@ -7,7 +7,11 @@ import { createGenerationJob } from "../src/core/jobs.mjs";
 import { createGeometrySpec, generateModelArtifacts } from "../src/core/geometry_generation.mjs";
 import { createDeviceConfig, createDraft, listCatalogModules, submitReview } from "../src/core/pipeline.mjs";
 import { addProductPlanTurn, createProductPlan, revertProductPlanRevision, submitProductPlanReview } from "../src/core/product_plan.mjs";
-import { createPrototypeReadinessPackage } from "../src/core/prototype_readiness.mjs";
+import {
+  createElectronicsDescriptorTrustReport,
+  createPrototypeReadinessPackage,
+  validateElectronicsSpec
+} from "../src/core/prototype_readiness.mjs";
 import { processUserTurn } from "../src/core/sparker_orchestrator.mjs";
 import { resolveComponentAsset } from "../src/core/component_asset_resolver.mjs";
 import { listComponentDescriptorValidation, listComponentDescriptors } from "../src/core/component_library.mjs";
@@ -1350,6 +1354,9 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
     message: "生成模型"
   });
   assert.equal(revision.modelArtifacts.status, "generated");
+  assert.equal(revision.electronicsDescriptorTrustReport.version, "electronics_descriptor_trust_report_v1");
+  assert.equal(revision.electronicsDescriptorTrustReport.status, "pass");
+  assert.ok(revision.electronicsDescriptorTrustReport.entries.every((entry) => entry.requiredEvidenceComplete));
   assert.equal(revision.electronicsSpec.version, "electronics_spec_v1");
   assert.equal(revision.electronicsValidation.version, "electronics_validation_v1");
   assert.equal(revision.prototypeReadinessReport.version, "prototype_readiness_report_v1");
@@ -1365,18 +1372,75 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
 
   const revisionPath = join(projectWorkspacePath(productPlan.planId), "revisions", revision.revisionId);
   const readinessReport = JSON.parse(await readFile(join(revisionPath, "prototype_readiness_report.json"), "utf8"));
+  const descriptorTrustReport = JSON.parse(await readFile(join(revisionPath, "electronics_descriptor_trust_report.json"), "utf8"));
   const electronicsSpec = JSON.parse(await readFile(join(revisionPath, "electronics_spec.json"), "utf8"));
   const assemblyPlan = JSON.parse(await readFile(join(revisionPath, "assembly_plan.json"), "utf8"));
   const manifest = JSON.parse(await readFile(join(revisionPath, "revision_manifest.json"), "utf8"));
   const ledger = JSON.parse(await readFile(join(projectWorkspacePath(productPlan.planId), "revision_ledger.json"), "utf8"));
   assert.equal(readinessReport.status, "Ready");
+  assert.equal(readinessReport.electronicsDescriptorTrust.status, "pass");
+  assert.equal(descriptorTrustReport.status, "pass");
   assert.equal(electronicsSpec.sourceOfTruth.productPlan, "ProductPlan");
   assert.equal(assemblyPlan.sourceOfTruth.geometrySpec.includes("GeometrySpec"), true);
+  assert.equal(manifest.derivedArtifacts.electronicsDescriptorTrustReport, "electronics_descriptor_trust_report.json");
   assert.equal(manifest.derivedArtifacts.prototypeReadinessReport, "prototype_readiness_report.json");
+  assert.ok(ledger.revisions.at(-1).artifactManifest.derivedOutputs.some((item) => (
+    item.key === "electronicsDescriptorTrustReport"
+    && item.present === true
+  )));
   assert.ok(ledger.revisions.at(-1).artifactManifest.derivedOutputs.some((item) => (
     item.key === "prototypeReadinessReport"
     && item.present === true
   )));
+});
+
+test("electronics descriptor trust report blocks incomplete controlled evidence", () => {
+  const electronicsSpec = {
+    mainController: {
+      componentId: "core_board_esp32_s3"
+    },
+    componentTrust: [],
+    powerInputs: [
+      { componentId: "usb_c_breakout", rail: "5v_usb", voltage: 5, availableMa: 1500 }
+    ],
+    powerBudget: {
+      rails: [
+        { rail: "5v_usb", availableMa: 1500, peakLoadMa: 320 }
+      ]
+    },
+    interfaceAssignments: [],
+    cableLinks: [],
+    electronicsDescriptors: [
+      {
+        version: "electronics_descriptor_v1",
+        componentId: "draft_sensor_without_mpn",
+        componentType: "sensor",
+        displayName: "Draft sensor without controlled evidence",
+        supplier: { name: "ProductPlan-scoped controlled draft", status: "workspace_draft" },
+        datasheet: { title: "Draft source notes", url: "component-drafts/draft_sensor/sources.md", status: "review_required" },
+        internalMeasurements: { available: false, note: "Measurement record pending." },
+        descriptorVersion: "draft",
+        alternatives: { replacementGroup: "sensor_draft", componentIds: [], note: "No reviewed substitute." },
+        trustLevel: "reviewable_proxy",
+        reviewStatus: "reviewable",
+        forgeApproved: false
+      }
+    ]
+  };
+  const trustReport = createElectronicsDescriptorTrustReport({ electronicsSpec });
+  assert.equal(trustReport.status, "blocked");
+  assert.ok(trustReport.entries[0].missingFields.includes("mpn"));
+
+  const validation = validateElectronicsSpec({
+    electronicsSpec,
+    electronicsDescriptorTrustReport: trustReport,
+    geometrySpec: {
+      version: "geometry_spec_v1",
+      routes: []
+    }
+  });
+  assert.equal(validation.status, "blocked");
+  assert.ok(validation.errors.some((error) => error.type === "electronics_descriptor_evidence_incomplete"));
 });
 
 test("prototype readiness validation blocks obvious GPIO exhaustion", () => {

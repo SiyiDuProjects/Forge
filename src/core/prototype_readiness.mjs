@@ -1,6 +1,7 @@
 import { clone } from "./workspace_state.mjs";
 
 export const ELECTRONICS_DESCRIPTOR_VERSION = "electronics_descriptor_v1";
+export const ELECTRONICS_DESCRIPTOR_TRUST_REPORT_VERSION = "electronics_descriptor_trust_report_v1";
 export const ELECTRONICS_SPEC_VERSION = "electronics_spec_v1";
 export const ELECTRONICS_VALIDATION_VERSION = "electronics_validation_v1";
 export const ASSEMBLY_PLAN_VERSION = "assembly_plan_v1";
@@ -10,6 +11,26 @@ export const PROTOTYPE_READINESS_REPORT_VERSION = "prototype_readiness_report_v1
 const CORE_V1 = "Core V1";
 const SUPPORTING_V1 = "Supporting V1";
 const FUTURE_V2 = "Future V2";
+
+const BLOCKING_REVIEW_STATUSES = Object.freeze(["draft", "blocked", "retired"]);
+
+const REQUIRED_ELECTRONICS_DESCRIPTOR_FIELDS = Object.freeze([
+  "componentId",
+  "mpn",
+  "supplier.name",
+  "supplier.status",
+  "datasheet.title",
+  "datasheet.url",
+  "datasheet.status",
+  "internalMeasurements.available",
+  "internalMeasurements.note",
+  "descriptorVersion",
+  "alternatives.componentIds",
+  "alternatives.note",
+  "trustLevel",
+  "reviewStatus",
+  "forgeApproved"
+]);
 
 const DEFAULT_BOARD_PINS = Object.freeze({
   display_spi: {
@@ -55,6 +76,7 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
       available: false,
       note: "Proxy current budget; bench measurement is a future evidence upgrade."
     },
+    alternatives: alternatives("esp32_s3_core_board", [], "No approved same-family controller substitute in Core V1."),
     version: "2026-06-07",
     trustLevel: "datasheet_verified",
     reviewStatus: "reviewable",
@@ -113,6 +135,7 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
       available: false,
       note: "Bench stock source is controlled; full load test remains review evidence."
     },
+    alternatives: alternatives("usb_c_power_input", [], "No approved power-input substitute in Core V1."),
     version: "2026-06-07",
     trustLevel: "datasheet_verified",
     reviewStatus: "reviewable",
@@ -149,6 +172,7 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
       available: false,
       note: "Low-current I2C sensor proxy."
     },
+    alternatives: alternatives("ambient_light_sensor", [], "No approved ambient-sensor substitute in Core V1."),
     version: "2026-06-07",
     trustLevel: "datasheet_verified",
     reviewStatus: "reviewable",
@@ -183,6 +207,7 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
       available: false,
       note: "Switch continuity only; no active current load."
     },
+    alternatives: alternatives("panel_button_6mm", [], "No approved same-footprint button substitute in Core V1."),
     version: "2026-06-07",
     trustLevel: "datasheet_verified",
     reviewStatus: "reviewable",
@@ -217,6 +242,7 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
       available: false,
       note: "Audio output path is prototype-level only."
     },
+    alternatives: alternatives("small_speaker", [], "Speaker remains a reviewable proxy; substitutes require human review."),
     version: "2026-06-07",
     trustLevel: "reviewable_proxy",
     reviewStatus: "reviewable",
@@ -252,6 +278,7 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
       available: false,
       note: "Camera requests remain human-review risk items."
     },
+    alternatives: alternatives("camera_module_review", [], "Camera substitutes are review-only in Core V1."),
     version: "2026-06-07",
     trustLevel: "reviewable_proxy",
     reviewStatus: "human_review_required",
@@ -278,6 +305,15 @@ const SEED_ELECTRONICS_DESCRIPTORS = Object.freeze({
   })
 });
 
+function alternatives(replacementGroup, componentIds = [], note = "") {
+  return {
+    replacementGroup,
+    componentIds: [...componentIds],
+    note,
+    directEditingAllowed: false
+  };
+}
+
 function displayDescriptor({ componentId, displayName, nominalCurrentMa, peakCurrentMa }) {
   return {
     componentId,
@@ -298,6 +334,11 @@ function displayDescriptor({ componentId, displayName, nominalCurrentMa, peakCur
       available: false,
       note: "Display current budget is datasheet-level prototype evidence."
     },
+    alternatives: alternatives(
+      "display_tft_spi",
+      ["display_3_5_tft", "display_5_tft"].filter((id) => id !== componentId),
+      "Same-family display substitutions require matching mechanical opening and SPI power budget checks."
+    ),
     version: "2026-06-07",
     trustLevel: "datasheet_verified",
     reviewStatus: "reviewable",
@@ -335,6 +376,11 @@ function batteryDescriptor({ componentId, displayName }) {
       available: false,
       note: "Battery path requires human risk review before prototype build."
     },
+    alternatives: alternatives(
+      "review_battery_source",
+      ["battery_lipo_2000", "battery_18650_holder"].filter((id) => id !== componentId),
+      "Battery substitutes remain human-review-only in Core V1."
+    ),
     version: "2026-06-07",
     trustLevel: "reviewable_proxy",
     reviewStatus: "human_review_required",
@@ -373,8 +419,12 @@ export function createPrototypeReadinessPackage({
     geometrySpec,
     revisionId
   });
+  const electronicsDescriptorTrustReport = createElectronicsDescriptorTrustReport({
+    electronicsSpec
+  });
   const electronicsValidation = validateElectronicsSpec({
     electronicsSpec,
+    electronicsDescriptorTrustReport,
     geometrySpec
   });
   const assemblyPlan = createAssemblyPlan({
@@ -393,12 +443,14 @@ export function createPrototypeReadinessPackage({
     geometrySpec,
     electronicsLayout,
     electronicsSpec,
+    electronicsDescriptorTrustReport,
     electronicsValidation,
     assemblyPlan,
     developmentBoardScaffold,
     revisionId
   });
   return {
+    electronicsDescriptorTrustReport,
     electronicsSpec,
     electronicsValidation,
     assemblyPlan,
@@ -491,7 +543,64 @@ export function createElectronicsSpec({ productPlan = {}, geometrySpec = {}, rev
   };
 }
 
-export function validateElectronicsSpec({ electronicsSpec = {}, geometrySpec = {} } = {}) {
+export function createElectronicsDescriptorTrustReport({ electronicsSpec = {}, electronicsDescriptors = null } = {}) {
+  const descriptors = Array.isArray(electronicsDescriptors)
+    ? electronicsDescriptors
+    : Array.isArray(electronicsSpec.electronicsDescriptors) ? electronicsSpec.electronicsDescriptors : [];
+  const entries = descriptors.map(electronicsDescriptorTrustEntry);
+  const blockedEntries = entries.filter((entry) => entry.status === "blocked");
+  const reviewEntries = entries.filter((entry) => entry.status === "warning");
+  const status = blockedEntries.length ? "blocked" : reviewEntries.length ? "warning" : "pass";
+  return {
+    version: ELECTRONICS_DESCRIPTOR_TRUST_REPORT_VERSION,
+    scopeClassification: CORE_V1,
+    status,
+    source: "ElectronicsDescriptor v1 controlled evidence lint",
+    componentCount: entries.length,
+    entries,
+    checks: [
+      {
+        name: "required_evidence_fields",
+        status: blockedEntries.some((entry) => entry.missingFields.length > 0) ? "blocked" : "pass",
+        missingFieldCount: entries.reduce((sum, entry) => sum + entry.missingFields.length, 0)
+      },
+      {
+        name: "forge_approval_and_review_state",
+        status: blockedEntries.length ? "blocked" : reviewEntries.length ? "warning" : "pass",
+        forgeApprovedCount: entries.filter((entry) => entry.forgeApproved).length,
+        reviewRequiredCount: entries.filter((entry) => entry.requiresHumanReview || entry.forgeApproved === false).length
+      },
+      {
+        name: "alternative_relationships",
+        status: entries.every((entry) => entry.alternatives?.recordPresent) ? "pass" : "blocked",
+        replacementGroups: [...new Set(entries.map((entry) => entry.alternatives?.replacementGroup).filter(Boolean))]
+      }
+    ],
+    summary: {
+      approvedCount: entries.filter((entry) => entry.forgeApproved && entry.status === "pass").length,
+      reviewRequiredCount: reviewEntries.length,
+      blockedCount: blockedEntries.length,
+      missingRequiredEvidenceCount: entries.reduce((sum, entry) => sum + entry.missingFields.length, 0),
+      trustLevels: [...new Set(entries.map((entry) => entry.trustLevel).filter(Boolean))],
+      reviewStatuses: [...new Set(entries.map((entry) => entry.reviewStatus).filter(Boolean))]
+    },
+    boundaries: {
+      controlledForgeLibraryOnly: true,
+      arbitraryUserComponentImport: false,
+      supplierCrawler: false,
+      datasheetAutoImport: false,
+      approvalByUserLink: false,
+      manufacturingReadinessClaim: false
+    },
+    directEditingAllowed: false
+  };
+}
+
+export function validateElectronicsSpec({
+  electronicsSpec = {},
+  electronicsDescriptorTrustReport = null,
+  geometrySpec = {}
+} = {}) {
   const errors = [];
   const warnings = [];
   const checks = [];
@@ -501,17 +610,31 @@ export function validateElectronicsSpec({ electronicsSpec = {}, geometrySpec = {
     errors.push(issue("missing_main_controller", "ElectronicsSpec requires a Forge-controlled main controller."));
   }
 
-  const trustWarnings = electronicsSpec.componentTrust
-    .filter((item) => item.trustLevel === "reviewable_proxy" || item.forgeApproved === false || item.reviewStatus === "human_review_required")
-    .map((item) => issue("component_requires_review", `${item.componentId} is not fully Forge-approved for unattended prototype build.`, {
-      componentId: item.componentId,
-      trustLevel: item.trustLevel,
-      reviewStatus: item.reviewStatus
+  const trustReport = electronicsDescriptorTrustReport || createElectronicsDescriptorTrustReport({ electronicsSpec });
+  const trustErrors = (trustReport.entries || [])
+    .filter((entry) => entry.status === "blocked")
+    .map((entry) => issue("electronics_descriptor_evidence_incomplete", `${entry.componentId} is missing required controlled ElectronicsDescriptor evidence.`, {
+      componentId: entry.componentId,
+      missingFields: entry.missingFields,
+      reviewStatus: entry.reviewStatus,
+      trustLevel: entry.trustLevel
+    }));
+  errors.push(...trustErrors);
+
+  const trustWarnings = (trustReport.entries || [])
+    .filter((entry) => entry.status === "warning")
+    .map((entry) => issue("component_requires_review", `${entry.componentId} is not fully Forge-approved for unattended prototype build.`, {
+      componentId: entry.componentId,
+      trustLevel: entry.trustLevel,
+      reviewStatus: entry.reviewStatus,
+      forgeApproved: entry.forgeApproved
     }));
   warnings.push(...trustWarnings);
-  addCheck("component_trust", trustWarnings.length ? "warning" : "pass", {
-    componentCount: electronicsSpec.componentTrust.length,
-    reviewItemCount: trustWarnings.length
+  addCheck("component_trust", trustErrors.length ? "blocked" : trustWarnings.length ? "warning" : "pass", {
+    componentCount: (electronicsSpec.componentTrust || []).length,
+    reviewItemCount: trustWarnings.length,
+    missingRequiredEvidenceCount: trustErrors.reduce((sum, error) => sum + (error.missingFields || []).length, 0),
+    trustReportStatus: trustReport.status || "unknown"
   });
 
   const powerInput = electronicsSpec.powerInputs.find((input) => input.rail === "5v_usb");
@@ -743,6 +866,7 @@ export function createPrototypeReadinessReport({
   geometrySpec = {},
   electronicsLayout = null,
   electronicsSpec = {},
+  electronicsDescriptorTrustReport = {},
   electronicsValidation = {},
   assemblyPlan = {},
   developmentBoardScaffold = {},
@@ -778,6 +902,7 @@ export function createPrototypeReadinessReport({
       productPlan: "product_plan.json",
       geometrySpec: "geometry-spec.json",
       componentDescriptors: "component_descriptors.json",
+      electronicsDescriptorTrustReport: "electronics_descriptor_trust_report.json",
       electronicsSpec: "electronics_spec.json",
       electronicsValidation: "electronics_validation_report.json",
       assemblyPlan: "assembly_plan.json",
@@ -785,10 +910,23 @@ export function createPrototypeReadinessReport({
       directEditingAllowed: false
     },
     componentTrustSummary: {
-      componentCount: (electronicsSpec.componentTrust || []).length,
-      forgeApprovedCount: (electronicsSpec.componentTrust || []).filter((item) => item.forgeApproved).length,
-      reviewRequiredCount: (electronicsSpec.componentTrust || []).filter((item) => item.reviewStatus === "human_review_required" || item.forgeApproved === false).length,
-      trustLevels: [...new Set((electronicsSpec.componentTrust || []).map((item) => item.trustLevel).filter(Boolean))]
+      componentCount: electronicsDescriptorTrustReport.componentCount || (electronicsSpec.componentTrust || []).length,
+      forgeApprovedCount: (electronicsDescriptorTrustReport.entries || []).filter((item) => item.forgeApproved).length
+        || (electronicsSpec.componentTrust || []).filter((item) => item.forgeApproved).length,
+      reviewRequiredCount: electronicsDescriptorTrustReport.summary?.reviewRequiredCount
+        ?? (electronicsSpec.componentTrust || []).filter((item) => item.reviewStatus === "human_review_required" || item.forgeApproved === false).length,
+      blockedCount: electronicsDescriptorTrustReport.summary?.blockedCount || 0,
+      missingRequiredEvidenceCount: electronicsDescriptorTrustReport.summary?.missingRequiredEvidenceCount || 0,
+      trustLevels: electronicsDescriptorTrustReport.summary?.trustLevels
+        || [...new Set((electronicsSpec.componentTrust || []).map((item) => item.trustLevel).filter(Boolean))],
+      reviewStatuses: electronicsDescriptorTrustReport.summary?.reviewStatuses || []
+    },
+    electronicsDescriptorTrust: {
+      version: electronicsDescriptorTrustReport.version || "",
+      status: electronicsDescriptorTrustReport.status || "unknown",
+      componentCount: electronicsDescriptorTrustReport.componentCount || 0,
+      checks: electronicsDescriptorTrustReport.checks || [],
+      boundaries: electronicsDescriptorTrustReport.boundaries || {}
     },
     electronicsSpecSummary: {
       selectedComponentIds: electronicsSpec.selectedComponentIds || [],
@@ -827,6 +965,7 @@ export function createPrototypeReadinessReport({
       productPlan: "product_plan.json",
       geometrySpec: "geometry-spec.json",
       componentDescriptors: "component_descriptors.json",
+      electronicsDescriptorTrustReport: "electronics_descriptor_trust_report.json",
       electronicsSpec: "electronics_spec.json",
       electronicsValidation: "electronics_validation_report.json",
       assemblyPlan: "assembly_plan.json",
@@ -889,6 +1028,12 @@ function descriptorForComponent(componentId, componentDescriptor = null) {
       available: false,
       note: "Promoted same-type descriptor inherits electronics proxy until a dedicated ElectronicsDescriptor is approved."
     },
+    version: componentDescriptor?.versioning?.descriptorVersion || componentDescriptor?.descriptorVersion || "product_plan_scoped_proxy",
+    alternatives: alternatives(
+      `${type}_product_plan_scoped_proxy`,
+      base.componentId ? [base.componentId] : [],
+      "ProductPlan-scoped same-type replacement requires a dedicated ElectronicsDescriptor before unattended prototype build."
+    ),
     trustLevel: "reviewable_proxy",
     reviewStatus: "reviewable",
     forgeApproved: false,
@@ -909,6 +1054,7 @@ function compactElectronicsDescriptor(descriptor) {
     datasheet: descriptor.datasheet || {},
     internalMeasurements: descriptor.internalMeasurements || {},
     descriptorVersion: descriptor.version || "",
+    alternatives: descriptor.alternatives || alternatives(`${descriptor.componentType || "component"}_untracked`, [], "Alternative relationship has not been reviewed."),
     trustLevel: descriptor.trustLevel || "",
     reviewStatus: descriptor.reviewStatus || "",
     forgeApproved: descriptor.forgeApproved === true,
@@ -920,6 +1066,103 @@ function compactElectronicsDescriptor(descriptor) {
   };
 }
 
+function electronicsDescriptorTrustEntry(descriptor = {}) {
+  const missingFields = missingElectronicsDescriptorFields(descriptor);
+  const reviewBlocked = BLOCKING_REVIEW_STATUSES.includes(descriptor.reviewStatus || "")
+    || descriptor.trustLevel === "blocked";
+  const reviewRequired = descriptor.requiresHumanReview === true
+    || descriptor.forgeApproved === false
+    || descriptor.reviewStatus === "human_review_required"
+    || descriptor.trustLevel === "reviewable_proxy";
+  const status = missingFields.length || reviewBlocked
+    ? "blocked"
+    : reviewRequired ? "warning" : "pass";
+  return {
+    componentId: descriptor.componentId || "",
+    internalComponentId: descriptor.componentId || "",
+    componentType: descriptor.componentType || "",
+    displayName: descriptor.displayName || "",
+    mpn: descriptor.mpn || "",
+    supplier: {
+      name: descriptor.supplier?.name || "",
+      status: descriptor.supplier?.status || "",
+      procurementSourceControlled: descriptor.supplier?.status === "vetted_internal_source"
+    },
+    datasheet: {
+      title: descriptor.datasheet?.title || "",
+      url: descriptor.datasheet?.url || "",
+      status: descriptor.datasheet?.status || ""
+    },
+    internalMeasurements: {
+      recordPresent: descriptor.internalMeasurements && typeof descriptor.internalMeasurements.available === "boolean",
+      available: descriptor.internalMeasurements?.available === true,
+      note: descriptor.internalMeasurements?.note || ""
+    },
+    descriptorVersion: descriptor.descriptorVersion || descriptor.version || "",
+    alternatives: {
+      recordPresent: Array.isArray(descriptor.alternatives?.componentIds) && Boolean(descriptor.alternatives?.note),
+      replacementGroup: descriptor.alternatives?.replacementGroup || "",
+      componentIds: Array.isArray(descriptor.alternatives?.componentIds) ? [...descriptor.alternatives.componentIds] : [],
+      note: descriptor.alternatives?.note || ""
+    },
+    trustLevel: descriptor.trustLevel || "blocked",
+    reviewStatus: descriptor.reviewStatus || "unknown",
+    forgeApproved: descriptor.forgeApproved === true,
+    requiresHumanReview: descriptor.requiresHumanReview === true,
+    requiredEvidenceComplete: missingFields.length === 0,
+    missingFields,
+    status,
+    issues: trustEntryIssues({ descriptor, missingFields, reviewBlocked, reviewRequired }),
+    directEditingAllowed: false
+  };
+}
+
+function missingElectronicsDescriptorFields(descriptor = {}) {
+  return REQUIRED_ELECTRONICS_DESCRIPTOR_FIELDS.filter((fieldPath) => isMissingEvidenceField(descriptor, fieldPath));
+}
+
+function isMissingEvidenceField(source = {}, fieldPath = "") {
+  const parts = fieldPath.split(".");
+  let value = source;
+  for (const part of parts) {
+    if (value == null || typeof value !== "object" || !(part in value)) return true;
+    value = value[part];
+  }
+  if (typeof value === "boolean") return false;
+  if (Array.isArray(value)) return false;
+  if (typeof value === "number") return Number.isNaN(value);
+  return value === null || value === undefined || value === "";
+}
+
+function trustEntryIssues({ descriptor = {}, missingFields = [], reviewBlocked = false, reviewRequired = false } = {}) {
+  const issues = [];
+  if (missingFields.length) {
+    issues.push({
+      type: "missing_required_electronics_descriptor_evidence",
+      severity: "blocked",
+      missingFields
+    });
+  }
+  if (reviewBlocked) {
+    issues.push({
+      type: "electronics_descriptor_review_blocked",
+      severity: "blocked",
+      reviewStatus: descriptor.reviewStatus || "",
+      trustLevel: descriptor.trustLevel || ""
+    });
+  }
+  if (!missingFields.length && !reviewBlocked && reviewRequired) {
+    issues.push({
+      type: "component_requires_human_review",
+      severity: "warning",
+      reviewStatus: descriptor.reviewStatus || "",
+      trustLevel: descriptor.trustLevel || "",
+      forgeApproved: descriptor.forgeApproved === true
+    });
+  }
+  return issues;
+}
+
 function componentTrustRecord(descriptor) {
   return {
     componentId: descriptor.componentId,
@@ -928,6 +1171,8 @@ function componentTrustRecord(descriptor) {
     supplierStatus: descriptor.supplier?.status || "",
     datasheetStatus: descriptor.datasheet?.status || "",
     internalMeasurementAvailable: descriptor.internalMeasurements?.available === true,
+    descriptorVersion: descriptor.version || descriptor.descriptorVersion || "",
+    alternativeComponentIds: Array.isArray(descriptor.alternatives?.componentIds) ? [...descriptor.alternatives.componentIds] : [],
     trustLevel: descriptor.trustLevel || "blocked",
     reviewStatus: descriptor.reviewStatus || "unknown",
     forgeApproved: descriptor.forgeApproved === true,
@@ -1186,6 +1431,7 @@ function issue(type, message, extra = {}) {
 function fixSuggestionForIssue(issueRecord = {}) {
   const suggestions = {
     missing_main_controller: "Select a Forge-approved core board before prototype bring-up.",
+    electronics_descriptor_evidence_incomplete: "Complete the controlled ElectronicsDescriptor evidence before treating this part as build-ready.",
     component_requires_review: "Keep the component in human review or replace it with a Forge-approved descriptor.",
     rail_current_exceeded: "Reduce module load, choose a lower-current display/module, or move this to a future reviewed power design.",
     interface_assignment_blocked: "Choose a supported same-type component or extend ElectronicsDescriptor/layout support in a future goal.",

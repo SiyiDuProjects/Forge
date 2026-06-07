@@ -47,6 +47,7 @@ export function buildContextPack({
   const revisionManifest = revisionPath ? readJson(join(revisionPath, "revision_manifest.json")) : null;
   const validationReport = revisionPath ? readJson(join(revisionPath, "validation_report.json")) : null;
   const generationEvidenceReport = revisionPath ? readJson(join(revisionPath, "generation_evidence_report.json")) : null;
+  const electronicsDescriptorTrustReport = revisionPath ? readJson(join(revisionPath, "electronics_descriptor_trust_report.json")) : null;
   const electronicsValidationReport = revisionPath ? readJson(join(revisionPath, "electronics_validation_report.json")) : null;
   const prototypeReadinessReport = revisionPath ? readJson(join(revisionPath, "prototype_readiness_report.json")) : null;
   const revisionLedger = readRevisionLedger({ workspaceId, rootDir }) || {};
@@ -79,7 +80,14 @@ export function buildContextPack({
       eventsPath: manifest.eventsPath || "events.jsonl"
     },
     currentProductPlanSummary: productPlanSummary(productPlan, { workspaceId, rootDir }),
-    currentRevisionSummary: revisionSummary(revisionManifest, validationReport, generationEvidenceReport, electronicsValidationReport, prototypeReadinessReport),
+    currentRevisionSummary: revisionSummary(
+      revisionManifest,
+      validationReport,
+      generationEvidenceReport,
+      electronicsDescriptorTrustReport,
+      electronicsValidationReport,
+      prototypeReadinessReport
+    ),
     revisionLedgerSummary: summarizeRevisionLedger(revisionLedger),
     openProposals: proposals.filter((proposal) => ["proposed", "staged"].includes(proposal.status)),
     recentEvents: events.map((event) => ({
@@ -104,6 +112,7 @@ export function buildContextPack({
       "raw GLB/STL/STEP bytes",
       "raw descriptor source/spec text",
       "raw electronics source evidence",
+      "full electronics descriptor trust entries",
       "full prototype readiness report details",
       "full events.jsonl",
       "arbitrary project file contents",
@@ -190,12 +199,20 @@ function productPlanComponentLibrarySummary(productPlan = {}, { workspaceId = ""
   };
 }
 
-function revisionSummary(revisionManifest, validationReport, generationEvidenceReport, electronicsValidationReport, prototypeReadinessReport) {
+function revisionSummary(
+  revisionManifest,
+  validationReport,
+  generationEvidenceReport,
+  electronicsDescriptorTrustReport,
+  electronicsValidationReport,
+  prototypeReadinessReport
+) {
   if (!revisionManifest) {
     return {
       revisionId: "",
       generationStatus: "none",
       validationStatus: "unknown",
+      electronicsDescriptorTrustStatus: "unknown",
       electronicsValidationStatus: "unknown",
       prototypeReadinessStatus: "unknown",
       directEditingAllowed: false
@@ -205,6 +222,7 @@ function revisionSummary(revisionManifest, validationReport, generationEvidenceR
     revisionId: revisionManifest.revisionId,
     generationStatus: revisionManifest.generationStatus,
     validationStatus: revisionManifest.validationStatus || validationReport?.status || "unknown",
+    electronicsDescriptorTrustStatus: electronicsDescriptorTrustReport?.status || "unknown",
     electronicsValidationStatus: electronicsValidationReport?.status || "unknown",
     prototypeReadinessStatus: prototypeReadinessReport?.status || "unknown",
     sourceOfTruth: revisionManifest.sourceOfTruth || {},
@@ -221,6 +239,18 @@ function revisionSummary(revisionManifest, validationReport, generationEvidenceR
           diagnostics: compactArtifactAuditDiagnostics(generationEvidenceReport.artifactAudit || {})
         },
         directEditingAllowed: generationEvidenceReport.directEditingAllowed === true
+      }
+      : null,
+    electronicsDescriptorTrust: electronicsDescriptorTrustReport
+      ? {
+        version: electronicsDescriptorTrustReport.version || "",
+        status: electronicsDescriptorTrustReport.status || "",
+        componentCount: electronicsDescriptorTrustReport.componentCount || 0,
+        summary: electronicsDescriptorTrustReport.summary || {},
+        checkCount: (electronicsDescriptorTrustReport.checks || []).length,
+        blockedCount: (electronicsDescriptorTrustReport.entries || []).filter((entry) => entry.status === "blocked").length,
+        reviewRequiredCount: (electronicsDescriptorTrustReport.entries || []).filter((entry) => entry.status === "warning").length,
+        directEditingAllowed: electronicsDescriptorTrustReport.directEditingAllowed === true
       }
       : null,
     prototypeReadiness: prototypeReadinessReport

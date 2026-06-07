@@ -417,6 +417,7 @@ function createRevisionForTurn({
     generationConfirmed: modelJob.output?.modelArtifacts?.status === "generated",
     modelPreview: modelJob.output?.modelPreview,
     electronicsLayout: layoutJob.output?.electronicsLayout,
+    electronicsDescriptorTrustReport: prototypeReadinessJob.output?.electronicsDescriptorTrustReport,
     electronicsSpec: prototypeReadinessJob.output?.electronicsSpec,
     electronicsValidation: prototypeReadinessJob.output?.electronicsValidation,
     assemblyPlan: prototypeReadinessJob.output?.assemblyPlan,
