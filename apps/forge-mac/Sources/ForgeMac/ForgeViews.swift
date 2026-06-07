@@ -7,17 +7,24 @@ struct ForgeRootView: View {
         NavigationSplitView {
             ForgeSidebarView()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-        } content: {
-            ForgeThreadView()
-                .navigationSplitViewColumnWidth(min: 420, ideal: 620)
         } detail: {
-            ForgeInspectorView()
-                .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 460)
+            ForgeWorkbenchDetailView()
         }
         .sheet(isPresented: $state.showingSettings) {
             ForgeSettingsView()
                 .environmentObject(state)
                 .frame(width: 480)
+        }
+    }
+}
+
+private struct ForgeWorkbenchDetailView: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            ForgeThreadView()
+                .frame(minWidth: 420, maxWidth: .infinity)
+            ForgeInspectorView()
+                .frame(minWidth: 320, idealWidth: 380, maxWidth: 460)
         }
     }
 }
@@ -68,6 +75,7 @@ struct ForgeSidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .tint(ForgeFill.projectRowSelected)
 
             Button {
                 state.showingSettings = true
@@ -261,7 +269,11 @@ struct ForgeInspectorView: View {
             }
             .padding(ForgeSpacing.lg)
         }
-        .background(.thinMaterial)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .forgeGlassPanel(radius: ForgeRadius.glassBubble, shadow: true)
+        .padding(.leading, ForgeSpacing.sm)
+        .padding(.trailing, ForgeSpacing.md)
+        .padding(.vertical, ForgeSpacing.md)
     }
 }
 
@@ -301,8 +313,6 @@ private struct ForgePreviewSection: View {
                 .background(.black.opacity(0.04), in: RoundedRectangle(cornerRadius: ForgeRadius.preview, style: .continuous))
             }
         }
-        .padding(ForgeSpacing.md)
-        .forgeGlassPanel(radius: ForgeRadius.panel)
     }
 }
 
@@ -327,8 +337,6 @@ private struct ForgePlanFactsSection: View {
             ForgeFactRow(label: "报价区间", value: revision?.quoteRange ?? "待估算")
             ForgeFactRow(label: "3D 模型状态", value: revision?.modelStatusTitle ?? "等待输入")
         }
-        .padding(ForgeSpacing.md)
-        .forgeGlassPanel(radius: ForgeRadius.panel)
     }
 
     private var shellPath: String {
@@ -375,8 +383,6 @@ private struct ForgeModulesSection: View {
                 }
             }
         }
-        .padding(ForgeSpacing.md)
-        .forgeGlassPanel(radius: ForgeRadius.panel)
     }
 }
 
@@ -398,8 +404,6 @@ private struct ForgeRiskSection: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(ForgeSpacing.md)
-        .forgeGlassPanel(radius: ForgeRadius.panel)
     }
 }
 

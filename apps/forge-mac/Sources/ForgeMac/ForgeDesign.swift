@@ -21,6 +21,7 @@ enum ForgeRadius {
 
 enum ForgeFill {
     static let systemBubble = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+    static let projectRowSelected = Color(red: 237.0 / 255.0, green: 237.0 / 255.0, blue: 237.0 / 255.0)
 }
 
 enum ForgeSidebarMetric {

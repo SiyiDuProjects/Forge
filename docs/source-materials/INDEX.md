@@ -62,6 +62,27 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 - Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
 - Key handles: Forge Mac, conversation-side top toolbar removal, native top-left controls preserved, lower-left settings bubble, runtime picker in settings, no refresh button, hidden title text.
 
+### Forge Mac 3D Preview Visibility Feedback
+
+- File: `docs/source-materials/2026-06-06-forge-mac-3d-preview-visibility-feedback.md`
+- Status: implemented by replacing the optional full-web-page preview with a dedicated Three.js `WKWebView` that loads the current revision's generated GLB directly.
+- Related docs: `AGENTS.md`, `README.md`, `apps/forge-mac/README.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, 3D preview, WKWebView, Three.js, model.glb, generated GLB, no web preview toggle, right inspector.
+
+### Forge Mac Project Row Selected Fill
+
+- File: `docs/source-materials/2026-06-06-forge-mac-project-row-selected-fill.md`
+- Status: implemented by adding a dedicated `#ededed` selected-fill token for Mac project rows.
+- Related docs: `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, project row, selected fill, #ededed, sidebar, List(selection:).
+
+### Forge Mac Right Inspector Bubble Feedback
+
+- File: `docs/source-materials/2026-06-06-forge-mac-right-inspector-bubble-feedback.md`
+- Status: implemented by making the Mac right inspector one large glass bubble with natural spacing and by removing the vertical center-right system splitter.
+- Related docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: Forge Mac, right inspector, large bubble, left sidebar bubble, Liquid Glass, no stacked cards, no dividers, no center-right splitter.
+
 ### Conversation Bottom Gap Comment
 
 - File: `docs/source-materials/2026-06-06-conversation-bottom-gap-comment.md`

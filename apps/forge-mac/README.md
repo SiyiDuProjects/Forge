@@ -29,6 +29,6 @@ The app defaults to `http://127.0.0.1:8765` and `Codex` runtime. Use `Forge шо╛ч
 - SwiftUI spacing/radius tokens for custom Forge surfaces.
 - Liquid Glass path on macOS 26 through SwiftUI `glassEffect`; older macOS falls back to system material.
 - Local Forge API calls for workspace restore, plan creation, and chat turns.
-- Optional `WKWebView` preview of the existing web/Three.js Forge surface.
+- Dedicated `WKWebView` Three.js preview for the current revision's generated GLB artifact.
 
 This is not a rewrite of the Forge core and does not make the Mac client the owner of ProductPlan, GeometrySpec, GLB/STL/STEP artifacts, or Codex thread state.

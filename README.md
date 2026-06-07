@@ -45,7 +45,7 @@ Start the Forge server first, then open the Xcode app project:
 open apps/forge-mac/ForgeMac.xcodeproj
 ```
 
-Select the `ForgeMac` scheme and run. The Xcode project sets the app bundle identifier, which avoids Swift-package executable launch warnings around missing bundle identity. The Mac client defaults to `http://127.0.0.1:8765`, uses native SwiftUI/AppKit surfaces for the shell, and keeps ProductPlan, GeometrySpec, Codex runtime state, and generated model artifacts in the existing Forge backend.
+Select the `ForgeMac` scheme and run. The Xcode project sets the app bundle identifier, which avoids Swift-package executable launch warnings around missing bundle identity. The Mac client defaults to `http://127.0.0.1:8765`, uses native SwiftUI/AppKit surfaces for the shell, loads generated GLB previews through a dedicated Three.js `WKWebView`, and keeps ProductPlan, GeometrySpec, Codex runtime state, and generated model artifacts in the existing Forge backend.
 
 ## Verify
 

@@ -20,6 +20,45 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-06 - Forge Mac Right Inspector Bubble
+
+- Scope: make the Mac right inspector render as one large native/glass bubble matching the left-side large surface and remove the separate vertical system splitter between the center thread and right inspector. The 3D preview, plan summary, BOM, and risk sections now sit inside that shared bubble with natural spacing instead of divider lines or separate rounded cards on a gray pane.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-right-inspector-bubble-feedback.md`
+- Main docs: `AGENTS.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+- Retrieval handles: Forge Mac, right inspector, large bubble, left sidebar bubble, Liquid Glass, no stacked cards, no dividers, no center-right splitter.
+- Verification: `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `npm run check` passes with 77 tests. Visual check relaunched `ForgeMac.app` and confirmed the center/right vertical system splitter is gone, the right inspector is one large rounded glass bubble with no internal divider lines, and the 3D model preview remains visible.
+- Boundary: Mac right-inspector visual shell only; no ProductPlan, GeometrySpec, API, 3D artifact generation, runtime, composer, or web UI behavior changed.
+
+### 2026-06-06 - Forge Mac Project Row Selected Fill
+
+- Scope: tune the Mac sidebar selected project row background to the user-specified `#ededed` while keeping native `List(selection:)` row behavior and right-click context menus.
+- Status: implemented and visually checked in the running Mac app.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-project-row-selected-fill.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeDesign.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+- Retrieval handles: Forge Mac, project row, selected fill, #ededed, sidebar, List(selection:).
+- Verification: `swift build` passes for `apps/forge-mac`; `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. Visual check relaunched `ForgeMac.app` and confirmed the selected project row uses the lighter gray fill.
+- Boundary: Mac sidebar visual styling only; no ProductPlan, runtime, API, 3D preview, composer, or web UI behavior changed.
+
+### 2026-06-06 - Forge Mac Direct 3D Preview
+
+- Scope: make the Mac right inspector show the generated 3D model directly instead of hiding it behind a `网页预览` toggle or embedding the full Forge web app. The Mac client now resolves the current revision's GLB artifact URL from ProductPlan state and loads it into a dedicated Three.js `WKWebView` preview.
+- Status: implemented and visually verified in the running Mac app.
+- Source note: `docs/source-materials/2026-06-06-forge-mac-3d-preview-visibility-feedback.md`
+- Main docs: `AGENTS.md`, `README.md`, `apps/forge-mac/README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `apps/forge-mac/Sources/ForgeMac/ForgeAppState.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeModels.swift`
+  - `apps/forge-mac/Sources/ForgeMac/ForgeViews.swift`
+  - `apps/forge-mac/Sources/ForgeMac/WebPreview.swift`
+- Retrieval handles: Forge Mac 3D preview, WKWebView, Three.js, model.glb, previewModelURL, generated GLB, no web preview toggle.
+- Verification: `npm run check` passes with 77 tests. `swift build` passes for `apps/forge-mac` after allowing SwiftPM/Xcode to write normal user cache files. `xcodebuild -project ForgeMac.xcodeproj -scheme ForgeMac -configuration Debug -derivedDataPath DerivedData build` passes from `apps/forge-mac`. Visual check relaunched `ForgeMac.app` and confirmed the right inspector shows `真实 3D 预览已加载` with the generated model visible for the selected generated revision.
+- Boundary: Mac client rendering only; ProductPlan, GeometrySpec, artifact generation, backend API routes, web app inspector behavior, and manufacturing/review flows were not changed.
+
 ### 2026-06-06 - Forge Mac Top Toolbar Removal
 
 - Scope: remove the Mac client's app-specific top refresh/runtime/settings controls and title text from the conversation side while preserving the native macOS top-left window/sidebar controls. Settings now opens from the lower-left sidebar glass bubble, runtime/model selection stays inside `Forge 设置`, and the Mac settings panel no longer exposes `刷新项目`.
