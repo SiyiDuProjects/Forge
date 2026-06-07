@@ -1120,6 +1120,7 @@ function auditGlbArtifact(asset, integrity, geometrySpec) {
     linePrimitiveCount: 0,
     vec3AccessorMissingBoundsCount: 0,
     thinMeshPrimitiveCount: 0,
+    thinMeshPrimitiveSamples: [],
     minimumMeshSpanMm: MIN_PREVIEW_SOLID_THICKNESS_MM,
     meshPrimitiveCount: 0,
     passed: false,
@@ -1149,7 +1150,9 @@ function auditGlbArtifact(asset, integrity, geometrySpec) {
       result.format.binaryChunkPresent = nextChunkType === 0x004e4942;
       result.semanticNodePrefixes = countGlbNodePrefixes(glbJson);
       result.linePrimitiveCount = countLinePrimitives(glbJson);
-      result.thinMeshPrimitiveCount = countThinMeshPrimitives(glbJson, MIN_PREVIEW_SOLID_THICKNESS_MM);
+      const thinMeshAnalysis = analyzeGlbThinMeshPrimitives(glbJson, MIN_PREVIEW_SOLID_THICKNESS_MM);
+      result.thinMeshPrimitiveCount = thinMeshAnalysis.count;
+      result.thinMeshPrimitiveSamples = thinMeshAnalysis.samples;
       result.vec3AccessorMissingBoundsCount = (glbJson.accessors || [])
         .filter((accessor) => accessor.type === "VEC3" && (!Array.isArray(accessor.min) || !Array.isArray(accessor.max)))
         .length;
@@ -1417,21 +1420,50 @@ function countLinePrimitives(glbJson = {}) {
   return count;
 }
 
-function countThinMeshPrimitives(glbJson = {}, minimumSpanMm = MIN_PREVIEW_SOLID_THICKNESS_MM) {
+export function analyzeGlbThinMeshPrimitives(glbJson = {}, minimumSpanMm = MIN_PREVIEW_SOLID_THICKNESS_MM, sampleLimit = 12) {
+  const nodeNamesByMeshIndex = nodeNamesByMesh(glbJson);
+  const samples = [];
   let count = 0;
-  for (const mesh of glbJson.meshes || []) {
-    for (const primitive of mesh.primitives || []) {
+  for (const [meshIndex, mesh] of (glbJson.meshes || []).entries()) {
+    for (const [primitiveIndex, primitive] of (mesh.primitives || []).entries()) {
       if ((primitive.mode ?? 4) !== 4) continue;
       const accessor = glbJson.accessors?.[primitive.attributes?.POSITION];
       if (!Array.isArray(accessor?.min) || !Array.isArray(accessor?.max)) continue;
-      const thin = accessor.max.some((max, index) => {
-        const spanMm = (Number(max) - Number(accessor.min[index])) * 100;
-        return spanMm < minimumSpanMm;
-      });
-      if (thin) count += 1;
+      const spans = ["width", "height", "depth"].map((axis, index) => ({
+        axis,
+        spanMm: Number((((Number(accessor.max[index]) || 0) - (Number(accessor.min[index]) || 0)) * 100).toFixed(3))
+      }));
+      const thinAxes = spans.filter((span) => span.spanMm < minimumSpanMm);
+      if (!thinAxes.length) continue;
+      count += 1;
+      if (samples.length < sampleLimit) {
+        const nodeNames = nodeNamesByMeshIndex.get(meshIndex) || [];
+        samples.push({
+          nodeName: nodeNames[0] || "",
+          nodeNames,
+          meshName: mesh.name || "",
+          meshIndex,
+          primitiveIndex,
+          accessorIndex: Number(primitive.attributes?.POSITION ?? -1),
+          thinAxes,
+          spanMm: Object.fromEntries(spans.map((span) => [span.axis, span.spanMm])),
+          minimumSpanMm
+        });
+      }
     }
   }
-  return count;
+  return { count, samples };
+}
+
+function nodeNamesByMesh(glbJson = {}) {
+  const names = new Map();
+  for (const node of glbJson.nodes || []) {
+    if (!Number.isInteger(node.mesh)) continue;
+    const list = names.get(node.mesh) || [];
+    if (node.name) list.push(String(node.name));
+    names.set(node.mesh, list);
+  }
+  return names;
 }
 
 function errorFinding(code, message) {

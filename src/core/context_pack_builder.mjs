@@ -431,6 +431,7 @@ function compactArtifactAuditDiagnostics(artifactAudit = {}) {
       passed: glb.passed === true,
       linePrimitiveCount: Number(glb.linePrimitiveCount || 0),
       thinMeshPrimitiveCount: Number(glb.thinMeshPrimitiveCount || 0),
+      thinMeshPrimitiveSamples: compactThinMeshPrimitiveSamples(glb.thinMeshPrimitiveSamples),
       vec3AccessorMissingBoundsCount: Number(glb.vec3AccessorMissingBoundsCount || 0),
       meshPrimitiveCount: Number(glb.meshPrimitiveCount || 0)
     },
@@ -462,6 +463,7 @@ function compactArtifactCheckDiagnostics(key, value = {}) {
       semanticNodePrefixes: value.semanticNodePrefixes || {},
       linePrimitiveCount: Number(value.linePrimitiveCount || 0),
       thinMeshPrimitiveCount: Number(value.thinMeshPrimitiveCount || 0),
+      thinMeshPrimitiveSamples: compactThinMeshPrimitiveSamples(value.thinMeshPrimitiveSamples),
       minimumMeshSpanMm: Number(value.minimumMeshSpanMm || 0),
       vec3AccessorMissingBoundsCount: Number(value.vec3AccessorMissingBoundsCount || 0),
       meshPrimitiveCount: Number(value.meshPrimitiveCount || 0)
@@ -501,6 +503,26 @@ function compactArtifactCheckDiagnostics(key, value = {}) {
     };
   }
   return {};
+}
+
+function compactThinMeshPrimitiveSamples(samples = []) {
+  return Array.isArray(samples)
+    ? samples.slice(0, 8).map((sample) => ({
+      nodeName: sample.nodeName || "",
+      nodeNames: Array.isArray(sample.nodeNames) ? sample.nodeNames.slice(0, 4) : [],
+      meshName: sample.meshName || "",
+      meshIndex: Number(sample.meshIndex ?? -1),
+      primitiveIndex: Number(sample.primitiveIndex ?? -1),
+      accessorIndex: Number(sample.accessorIndex ?? -1),
+      thinAxes: Array.isArray(sample.thinAxes)
+        ? sample.thinAxes.map((axis) => ({
+          axis: axis.axis || "",
+          spanMm: Number(axis.spanMm || 0)
+        }))
+        : [],
+      minimumSpanMm: Number(sample.minimumSpanMm || 0)
+    }))
+    : [];
 }
 
 function readProposalSummaries(proposalDir) {

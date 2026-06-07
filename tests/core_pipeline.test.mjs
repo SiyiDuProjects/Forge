@@ -1273,6 +1273,7 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   assert.equal(generationEvidence.artifactAudit.checks.glb.format.version, 2);
   assert.equal(generationEvidence.artifactAudit.checks.glb.linePrimitiveCount, 0);
   assert.equal(generationEvidence.artifactAudit.checks.glb.thinMeshPrimitiveCount, 0);
+  assert.deepEqual(generationEvidence.artifactAudit.checks.glb.thinMeshPrimitiveSamples, []);
   assert.equal(generationEvidence.artifactAudit.checks.glb.vec3AccessorMissingBoundsCount, 0);
   assert.equal(generationEvidence.artifactAudit.checks.glb.semanticNodePrefixes["shell."] >= 1, true);
   assert.equal(generationEvidence.artifactAudit.checks.glb.semanticNodePrefixes["module."] >= 3, true);

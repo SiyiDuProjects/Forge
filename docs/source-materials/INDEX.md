@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### 3D GLB Thin Mesh Audit Diagnostics V3 P55
+
+- File: `docs/source-materials/2026-06-07-3d-glb-thin-mesh-audit-diagnostics-v3-p55.md`
+- Status: implemented by adding compact node/mesh/axis/span samples to GLB thin-mesh artifact audit diagnostics, propagating them into ContextPack without exposing raw model bytes, and testing both synthetic thin GLB JSON and normal generated artifact paths.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: 3D trusted generation, GLB audit, thinMeshPrimitiveSamples, zero thickness, node-level diagnostics, artifactAudit, ContextPack, raw artifact bytes excluded.
+
 ### 3D Source Spec Onboarding End-To-End V3 P54
 
 - File: `docs/source-materials/2026-06-07-3d-source-spec-onboarding-e2e-v3-p54.md`

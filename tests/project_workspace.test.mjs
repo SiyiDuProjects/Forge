@@ -1429,6 +1429,7 @@ test("ContextPack summarizes project folder state without raw artifact bytes", (
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.status, "passed");
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.passed, true);
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.glb.thinMeshPrimitiveCount, 0);
+  assert.deepEqual(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.glb.thinMeshPrimitiveSamples, []);
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.stl.degenerateFacetCount, 0);
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.step.directEditingBoundaryPresent, true);
   assert.equal(contextPack.revisionLedgerSummary.currentRevisionId, generated.revisionId);
@@ -1444,6 +1445,7 @@ test("ContextPack summarizes project folder state without raw artifact bytes", (
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.passed, true);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.glb.passed, true);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.glb.diagnostics.thinMeshPrimitiveCount, 0);
+  assert.deepEqual(contextPack.generationEvidenceSummary.artifactAudit.checks.glb.diagnostics.thinMeshPrimitiveSamples, []);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.stl.diagnostics.geometry.degenerateFacetCount, 0);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.stl.diagnostics.geometry.thinAxisCount, 0);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.shellFront.diagnostics.geometry.thinAxisCount, 0);
@@ -1451,6 +1453,7 @@ test("ContextPack summarizes project folder state without raw artifact bytes", (
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.step.diagnostics.format.hasComponentAssetManifest, true);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.checks.step.diagnostics.metadata.directEditingBoundaryPresent, true);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.diagnostics.glb.thinMeshPrimitiveCount, 0);
+  assert.deepEqual(contextPack.generationEvidenceSummary.artifactAudit.diagnostics.glb.thinMeshPrimitiveSamples, []);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.diagnostics.stl.thinAxisCount, 0);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.diagnostics.step.shellDimensionsPositive, true);
   assert.equal(contextPack.generationEvidenceSummary.artifactAudit.findingCount, 0);

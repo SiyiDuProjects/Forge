@@ -9,6 +9,7 @@ import {
   validateDesign
 } from "../src/core/forge_actions.mjs";
 import {
+  analyzeGlbThinMeshPrimitives,
   createGeometrySpec,
   generateModelArtifacts
 } from "../src/core/geometry_generation.mjs";
@@ -25,6 +26,38 @@ const GOLDEN_REQUEST = [
   "an ambient light sensor, camera recognition, battery power, speaker alerts,",
   "and two side buttons."
 ].join(" ");
+
+test("GLB thin mesh analysis reports node-level diagnostics", () => {
+  const analysis = analyzeGlbThinMeshPrimitives({
+    nodes: [
+      { name: "feature.zero_panel", mesh: 0 },
+      { name: "feature.zero_panel.alias", mesh: 0 }
+    ],
+    meshes: [
+      {
+        name: "thin_panel_mesh",
+        primitives: [
+          { mode: 4, attributes: { POSITION: 0 } }
+        ]
+      }
+    ],
+    accessors: [
+      {
+        type: "VEC3",
+        min: [0, 0, 0],
+        max: [0.02, 0.005, 0.03]
+      }
+    ]
+  }, 1.15);
+
+  assert.equal(analysis.count, 1);
+  assert.equal(analysis.samples.length, 1);
+  assert.equal(analysis.samples[0].nodeName, "feature.zero_panel");
+  assert.deepEqual(analysis.samples[0].nodeNames, ["feature.zero_panel", "feature.zero_panel.alias"]);
+  assert.equal(analysis.samples[0].meshName, "thin_panel_mesh");
+  assert.deepEqual(analysis.samples[0].thinAxes, [{ axis: "height", spanMm: 0.5 }]);
+  assert.deepEqual(analysis.samples[0].spanMm, { width: 2, height: 0.5, depth: 3 });
+});
 
 function createTrustedGenerationFixture() {
   const { productPlan } = createProductPlan({
@@ -207,6 +240,7 @@ async function assertConfirmedArtifactContracts({ productPlan, revision }) {
   assert.equal(evidence.artifactAudit.findings.length, 0);
   assert.equal(evidence.artifactAudit.checks.glb.passed, true);
   assert.equal(evidence.artifactAudit.checks.glb.thinMeshPrimitiveCount, 0);
+  assert.deepEqual(evidence.artifactAudit.checks.glb.thinMeshPrimitiveSamples, []);
   assert.equal(evidence.artifactAudit.checks.glb.minimumMeshSpanMm, 1.15);
   assert.equal(evidence.artifactAudit.checks.stl.passed, true);
   assert.equal(evidence.artifactAudit.checks.stl.geometry.degenerateFacetCount, 0);

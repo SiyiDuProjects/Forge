@@ -20,6 +20,22 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D GLB Thin Mesh Audit Diagnostics V3 P55
+
+- Scope: strengthen generated artifact visual/structure audit diagnostics for suspected zero-thickness GLB preview geometry. `analyzeGlbThinMeshPrimitives` now returns both a count and compact node-level samples with semantic node names, mesh/accessor indexes, thin axes, measured spans in millimeters, and the configured minimum span. GLB post-write audit writes `thinMeshPrimitiveSamples` into `generation_evidence_report.json`, and ContextPack carries the compact samples in artifact audit diagnostics without raw GLB bytes.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-glb-thin-mesh-audit-diagnostics-v3-p55.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/geometry_generation.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `tests/trusted_generation_regression.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, GLB audit, thinMeshPrimitiveSamples, zero thickness, node-level diagnostics, artifactAudit, ContextPack, raw artifact bytes excluded.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/trusted_generation_regression.test.mjs` passes with 4 tests, including a synthetic thin GLB JSON diagnostic case. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes with 22 tests. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes with 28 tests. Full `npm run check` passes with 107 tests.
+- Boundary: this is artifact audit evidence only. It does not expose raw GLB/STL/STEP bytes, add CAD/model editing controls, mutate ProductPlan or GeometrySpec directly, create generated artifacts before confirmation, validate production readiness, or broaden the read-only preview into a CAD editor.
+
 ### 2026-06-07 - 3D Source Spec Onboarding End-To-End V3 P54
 
 - Scope: strengthen the "new part from source document" path with end-to-end regression evidence. CLI coverage now runs a full core-board `source-specs.md` through `descriptor-scaffold`, `descriptor-specs`, `descriptor-promote`, `descriptor-select`, explicit `generate`, `artifacts`, generated `component_descriptors.json`, and `generation_evidence_report.json`. Codex-runtime coverage now uses a richer button `source-specs.md` through project-bound `forge-tool` calls and verifies the generated descriptor/evidence preserves connector, external-feature, keepout, access-volume, and cable-exit fields.
