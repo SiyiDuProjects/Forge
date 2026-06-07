@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### 3D Descriptor Cable Exit And Connector Orientation Spec Extraction V3 P53
+
+- File: `docs/source-materials/2026-06-07-3d-descriptor-cable-exit-orientation-spec-extraction-v3-p53.md`
+- Status: implemented by extending `descriptor-specs` extraction to capture explicitly labeled existing connector orientation and existing cable-exit direction from workspace source specs, while leaving connector creation, cable-exit creation, mating, promotion, selection, and artifact generation separate.
+- Related docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, connector orientation, cable exit direction, cableExitDirections, orientation.
+
 ### 3D Descriptor Keepout And Access Volume Spec Extraction V3 P52
 
 - File: `docs/source-materials/2026-06-07-3d-descriptor-volume-spec-extraction-v3-p52.md`

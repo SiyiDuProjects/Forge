@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Descriptor Cable Exit And Connector Orientation Spec Extraction V3 P53
+
+- Scope: extend workspace descriptor spec patching so explicit connector orientation and cable-exit direction constraints in `source-specs.md` can update existing `connectors[].orientation` and `cableExitDirections[].direction` fields in a draft descriptor. `descriptor-specs` now recognizes bounded forms such as `connector usb_c orientation -z`, `cable exit usb_c direction external_rear`, and `线缆出口 signal 方向 -y_to_core_board`, updates only known same-type reference connector ids or existing cable-exit connector ids, and does not create connectors, cable exits, access volumes, or mating endpoints.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-cable-exit-orientation-spec-extraction-v3-p53.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, connector orientation, cable exit direction, cableExitDirections, orientation.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs` passes with 20 tests, including connector-orientation extraction, cable-exit direction extraction, and a no-new-cable-exit assertion. Full `npm run check` passes with 105 tests.
+- Boundary: this updates reviewable prototype descriptor interface-routing metadata only. It does not create connector ids, cable-exit entries, access volumes, or mating endpoints, parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical routing, claim production readiness, or enable CAD/model editing.
+
 ### 2026-06-07 - 3D Descriptor Keepout And Access Volume Spec Extraction V3 P52
 
 - Scope: extend workspace descriptor spec patching so explicit keepout/access-volume size and position constraints in `source-specs.md` can update existing `keepouts[]` and `accessVolumes[]` entries in a draft descriptor. `descriptor-specs` now recognizes bounded forms such as `keepout button_travel_keepout size 12 x 12 x 9 mm position 0, 0, 6 mm` and `access volume button_wire_access size 12 x 9 x 7 mm position 0, -9, -2 mm`, updates only known same-type reference ids or types, and leaves volume creation plus access-volume `connectorId` unchanged. Thin dimensions still produce `descriptor_preview_solid_dimension_too_thin` and block promotion.

@@ -1922,6 +1922,15 @@ function descriptorFromReferenceAndSpecs({
     extracted.fieldNames ||= [];
     extracted.fieldNames.push("connectorPositionLocalMm");
   }
+  const connectorOrientationPatch = connectorsWithExtractedOrientations({
+    connectors: descriptor.connectors || [],
+    connectorOrientationSpecs: extracted.connectorOrientationSpecs
+  });
+  descriptor.connectors = connectorOrientationPatch.connectors;
+  if (connectorOrientationPatch.appliedIds.length > 0 && !extracted.fieldNames?.includes("connectorOrientation")) {
+    extracted.fieldNames ||= [];
+    extracted.fieldNames.push("connectorOrientation");
+  }
   const externalFeaturePatch = externalFeaturesWithExtractedSpecs({
     externalFeatures: descriptor.externalFeatures || [],
     openingSizeMm: extracted.openingSizeMm,
@@ -1950,6 +1959,15 @@ function descriptorFromReferenceAndSpecs({
   if (accessVolumePatch.appliedIds.length > 0 && !extracted.fieldNames?.includes("accessVolumeSpec")) {
     extracted.fieldNames ||= [];
     extracted.fieldNames.push("accessVolumeSpec");
+  }
+  const cableExitPatch = cableExitDirectionsWithExtractedSpecs({
+    cableExitDirections: descriptor.cableExitDirections || [],
+    cableExitDirectionSpecs: extracted.cableExitDirectionSpecs
+  });
+  descriptor.cableExitDirections = cableExitPatch.cableExitDirections;
+  if (cableExitPatch.appliedConnectorIds.length > 0 && !extracted.fieldNames?.includes("cableExitDirection")) {
+    extracted.fieldNames ||= [];
+    extracted.fieldNames.push("cableExitDirection");
   }
   descriptor.sourceNotes = {
     ...(descriptor.sourceNotes || {}),
@@ -2143,6 +2161,48 @@ function connectorsWithExtractedPositions({
   return { connectors: patched, appliedIds };
 }
 
+function connectorsWithExtractedOrientations({
+  connectors = [],
+  connectorOrientationSpecs = []
+} = {}) {
+  const patched = Array.isArray(connectors) ? clone(connectors) : [];
+  const appliedIds = [];
+  for (const spec of connectorOrientationSpecs || []) {
+    const id = String(spec?.id || "").trim();
+    const orientation = normalizedDirectionToken(spec?.orientation);
+    if (!id || !orientation) continue;
+    const index = patched.findIndex((connector) => connector.id === id);
+    if (index < 0) continue;
+    patched[index] = {
+      ...patched[index],
+      orientation
+    };
+    appliedIds.push(id);
+  }
+  return { connectors: patched, appliedIds };
+}
+
+function cableExitDirectionsWithExtractedSpecs({
+  cableExitDirections = [],
+  cableExitDirectionSpecs = []
+} = {}) {
+  const patched = Array.isArray(cableExitDirections) ? clone(cableExitDirections) : [];
+  const appliedConnectorIds = [];
+  for (const spec of cableExitDirectionSpecs || []) {
+    const connectorId = String(spec?.connectorId || "").trim();
+    const direction = normalizedDirectionToken(spec?.direction);
+    if (!connectorId || !direction) continue;
+    const index = patched.findIndex((cableExit) => cableExit.connectorId === connectorId);
+    if (index < 0) continue;
+    patched[index] = {
+      ...patched[index],
+      direction
+    };
+    appliedConnectorIds.push(connectorId);
+  }
+  return { cableExitDirections: patched, appliedConnectorIds };
+}
+
 function inferMountingHoleZ({ mountingHoles = [], depthMm = 0 } = {}) {
   const firstZ = mountingHoles.find((hole) => Array.isArray(hole.positionLocalMm) && Number.isFinite(Number(hole.positionLocalMm[2])))?.positionLocalMm?.[2];
   if (Number.isFinite(Number(firstZ))) return Number(firstZ);
@@ -2174,6 +2234,7 @@ function extractDescriptorSpecs(specsText = "") {
     /(?:孔径|直径|ø|Ø)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*mm.{0,40}?(?:安装孔|螺丝孔|固定孔)/i
   ]);
   const connectorPositionSpecs = extractConnectorPositionSpecs(text);
+  const connectorOrientationSpecs = extractConnectorOrientationSpecs(text);
   const externalFeaturePositionSpecs = extractExternalFeaturePositionSpecs(text);
   const keepoutVolumeSpecs = extractVolumeSpecs(text, {
     labelPattern: "keepout(?:\\s+volume)?|keepout\\s+zone|clearance\\s+keepout|避让区|避让空间"
@@ -2181,15 +2242,18 @@ function extractDescriptorSpecs(specsText = "") {
   const accessVolumeSpecs = extractVolumeSpecs(text, {
     labelPattern: "access(?:\\s+volume)?|service\\s+access|wire\\s+access|connector\\s+access|维修空间|接入空间|服务空间|走线空间"
   });
+  const cableExitDirectionSpecs = extractCableExitDirectionSpecs(text);
   const extracted = {
     dimensionsMm,
     openingSizeMm,
     mountingHolePitchMm,
     mountingHoleDiameterMm,
     connectorPositionSpecs,
+    connectorOrientationSpecs,
     externalFeaturePositionSpecs,
     keepoutVolumeSpecs,
     accessVolumeSpecs,
+    cableExitDirectionSpecs,
     manufacturer: extractLabeledValue(text, ["manufacturer", "maker", "vendor", "厂商", "制造商"]),
     partNumber: extractLabeledValue(text, ["part number", "part no", "pn", "型号", "料号"]),
     displayName: extractLabeledValue(text, ["display name", "name", "名称"]),
@@ -2198,7 +2262,7 @@ function extractDescriptorSpecs(specsText = "") {
   };
   const fieldNames = [];
   for (const [field, value] of Object.entries(extracted)) {
-    if (["fieldNames", "connectorPositionSpecs", "externalFeaturePositionSpecs", "keepoutVolumeSpecs", "accessVolumeSpecs"].includes(field)) continue;
+    if (["fieldNames", "connectorPositionSpecs", "connectorOrientationSpecs", "externalFeaturePositionSpecs", "keepoutVolumeSpecs", "accessVolumeSpecs", "cableExitDirectionSpecs"].includes(field)) continue;
     if (Array.isArray(value) ? value.length > 0 : Boolean(value)) fieldNames.push(field);
   }
   return {
@@ -2251,6 +2315,26 @@ function extractConnectorPositionSpecs(text = "") {
   return specs;
 }
 
+function extractConnectorOrientationSpecs(text = "") {
+  const specs = [];
+  const chunks = String(text || "").split(/[;\n]+/);
+  for (const chunk of chunks) {
+    const parsed = parseConnectorOrientationChunk(chunk);
+    if (parsed) specs.push(parsed);
+  }
+  return specs;
+}
+
+function extractCableExitDirectionSpecs(text = "") {
+  const specs = [];
+  const chunks = String(text || "").split(/[;\n]+/);
+  for (const chunk of chunks) {
+    const parsed = parseCableExitDirectionChunk(chunk);
+    if (parsed) specs.push(parsed);
+  }
+  return specs;
+}
+
 function parsePositionTriplet(text = "") {
   const compact = String(text || "");
   const labeled = compact.match(/(?:positionLocalMm|position|pos|位置|坐标)\s*[:：=]?\s*\[?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
@@ -2258,6 +2342,54 @@ function parsePositionTriplet(text = "") {
   const axes = compact.match(/x\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?y\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?z\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
   if (axes) return [Number(axes[1]), Number(axes[2]), Number(axes[3])];
   return null;
+}
+
+function parseConnectorOrientationChunk(chunk = "") {
+  const text = String(chunk || "").trim();
+  if (!text) return null;
+  const labeled = text.match(/(?:connector|连接器|接口)\s+([A-Za-z0-9_.-]+).{0,80}?(?:orientation|facing|朝向)\s*[:：=]?\s*([A-Za-z0-9_+.-]+)/i);
+  if (labeled) return connectorOrientationSpecFromMatch(labeled);
+
+  const reverse = text.match(/([A-Za-z0-9_.-]+)\s+(?:connector|连接器|接口).{0,80}?(?:orientation|facing|朝向)\s*[:：=]?\s*([A-Za-z0-9_+.-]+)/i);
+  if (reverse) return connectorOrientationSpecFromMatch(reverse);
+  return null;
+}
+
+function connectorOrientationSpecFromMatch(match = []) {
+  const id = String(match[1] || "").trim();
+  const orientation = normalizedDirectionToken(match[2]);
+  if (!id || !orientation) return null;
+  return { id, orientation };
+}
+
+function parseCableExitDirectionChunk(chunk = "") {
+  const text = String(chunk || "").trim();
+  if (!text) return null;
+  const labeled = text.match(/(?:cable\s+exit(?:\s+direction)?|cableExitDirection|wire\s+exit|线缆出口|出线方向|走线方向)\s+([A-Za-z0-9_.-]+).{0,80}?(?:direction|dir|方向)\s*[:：=]?\s*([A-Za-z0-9_+.-]+)/i);
+  if (labeled) return cableExitDirectionSpecFromMatch(labeled);
+
+  const compact = text.match(/(?:cable\s+exit(?:\s+direction)?|cableExitDirection|wire\s+exit|线缆出口|出线方向|走线方向)\s+([A-Za-z0-9_.-]+)\s+([A-Za-z0-9_+.-]+)/i);
+  if (compact) return cableExitDirectionSpecFromMatch(compact);
+
+  const reverse = text.match(/([A-Za-z0-9_.-]+)\s+(?:cable\s+exit(?:\s+direction)?|cableExitDirection|wire\s+exit|线缆出口|出线方向|走线方向).{0,80}?(?:direction|dir|方向)\s*[:：=]?\s*([A-Za-z0-9_+.-]+)/i);
+  if (reverse) return cableExitDirectionSpecFromMatch(reverse);
+
+  const reverseCompact = text.match(/([A-Za-z0-9_.-]+)\s+(?:cable\s+exit(?:\s+direction)?|cableExitDirection|wire\s+exit|线缆出口|出线方向|走线方向)\s+([A-Za-z0-9_+.-]+)/i);
+  if (reverseCompact) return cableExitDirectionSpecFromMatch(reverseCompact);
+  return null;
+}
+
+function cableExitDirectionSpecFromMatch(match = []) {
+  const connectorId = String(match[1] || "").trim();
+  const direction = normalizedDirectionToken(match[2]);
+  if (!connectorId || !direction) return null;
+  return { connectorId, direction };
+}
+
+function normalizedDirectionToken(value = "") {
+  const token = String(value || "").trim();
+  if (!/^[A-Za-z0-9_+.-]{1,48}$/.test(token)) return "";
+  return token;
 }
 
 function parseConnectorPositionChunk(chunk = "") {

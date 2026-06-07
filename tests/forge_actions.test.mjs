@@ -492,6 +492,48 @@ test("workspace descriptor specs extract keepout and access volumes and gate thi
   )));
 });
 
+test("workspace descriptor specs extract connector orientation and cable exit directions without creating exits", async () => {
+  const plan = createActionPlan();
+  const scaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "core_board_cable_exit_specs",
+    componentType: "core_board",
+    displayName: "Spec Board With Cable Exit Direction"
+  });
+  assert.equal(scaffold.ok, true);
+
+  const patch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "core_board_cable_exit_specs",
+    specsText: [
+      "dimensions 64 x 38 x 8 mm",
+      "connector usb_c orientation -z",
+      "connector gpio orientation +y",
+      "cable exit usb_c direction external_rear",
+      "cable exit gpio direction +x_to_button",
+      "manufacturer Forge Test",
+      "part number CORE-CABLE-EXIT-SPECS",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(patch.ok, true);
+  assert.equal(patch.specsApplied, true);
+  assert.equal(patch.readyForLibraryPromotion, true);
+  assert.ok(patch.extractedFields.includes("connectorOrientation"));
+  assert.ok(patch.extractedFields.includes("cableExitDirection"));
+
+  const descriptorPath = join(projectWorkspacePath(plan.planId), "component-drafts", "core_board_cable_exit_specs", "descriptor.json");
+  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  const usbC = descriptor.connectors.find((connector) => connector.id === "usb_c");
+  const gpio = descriptor.connectors.find((connector) => connector.id === "gpio");
+  const usbExit = descriptor.cableExitDirections.find((exit) => exit.connectorId === "usb_c");
+  assert.equal(usbC.orientation, "-z");
+  assert.equal(gpio.orientation, "+y");
+  assert.equal(usbExit.direction, "external_rear");
+  assert.equal(descriptor.cableExitDirections.filter((exit) => exit.connectorId === "gpio").length, 0);
+});
+
 test("descriptor draft promotion makes a same-type part selectable through ProductPlan", () => {
   const plan = createActionPlan();
   const seed = listComponentDescriptors().find((item) => item.id === "button_6mm");
