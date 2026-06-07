@@ -261,6 +261,7 @@ function revisionSummary(
         electronicsValidation: prototypeReadinessReport.electronicsValidation || {},
         assemblyPlan: prototypeReadinessReport.assemblyPlan || {},
         developmentBoardScaffold: prototypeReadinessReport.developmentBoardScaffold || {},
+        readinessGate: compactPrototypeReadinessGate(prototypeReadinessReport.readinessGate || {}),
         blockingIssueCount: (prototypeReadinessReport.blockingIssues || []).length,
         warningCount: (prototypeReadinessReport.warnings || []).length,
         humanReviewRequired: prototypeReadinessReport.humanReviewRequired === true,
@@ -269,6 +270,19 @@ function revisionSummary(
       : null,
     artifactCount: Array.isArray(revisionManifest.artifactSummary) ? revisionManifest.artifactSummary.length : 0,
     directEditingAllowed: false
+  };
+}
+
+function compactPrototypeReadinessGate(readinessGate = {}) {
+  if (!readinessGate.version) return null;
+  return {
+    version: readinessGate.version || "",
+    decision: readinessGate.decision || "",
+    canEnterInternalPrototypeBuild: readinessGate.canEnterInternalPrototypeBuild === true,
+    blockingItemCount: readinessGate.blockingItemCount || 0,
+    warningItemCount: readinessGate.warningItemCount || 0,
+    itemStatuses: Object.fromEntries((readinessGate.items || []).map((item) => [item.name, item.status])),
+    directEditingAllowed: readinessGate.directEditingAllowed === true
   };
 }
 

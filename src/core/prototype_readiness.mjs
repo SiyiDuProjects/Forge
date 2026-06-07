@@ -7,6 +7,7 @@ export const ELECTRONICS_VALIDATION_VERSION = "electronics_validation_v1";
 export const ASSEMBLY_PLAN_VERSION = "assembly_plan_v1";
 export const DEVELOPMENT_BOARD_SCAFFOLD_VERSION = "development_board_scaffold_v1";
 export const PROTOTYPE_READINESS_REPORT_VERSION = "prototype_readiness_report_v1";
+export const PROTOTYPE_READINESS_GATE_VERSION = "prototype_readiness_gate_v1";
 
 const CORE_V1 = "Core V1";
 const SUPPORTING_V1 = "Supporting V1";
@@ -940,17 +941,56 @@ export function createPrototypeReadinessReport({
   developmentBoardScaffold = {},
   revisionId = ""
 } = {}) {
+  const evidenceReferences = {
+    productPlan: "product_plan.json",
+    geometrySpec: "geometry-spec.json",
+    componentDescriptors: "component_descriptors.json",
+    electronicsDescriptorTrustReport: "electronics_descriptor_trust_report.json",
+    electronicsSpec: "electronics_spec.json",
+    electronicsValidation: "electronics_validation_report.json",
+    assemblyPlan: "assembly_plan.json",
+    developmentBoardScaffold: "development_board_scaffold.json",
+    prototypeReadinessReport: "prototype_readiness_report.json"
+  };
+  const boundaries = {
+    prototypeReadinessOnly: true,
+    manufacturingReadiness: false,
+    customPcb: false,
+    supplierOrdering: false,
+    ota: false,
+    fullFirmwareRuntime: false,
+    arbitraryUserComponentImport: false,
+    productionCertification: false,
+    frontendRedesign: false
+  };
+  const readinessGate = createPrototypeReadinessGate({
+    electronicsDescriptorTrustReport,
+    electronicsSpec,
+    electronicsValidation,
+    assemblyPlan,
+    developmentBoardScaffold,
+    evidenceReferences,
+    boundaries
+  });
   const blockingIssues = [
     ...(electronicsValidation.errors || []),
-    ...((assemblyPlan.riskItems || []).filter((item) => item.level === "blocked"))
+    ...((assemblyPlan.riskItems || []).filter((item) => item.level === "blocked")),
+    ...((developmentBoardScaffold.blockedReasons || []).map((reason) => issue(
+      reason.type || "development_board_scaffold_blocked",
+      reason.message || "Development board scaffold is blocked.",
+      {
+        componentId: reason.componentId || "",
+        assignmentId: reason.assignmentId || ""
+      }
+    )))
   ];
   const warnings = [
     ...(electronicsValidation.warnings || []),
     ...((assemblyPlan.riskItems || []).filter((item) => item.level === "warning"))
   ];
-  const status = blockingIssues.length
+  const status = readinessGate.decision === "blocked" || blockingIssues.length
     ? "Blocked"
-    : warnings.length ? "Needs Review" : "Ready";
+    : readinessGate.decision === "needs_review" || warnings.length ? "Needs Review" : "Ready";
   return {
     version: PROTOTYPE_READINESS_REPORT_VERSION,
     scopeClassification: CORE_V1,
@@ -977,6 +1017,7 @@ export function createPrototypeReadinessReport({
       developmentBoardScaffold: "development_board_scaffold.json",
       directEditingAllowed: false
     },
+    readinessGate,
     componentTrustSummary: {
       componentCount: electronicsDescriptorTrustReport.componentCount || (electronicsSpec.componentTrust || []).length,
       forgeApprovedCount: (electronicsDescriptorTrustReport.entries || []).filter((item) => item.forgeApproved).length
@@ -1041,30 +1082,174 @@ export function createPrototypeReadinessReport({
       : null,
     blockingIssues,
     warnings,
-    humanReviewRequired: warnings.some((warning) => warning.type === "component_requires_review"),
-    evidenceReferences: {
-      productPlan: "product_plan.json",
-      geometrySpec: "geometry-spec.json",
-      componentDescriptors: "component_descriptors.json",
-      electronicsDescriptorTrustReport: "electronics_descriptor_trust_report.json",
-      electronicsSpec: "electronics_spec.json",
-      electronicsValidation: "electronics_validation_report.json",
-      assemblyPlan: "assembly_plan.json",
-      developmentBoardScaffold: "development_board_scaffold.json"
-    },
-    boundaries: {
-      prototypeReadinessOnly: true,
-      manufacturingReadiness: false,
-      customPcb: false,
-      supplierOrdering: false,
-      ota: false,
-      fullFirmwareRuntime: false,
-      arbitraryUserComponentImport: false,
-      productionCertification: false,
-      frontendRedesign: false
-    },
+    humanReviewRequired: warnings.some((warning) => warning.type === "component_requires_review")
+      || readinessGate.warningItemCount > 0,
+    evidenceReferences,
+    boundaries,
     directEditingAllowed: false
   };
+}
+
+export function createPrototypeReadinessGate({
+  electronicsDescriptorTrustReport = {},
+  electronicsSpec = {},
+  electronicsValidation = {},
+  assemblyPlan = {},
+  developmentBoardScaffold = {},
+  evidenceReferences = {},
+  boundaries = {}
+} = {}) {
+  const items = [
+    gateItem("component_trust", trustGateStatus(electronicsDescriptorTrustReport), {
+      requirement: "Selected electronic components have Forge-controlled source evidence and trust level.",
+      evidenceRef: evidenceReferences.electronicsDescriptorTrustReport || "electronics_descriptor_trust_report.json",
+      componentCount: electronicsDescriptorTrustReport.componentCount || 0,
+      missingRequiredEvidenceCount: electronicsDescriptorTrustReport.summary?.missingRequiredEvidenceCount || 0,
+      reviewRequiredCount: electronicsDescriptorTrustReport.summary?.reviewRequiredCount || 0
+    }),
+    gateItem("electronics_spec", electronicsSpecGateStatus(electronicsSpec), {
+      requirement: "ProductPlan derives an ElectronicsSpec without becoming a new source of truth.",
+      evidenceRef: evidenceReferences.electronicsSpec || "electronics_spec.json",
+      selectedComponentCount: (electronicsSpec.selectedComponentIds || []).length,
+      interfaceAssignmentCount: (electronicsSpec.interfaceAssignments || []).length,
+      powerInputCount: (electronicsSpec.powerInputs || []).length,
+      mainControllerPresent: Boolean(electronicsSpec.mainController?.componentId)
+    }),
+    gateItem("electronics_validation", validationGateStatus(electronicsValidation), {
+      requirement: "Prototype-level electronics checks cover obvious power, pin, and interface conflicts.",
+      evidenceRef: evidenceReferences.electronicsValidation || "electronics_validation_report.json",
+      errorCount: (electronicsValidation.errors || []).length,
+      warningCount: (electronicsValidation.warnings || []).length,
+      checkStatuses: Object.fromEntries((electronicsValidation.checks || []).map((check) => [check.name, check.status])),
+      canEnterPrototypeBuild: electronicsValidation.canEnterPrototypeBuild === true
+    }),
+    gateItem("assembly_plan", assemblyGateStatus(assemblyPlan), {
+      requirement: "AssemblyPlan is linked to GeometrySpec evidence and blocks missing assembly refs.",
+      evidenceRef: evidenceReferences.assemblyPlan || "assembly_plan.json",
+      status: assemblyPlan.status || "",
+      stepCount: (assemblyPlan.steps || []).length,
+      riskItemCount: (assemblyPlan.riskItems || []).length,
+      checkStatuses: Object.fromEntries((assemblyPlan.checks || []).map((check) => [check.name, check.status]))
+    }),
+    gateItem("development_board_scaffold", scaffoldGateStatus(developmentBoardScaffold), {
+      requirement: "Development-board bring-up scaffold is generated or explicitly blocked with reasons.",
+      evidenceRef: evidenceReferences.developmentBoardScaffold || "development_board_scaffold.json",
+      status: developmentBoardScaffold.status || "",
+      generatedFileCount: (developmentBoardScaffold.generatedFiles || []).length,
+      blockedReasonCount: (developmentBoardScaffold.blockedReasons || []).length,
+      checkStatuses: Object.fromEntries((developmentBoardScaffold.checks || []).map((check) => [check.name, check.status]))
+    }),
+    gateItem("evidence_revision_context", evidenceGateStatus(evidenceReferences), {
+      requirement: "Readiness outputs are persisted as revision evidence/context references.",
+      evidenceRef: evidenceReferences.prototypeReadinessReport || "prototype_readiness_report.json",
+      requiredRefs: requiredPrototypeReadinessEvidenceRefs(),
+      presentRefs: Object.keys(evidenceReferences).filter((key) => evidenceReferences[key])
+    }),
+    gateItem("prototype_boundaries", boundaryGateStatus(boundaries), {
+      requirement: "V1 remains prototype readiness only and excludes manufacturing/PCB/runtime expansion.",
+      evidenceRef: evidenceReferences.prototypeReadinessReport || "prototype_readiness_report.json",
+      boundaries: clone(boundaries)
+    })
+  ];
+  const blockingItemCount = items.filter((item) => item.status === "blocked").length;
+  const warningItemCount = items.filter((item) => item.status === "warning").length;
+  const decision = blockingItemCount
+    ? "blocked"
+    : warningItemCount ? "needs_review" : "ready";
+  return {
+    version: PROTOTYPE_READINESS_GATE_VERSION,
+    scopeClassification: CORE_V1,
+    decision,
+    canEnterInternalPrototypeBuild: decision === "ready",
+    items,
+    blockingItemCount,
+    warningItemCount,
+    completionStandard: "Ready means every V1 gate item passed; Needs Review or Blocked must not enter unattended internal prototype build.",
+    directEditingAllowed: false
+  };
+}
+
+function gateItem(name, status, detail = {}) {
+  return {
+    name,
+    ...detail,
+    status,
+    directEditingAllowed: false
+  };
+}
+
+function trustGateStatus(report = {}) {
+  if (report.status === "blocked") return "blocked";
+  if (report.status === "warning") return "warning";
+  if (report.status === "pass" && report.componentCount > 0) return "pass";
+  return "blocked";
+}
+
+function electronicsSpecGateStatus(spec = {}) {
+  if (
+    spec.version === ELECTRONICS_SPEC_VERSION
+    && spec.sourceOfTruth?.electronicsSpecDerived === true
+    && spec.sourceOfTruth?.directEditingAllowed === false
+    && spec.mainController?.componentId
+    && (spec.selectedComponentIds || []).length > 0
+  ) {
+    return "pass";
+  }
+  return "blocked";
+}
+
+function validationGateStatus(validation = {}) {
+  if (validation.status === "blocked") return "blocked";
+  if (validation.status === "warning") return "warning";
+  if (validation.status === "pass" && validation.canEnterPrototypeBuild === true) return "pass";
+  return "blocked";
+}
+
+function assemblyGateStatus(assemblyPlan = {}) {
+  const checkStatuses = (assemblyPlan.checks || []).map((check) => check.status);
+  if (assemblyPlan.status === "blocked" || checkStatuses.includes("blocked")) return "blocked";
+  if (assemblyPlan.status === "needs_review" || (assemblyPlan.riskItems || []).some((item) => item.level === "warning")) return "warning";
+  if (assemblyPlan.status === "feasible" && (assemblyPlan.steps || []).length > 0) return "pass";
+  return "blocked";
+}
+
+function scaffoldGateStatus(scaffold = {}) {
+  const checkStatuses = (scaffold.checks || []).map((check) => check.status);
+  if (scaffold.status === "missing_information" || checkStatuses.includes("blocked")) return "blocked";
+  if (scaffold.status === "generated" && (scaffold.generatedFiles || []).length > 0) return "pass";
+  return "blocked";
+}
+
+function evidenceGateStatus(evidenceReferences = {}) {
+  const missingRefs = requiredPrototypeReadinessEvidenceRefs().filter((key) => !evidenceReferences[key]);
+  return missingRefs.length ? "blocked" : "pass";
+}
+
+function boundaryGateStatus(boundaries = {}) {
+  const blocked = boundaries.prototypeReadinessOnly !== true
+    || boundaries.manufacturingReadiness !== false
+    || boundaries.customPcb !== false
+    || boundaries.supplierOrdering !== false
+    || boundaries.ota !== false
+    || boundaries.fullFirmwareRuntime !== false
+    || boundaries.arbitraryUserComponentImport !== false
+    || boundaries.productionCertification !== false
+    || boundaries.frontendRedesign !== false;
+  return blocked ? "blocked" : "pass";
+}
+
+function requiredPrototypeReadinessEvidenceRefs() {
+  return [
+    "productPlan",
+    "geometrySpec",
+    "componentDescriptors",
+    "electronicsDescriptorTrustReport",
+    "electronicsSpec",
+    "electronicsValidation",
+    "assemblyPlan",
+    "developmentBoardScaffold",
+    "prototypeReadinessReport"
+  ];
 }
 
 function selectedComponentIdsFor(geometrySpec, componentDescriptors) {

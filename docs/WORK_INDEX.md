@@ -20,6 +20,22 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - Prototype Readiness Report Gate V1
+
+- Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 report/audit hardening slice. `prototype_readiness_report.json` now includes `readinessGate`, a machine-readable decision layer covering component trust, ElectronicsSpec derivation, electronics validation, AssemblyPlan, development-board scaffold, revision evidence context, and V1 boundaries. The top-level report status now blocks if scaffold gate checks fail, even when electronics and assembly inputs otherwise pass. ContextPack carries compact readiness-gate decision and item statuses without raw electronics/source evidence.
+- Status: implemented in the current working tree; V1 completion audit is complete.
+- Source note: `docs/source-materials/2026-06-07-prototype-readiness-report-gate-v1.md`
+- Completion audit: `docs/PROTOTYPE_READINESS_V1_COMPLETION_AUDIT.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/prototype_readiness.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: PrototypeReadinessReport, readinessGate, prototype readiness gate, completion audit, ContextPack, revision evidence, scaffold gate blocked.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs tests/project_workspace.test.mjs` passes with 57 tests; full `npm run check` passes with 114 tests.
+- Boundary: Core V1 report/audit only. This does not add custom PCB, schematic generation, supplier ordering, OTA, full firmware runtime, production firmware, device runtime, manufacturing readiness, certification, robotics, complex mechanisms, arbitrary user component import, or frontend redesign.
+
 ### 2026-06-07 - Development Board Scaffold V1
 
 - Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Supporting V1 development-board scaffold hardening slice. `development_board_scaffold.json` now carries a derived `bringUpConfig`, generated internal bring-up file contents for `pin_map.json`, `main.cpp`, `bringup_checklist.md`, and `behavior_rules.placeholder.json`, ProductPlan-derived behavior placeholders, module init stubs, smoke-test entrypoints, compact scaffold checks, and blocked reasons when electronics validation prevents safe bring-up generation.

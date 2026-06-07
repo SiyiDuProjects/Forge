@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### Prototype Readiness Report Gate V1
+
+- File: `docs/source-materials/2026-06-07-prototype-readiness-report-gate-v1.md`
+- Status: implemented by adding `PrototypeReadinessReport.readinessGate`, scaffold-gate blocking behavior, compact ContextPack readiness-gate summary, regression coverage, and the V1 completion audit document.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/CONTRACTS.md`, `docs/PROTOTYPE_READINESS_V1_COMPLETION_AUDIT.md`
+- Key handles: PrototypeReadinessReport, readinessGate, prototype readiness gate, completion audit, ContextPack, revision evidence.
+
 ### Development Board Scaffold V1
 
 - File: `docs/source-materials/2026-06-07-development-board-scaffold-v1.md`

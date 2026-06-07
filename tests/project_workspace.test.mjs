@@ -1432,6 +1432,13 @@ test("ContextPack summarizes project folder state without raw artifact bytes", (
   assert.deepEqual(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.glb.thinMeshPrimitiveSamples, []);
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.stl.degenerateFacetCount, 0);
   assert.equal(contextPack.currentRevisionSummary.generationEvidence?.artifactAudit?.diagnostics.step.directEditingBoundaryPresent, true);
+  assert.equal(contextPack.currentRevisionSummary.prototypeReadiness?.status, "Ready");
+  assert.equal(contextPack.currentRevisionSummary.prototypeReadiness?.readinessGate?.decision, "ready");
+  assert.equal(contextPack.currentRevisionSummary.prototypeReadiness?.readinessGate?.canEnterInternalPrototypeBuild, true);
+  assert.equal(
+    contextPack.currentRevisionSummary.prototypeReadiness?.readinessGate?.itemStatuses.development_board_scaffold,
+    "pass"
+  );
   assert.equal(contextPack.revisionLedgerSummary.currentRevisionId, generated.revisionId);
   assert.equal(contextPack.revisionLedgerSummary.rollbackSupported, true);
   assert.equal(contextPack.revisionLedgerSummary.directEditingAllowed, false);

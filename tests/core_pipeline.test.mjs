@@ -10,6 +10,7 @@ import { addProductPlanTurn, createProductPlan, revertProductPlanRevision, submi
 import {
   createElectronicsDescriptorTrustReport,
   createPrototypeReadinessPackage,
+  createPrototypeReadinessReport,
   validateElectronicsSpec
 } from "../src/core/prototype_readiness.mjs";
 import { processUserTurn } from "../src/core/sparker_orchestrator.mjs";
@@ -1407,6 +1408,19 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.ok(behaviorRules.rules.some((rule) => rule.ruleId === "button_smoke_event"));
   assert.equal(revision.prototypeReadinessReport.developmentBoardScaffold.generatedFileCount, 4);
   assert.equal(revision.prototypeReadinessReport.developmentBoardScaffold.behaviorPlaceholderCount, behaviorRules.rules.length);
+  assert.equal(revision.prototypeReadinessReport.readinessGate.version, "prototype_readiness_gate_v1");
+  assert.equal(revision.prototypeReadinessReport.readinessGate.decision, "ready");
+  assert.equal(revision.prototypeReadinessReport.readinessGate.canEnterInternalPrototypeBuild, true);
+  assert.equal(revision.prototypeReadinessReport.readinessGate.blockingItemCount, 0);
+  assert.equal(revision.prototypeReadinessReport.readinessGate.warningItemCount, 0);
+  const gateStatuses = Object.fromEntries(revision.prototypeReadinessReport.readinessGate.items.map((item) => [item.name, item.status]));
+  assert.equal(gateStatuses.component_trust, "pass");
+  assert.equal(gateStatuses.electronics_spec, "pass");
+  assert.equal(gateStatuses.electronics_validation, "pass");
+  assert.equal(gateStatuses.assembly_plan, "pass");
+  assert.equal(gateStatuses.development_board_scaffold, "pass");
+  assert.equal(gateStatuses.evidence_revision_context, "pass");
+  assert.equal(gateStatuses.prototype_boundaries, "pass");
   assert.ok(productPlan.jobs.some((job) => job.capability === JOB_CAPABILITY.PROTOTYPE_READINESS));
 
   const revisionPath = join(projectWorkspacePath(productPlan.planId), "revisions", revision.revisionId);
@@ -1423,6 +1437,8 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.equal(readinessReport.electronicsSpecSummary.powerPath.routeId, "route.usb_c_to_core_board");
   assert.equal(readinessReport.assemblyPlan.checkStatuses.step_evidence_refs, "pass");
   assert.equal(readinessReport.developmentBoardScaffold.checkStatuses.generated_file_contents, "pass");
+  assert.equal(readinessReport.readinessGate.decision, "ready");
+  assert.equal(readinessReport.readinessGate.items.find((item) => item.name === "evidence_revision_context").status, "pass");
   assert.equal(descriptorTrustReport.status, "pass");
   assert.equal(electronicsSpec.sourceOfTruth.productPlan, "ProductPlan");
   assert.equal(assemblyPlan.sourceOfTruth.geometrySpec.includes("GeometrySpec"), true);
@@ -1511,6 +1527,12 @@ test("prototype readiness validation blocks missing USB-C power route", () => {
   assert.equal(readiness.electronicsValidation.status, "blocked");
   assert.ok(readiness.electronicsValidation.errors.some((error) => error.type === "power_path_route_missing"));
   assert.equal(readiness.prototypeReadinessReport.status, "Blocked");
+  assert.equal(readiness.prototypeReadinessReport.readinessGate.decision, "blocked");
+  assert.equal(readiness.prototypeReadinessReport.readinessGate.canEnterInternalPrototypeBuild, false);
+  assert.equal(
+    readiness.prototypeReadinessReport.readinessGate.items.find((item) => item.name === "electronics_validation").status,
+    "blocked"
+  );
   assert.equal(readiness.prototypeReadinessReport.electronicsValidation.checkStatuses.power_path, "blocked");
 });
 
@@ -1589,6 +1611,78 @@ test("prototype readiness validation blocks obvious GPIO exhaustion", () => {
   assert.equal(scaffoldChecks.generated_file_contents, "blocked");
   assert.ok(readiness.developmentBoardScaffold.blockedReasons.some((reason) => reason.type === "interface_assignment_blocked"));
   assert.ok(readiness.prototypeReadinessReport.developmentBoardScaffold.blockedReasonCount > 0);
+  assert.equal(readiness.prototypeReadinessReport.readinessGate.items.find((item) => (
+    item.name === "development_board_scaffold"
+  )).status, "blocked");
+});
+
+test("prototype readiness report blocks if development-board scaffold gate fails", () => {
+  const report = createPrototypeReadinessReport({
+    productPlan: {
+      productType: "desktop_display"
+    },
+    geometrySpec: {
+      version: "geometry_spec_v1"
+    },
+    electronicsSpec: {
+      version: "electronics_spec_v1",
+      sourceOfTruth: {
+        electronicsSpecDerived: true,
+        directEditingAllowed: false
+      },
+      selectedComponentIds: ["core_board_esp32_s3", "display_3_5_tft"],
+      mainController: {
+        componentId: "core_board_esp32_s3"
+      },
+      interfaceAssignments: [
+        { assignmentId: "assignment.display_3_5_tft.spi", status: "assigned" }
+      ],
+      powerInputs: [
+        { componentId: "usb_c_breakout", rail: "5v_usb" }
+      ]
+    },
+    electronicsDescriptorTrustReport: {
+      version: "electronics_descriptor_trust_report_v1",
+      status: "pass",
+      componentCount: 2,
+      summary: {
+        missingRequiredEvidenceCount: 0,
+        reviewRequiredCount: 0
+      }
+    },
+    electronicsValidation: {
+      version: "electronics_validation_v1",
+      status: "pass",
+      canEnterPrototypeBuild: true,
+      checks: [
+        { name: "power_path", status: "pass" },
+        { name: "interface_assignment", status: "pass" }
+      ],
+      errors: [],
+      warnings: []
+    },
+    assemblyPlan: {
+      version: "assembly_plan_v1",
+      status: "feasible",
+      steps: [{ stepId: "bring_up_check" }],
+      checks: [{ name: "step_evidence_refs", status: "pass" }],
+      riskItems: []
+    },
+    developmentBoardScaffold: {
+      version: "development_board_scaffold_v1",
+      status: "missing_information",
+      generatedFiles: [],
+      checks: [{ name: "generated_file_contents", status: "blocked" }],
+      blockedReasons: [{ type: "generated_file_contents_missing", message: "Bring-up source content was not generated." }]
+    },
+    revisionId: "test_scaffold_gate_failure"
+  });
+
+  assert.equal(report.status, "Blocked");
+  assert.equal(report.readinessGate.decision, "blocked");
+  assert.equal(report.readinessGate.canEnterInternalPrototypeBuild, false);
+  assert.equal(report.readinessGate.items.find((item) => item.name === "development_board_scaffold").status, "blocked");
+  assert.ok(report.blockingIssues.some((issue) => issue.type === "generated_file_contents_missing"));
 });
 
 test("assembly plan blocks missing required GeometrySpec feature evidence", () => {

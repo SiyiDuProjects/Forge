@@ -618,6 +618,8 @@ Prototype readiness is currently produced as an internal `prototype_readiness` r
 
 `development_board_scaffold.json` includes a Supporting V1 `bringUpConfig`, generated internal bring-up file contents, module init stubs, test entrypoints, ProductPlan-derived behavior placeholders, manual checklist items, compact scaffold checks, and blocked reasons. Generated source stubs are evidence for internal bring-up only; they do not claim OTA, full firmware runtime, production firmware, or long-term device behavior programming.
 
+`prototype_readiness_report.json` includes `readinessGate`, a compact machine-readable decision layer with gate items for component trust, ElectronicsSpec derivation, electronics validation, AssemblyPlan, development-board scaffold, revision evidence context, and prototype-readiness boundaries. `ready` requires every gate item to pass; `needs_review` or `blocked` must not be treated as unattended internal prototype-build readiness.
+
 ### `POST /api/quote/estimate`
 
 Convenience route for a `quote_estimate` job. v1 returns a pre-review estimate with assumptions and no low/mid/high tiers.
