@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Descriptor Mounting Hole Spec Extraction V3 P49
+
+- Scope: extend workspace descriptor spec patching so explicit mounting-hole constraints in `source-specs.md` can become reviewable `mountingHoles` fields in a draft descriptor. `descriptor-specs` now extracts labeled mounting-hole spacing and diameter from English or Chinese source text, creates four centered mounting holes when rectangular spacing is provided, and updates existing reference-hole diameters when only a diameter is provided. The resulting descriptor still passes through the existing local-position and mounting-hole diameter envelope gates before promotion.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-mounting-hole-spec-extraction-v3-p49.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, mounting hole spacing, mounting hole diameter, mountingHoles, standoffs, reviewable descriptor draft.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs` passes with 16 tests, including a core-board workspace descriptor scaffold whose specs text creates four `2.2 mm` mounting holes at a `54 x 28 mm` pattern.
+- Boundary: this is conservative source-spec extraction for reviewable prototype descriptors, not arbitrary PDF/prose parsing or production tolerance validation. It does not promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
 ### 2026-06-07 - 3D Descriptor Mounting Hole Envelope Gate V3 P48
 
 - Scope: add a descriptor package readiness gate for mounting-hole diameters that exceed the descriptor body planar envelope. `componentPackageReport` now emits `descriptor_mounting_hole_exceeds_body_envelope` when `mountingHoles[].diameterMm` is larger than the smaller of `dimensionsMm.width` and `dimensionsMm.height`. This keeps normal PCB standoff holes valid while blocking schema-valid but mechanically impossible drafts, such as a 52 x 30 x 8 mm core board with a 40 mm mounting hole, before ProductPlan selection or GLB/STL/STEP generation.

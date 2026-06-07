@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { test } from "node:test";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import {
   applyDesignPatch,
+  applyWorkspaceDescriptorDraftSpecs,
   commitStagedChange,
   getRevisionArtifacts,
   getWorkspaceSummary,
   inspectComponentDescriptorDraft,
   inspectComponentPackage,
+  scaffoldWorkspaceComponentDescriptorDraft,
   promoteComponentDescriptorDraft,
   proposeDesignChange,
   regenerateRevision,
@@ -23,7 +26,7 @@ import {
 } from "../src/core/forge_actions.mjs";
 import { listComponentDescriptors } from "../src/core/component_library.mjs";
 import { createProductPlan, getProductPlan } from "../src/core/product_plan.mjs";
-import { readRevisionLedger } from "../src/core/project_workspace.mjs";
+import { projectWorkspacePath, readRevisionLedger } from "../src/core/project_workspace.mjs";
 
 function createActionPlan() {
   return createProductPlan({
@@ -253,6 +256,48 @@ test("descriptor draft inspection blocks oversized mounting holes", () => {
   assert.equal(promoted.ok, false);
   assert.equal(promoted.error.code, "DESCRIPTOR_DRAFT_NOT_PROMOTABLE");
   assert.ok(promoted.error.draftReport.blockingIssues.some((issue) => issue.code === "descriptor_mounting_hole_exceeds_body_envelope"));
+});
+
+test("workspace descriptor specs extract mounting hole pattern constraints", async () => {
+  const plan = createActionPlan();
+  const scaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "core_board_mount_specs",
+    componentType: "core_board",
+    displayName: "Spec Board With Mounting Holes"
+  });
+  assert.equal(scaffold.ok, true);
+  assert.equal(scaffold.scaffolded, true);
+
+  const patch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "core_board_mount_specs",
+    specsText: [
+      "dimensions 64 x 38 x 8 mm",
+      "mounting hole spacing 54 x 28 mm",
+      "mounting hole diameter 2.2 mm",
+      "manufacturer Forge Test",
+      "part number CORE-MOUNT-SPECS",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(patch.ok, true);
+  assert.equal(patch.specsApplied, true);
+  assert.equal(patch.readyForLibraryPromotion, true);
+  assert.ok(patch.extractedFields.includes("mountingHolePitchMm"));
+  assert.ok(patch.extractedFields.includes("mountingHoleDiameterMm"));
+
+  const descriptorPath = join(projectWorkspacePath(plan.planId), "component-drafts", "core_board_mount_specs", "descriptor.json");
+  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  assert.equal(descriptor.mountingHoles.length, 4);
+  assert.deepEqual(descriptor.mountingHoles.map((hole) => hole.diameterMm), [2.2, 2.2, 2.2, 2.2]);
+  assert.deepEqual(descriptor.mountingHoles.map((hole) => hole.positionLocalMm), [
+    [-27, 14, -4],
+    [27, 14, -4],
+    [-27, -14, -4],
+    [27, -14, -4]
+  ]);
 });
 
 test("descriptor draft promotion makes a same-type part selectable through ProductPlan", () => {

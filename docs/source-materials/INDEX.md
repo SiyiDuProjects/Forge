@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### 3D Descriptor Mounting Hole Spec Extraction V3 P49
+
+- File: `docs/source-materials/2026-06-07-3d-descriptor-mounting-hole-spec-extraction-v3-p49.md`
+- Status: implemented by extending `descriptor-specs` extraction to capture explicitly labeled mounting-hole spacing and diameter from workspace source specs, producing reviewable draft `mountingHoles` while still relying on readiness gates before promotion.
+- Related docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, mounting hole spacing, mounting hole diameter, mountingHoles, standoffs, reviewable descriptor draft.
+
 ### 3D Descriptor Mounting Hole Envelope Gate V3 P48
 
 - File: `docs/source-materials/2026-06-07-3d-descriptor-mounting-hole-envelope-gate-v3-p48.md`

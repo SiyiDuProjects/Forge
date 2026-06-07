@@ -1906,6 +1906,13 @@ function descriptorFromReferenceAndSpecs({
     ]
   };
   descriptor.dimensionsMm = extracted.dimensionsMm || currentDescriptor.dimensionsMm || descriptor.dimensionsMm || {};
+  descriptor.mountingHoles = mountingHolesWithExtractedSpecs({
+    mountingHoles: descriptor.mountingHoles || [],
+    pitchMm: extracted.mountingHolePitchMm,
+    diameterMm: extracted.mountingHoleDiameterMm,
+    depthMm: Number(descriptor.dimensionsMm?.depth || 0),
+    defaultDiameterMm: descriptor.mechanicalProxy?.defaultHoleDiameterMm
+  });
   if (extracted.openingSizeMm) {
     descriptor.externalFeatures = externalFeaturesWithOpeningSize({
       externalFeatures: descriptor.externalFeatures || [],
@@ -1973,6 +1980,45 @@ function externalFeaturesWithOpeningSize({
   ];
 }
 
+function mountingHolesWithExtractedSpecs({
+  mountingHoles = [],
+  pitchMm = null,
+  diameterMm = null,
+  depthMm = 0,
+  defaultDiameterMm = 2.4
+} = {}) {
+  const holes = Array.isArray(mountingHoles) ? clone(mountingHoles) : [];
+  const diameter = positiveNumberOrNull(diameterMm)
+    || positiveNumberOrNull(defaultDiameterMm)
+    || 2.4;
+  if (Array.isArray(pitchMm) && pitchMm.length === 2 && pitchMm.every((value) => Number(value) > 0)) {
+    const halfX = Number(pitchMm[0]) / 2;
+    const halfY = Number(pitchMm[1]) / 2;
+    const z = inferMountingHoleZ({ mountingHoles: holes, depthMm });
+    return [
+      { id: "mount_tl", positionLocalMm: [-halfX, halfY, z], diameterMm: diameter },
+      { id: "mount_tr", positionLocalMm: [halfX, halfY, z], diameterMm: diameter },
+      { id: "mount_bl", positionLocalMm: [-halfX, -halfY, z], diameterMm: diameter },
+      { id: "mount_br", positionLocalMm: [halfX, -halfY, z], diameterMm: diameter }
+    ];
+  }
+  if (positiveNumberOrNull(diameterMm) && holes.length > 0) {
+    return holes.map((hole, index) => ({
+      ...hole,
+      id: hole.id || `mount_${index + 1}`,
+      diameterMm: Number(diameterMm)
+    }));
+  }
+  return holes;
+}
+
+function inferMountingHoleZ({ mountingHoles = [], depthMm = 0 } = {}) {
+  const firstZ = mountingHoles.find((hole) => Array.isArray(hole.positionLocalMm) && Number.isFinite(Number(hole.positionLocalMm[2])))?.positionLocalMm?.[2];
+  if (Number.isFinite(Number(firstZ))) return Number(firstZ);
+  const depth = Number(depthMm || 0);
+  return depth > 0 ? -depth / 2 : 0;
+}
+
 function extractDescriptorSpecs(specsText = "") {
   const text = String(specsText || "");
   const dimensionsMm = parseThreeAxisMm(text, [
@@ -1985,9 +2031,22 @@ function extractDescriptorSpecs(specsText = "") {
     /(?:开孔|孔位|孔径)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm?/i,
     /(?:开孔|孔位|孔径)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*mm/i
   ]);
+  const mountingHolePitchMm = parseTwoAxisMm(text, [
+    /(?:mounting\s+holes?|mount\s+holes?|screw\s+holes?|standoff\s+holes?).{0,80}?(?:pitch|spacing|center(?:-| )?to(?:-| )?center|c[- ]?c)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm?/i,
+    /(?:mounting\s+(?:pitch|spacing)|mounting\s+hole\s+pattern|hole\s+spacing)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm?/i,
+    /(?:安装孔距|安装孔位|螺丝孔距|固定孔距)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*mm?/i
+  ]);
+  const mountingHoleDiameterMm = parseOneAxisMm(text, [
+    /(?:mounting\s+holes?|mount\s+holes?|screw\s+holes?|standoff\s+holes?).{0,80}?(?:diameter|dia\.?|ø|Ø|d)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mm/i,
+    /(?:diameter|dia\.?|ø|Ø)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*mm.{0,80}?(?:mounting\s+holes?|mount\s+holes?|screw\s+holes?|standoff\s+holes?)/i,
+    /(?:安装孔|螺丝孔|固定孔).{0,40}?(?:孔径|直径|ø|Ø)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*mm/i,
+    /(?:孔径|直径|ø|Ø)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*mm.{0,40}?(?:安装孔|螺丝孔|固定孔)/i
+  ]);
   const extracted = {
     dimensionsMm,
     openingSizeMm,
+    mountingHolePitchMm,
+    mountingHoleDiameterMm,
     manufacturer: extractLabeledValue(text, ["manufacturer", "maker", "vendor", "厂商", "制造商"]),
     partNumber: extractLabeledValue(text, ["part number", "part no", "pn", "型号", "料号"]),
     displayName: extractLabeledValue(text, ["display name", "name", "名称"]),
@@ -2003,6 +2062,16 @@ function extractDescriptorSpecs(specsText = "") {
     ...extracted,
     fieldNames
   };
+}
+
+function parseOneAxisMm(text = "", patterns = []) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const value = Number(match[1]);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return null;
 }
 
 function parseThreeAxisMm(text = "", patterns = []) {
@@ -2027,6 +2096,11 @@ function parseTwoAxisMm(text = "", patterns = []) {
     return [first, second];
   }
   return null;
+}
+
+function positiveNumberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function extractLabeledValue(text = "", labels = []) {
