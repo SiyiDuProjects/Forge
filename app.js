@@ -1385,6 +1385,7 @@ function render({ scrollConversationToBottom = false } = {}) {
   renderModelFullscreen();
   renderPopovers();
   if (scrollConversationToBottom) scheduleConversationScrollToBottom();
+  drawPreview();
   window.requestAnimationFrame(drawPreview);
 }
 
@@ -2239,6 +2240,7 @@ function renderInspector() {
       `;
     })
     .join("");
+  drawPreview();
 }
 
 function renderModelFullscreen() {
@@ -2324,7 +2326,7 @@ function renderModelSection(revision) {
       <button class="preview-fullscreen-button" type="button" data-preview-fullscreen aria-label="${escapeHtml(t("openModelFullscreen"))}">
         <span aria-hidden="true">⛶</span>
       </button>
-      <canvas data-device-canvas="inspector" data-preview-id="inspector" data-preview-engine="${escapeHtml(previewEngine)}" width="760" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
+      <canvas data-device-canvas="inspector" data-preview-id="inspector" data-preview-engine="${escapeHtml(previewEngine)}" data-model-url="${escapeHtml(modelGlbUrl(revision))}" width="760" height="520" aria-label="${escapeHtml(t("sections.model"))}"></canvas>
     </div>
     ${renderPreviewControls()}
     ${pending ? `<div class="model-action-row"><button class="snapshot-link primary" type="button" data-model-action="generate">${escapeHtml(t("generateModelCta"))}</button></div>` : ""}
@@ -2748,6 +2750,8 @@ function drawPreview() {
   if (!revision) return;
   cleanupThreePreviews();
   document.querySelectorAll("[data-device-canvas]").forEach((canvas) => {
+    canvas.dataset.previewDrawnAt = String(Date.now());
+    canvas.dataset.modelUrl = modelGlbUrl(revision);
     if (canvas.closest("[hidden]")) {
       disposeThreePreview(canvas.dataset.previewId);
       return;
@@ -2789,7 +2793,14 @@ function drawThreePreview(canvas, revision) {
   let instance = threePreviewInstances.get(previewId);
   if (!instance || instance.canvas !== canvas || instance.glbUrl !== glbUrl) {
     disposeThreePreview(previewId);
-    instance = createThreePreviewInstance({ canvas, previewId, glbUrl, width, height });
+    canvas.dataset.previewInstanceCreatedAt = String(Date.now());
+    try {
+      instance = createThreePreviewInstance({ canvas, previewId, glbUrl, width, height });
+    } catch (error) {
+      canvas.dataset.previewError = error instanceof Error ? error.message : "Could not create Three.js preview.";
+      setRenderStatus(previewId, t("modelLoadFailed"));
+      return;
+    }
     threePreviewInstances.set(previewId, instance);
     loadThreeModel(instance, revision);
   }
@@ -2855,37 +2866,56 @@ function createThreePreviewInstance({ canvas, previewId, glbUrl, width, height }
 
 function loadThreeModel(instance, revision) {
   const loader = new GLTFLoader();
-  loader.load(
-    instance.glbUrl,
-    (gltf) => {
-      instance.root = gltf.scene;
-      instance.root.name = "forge_generated_3d_preview";
-      instance.scene.add(instance.root);
-      instance.root.traverse((node) => {
-        if (!node.isObject3D) return;
-        instance.basePositions.set(node.uuid, node.position.clone());
-        if (node.isMesh) {
-          node.castShadow = false;
-          node.receiveShadow = false;
-          node.material = normalizeThreeMaterial(node.material);
-          node.userData.baseMaterial = Array.isArray(node.material)
-            ? node.material.map((material) => material.clone())
-            : node.material?.clone?.();
-        }
-      });
-      instance.status = "loaded";
-      frameThreeModel(instance, revision);
-      applyThreePreviewMode(instance);
-      setRenderStatus(instance.previewId, t("modelLoaded"));
-      animateThreePreview(instance);
-    },
-    undefined,
-    () => {
-      instance.status = "failed";
-      setRenderStatus(instance.previewId, t("modelLoadFailed"));
-      instance.renderer.render(instance.scene, instance.camera);
-    }
-  );
+  instance.canvas.dataset.previewLoadStartedAt = String(Date.now());
+  const loadingTimeout = window.setTimeout(() => {
+    if (instance.status !== "loading") return;
+    instance.status = "failed";
+    setRenderStatus(instance.previewId, t("modelLoadFailed"));
+    instance.renderer.render(instance.scene, instance.camera);
+  }, 12000);
+  const onLoaded = (gltf) => {
+    if (instance.status !== "loading") return;
+    window.clearTimeout(loadingTimeout);
+    instance.root = gltf.scene;
+    instance.root.name = "forge_generated_3d_preview";
+    instance.scene.add(instance.root);
+    instance.root.traverse((node) => {
+      if (!node.isObject3D) return;
+      instance.basePositions.set(node.uuid, node.position.clone());
+      if (node.isMesh) {
+        node.castShadow = false;
+        node.receiveShadow = false;
+        node.material = normalizeThreeMaterial(node.material);
+        node.userData.baseMaterial = Array.isArray(node.material)
+          ? node.material.map((material) => material.clone())
+          : node.material?.clone?.();
+      }
+    });
+    instance.status = "loaded";
+    frameThreeModel(instance, revision);
+    applyThreePreviewMode(instance);
+    setRenderStatus(instance.previewId, t("modelLoaded"));
+    animateThreePreview(instance);
+  };
+  const onFailed = () => {
+    if (instance.status !== "loading") return;
+    window.clearTimeout(loadingTimeout);
+    instance.status = "failed";
+    setRenderStatus(instance.previewId, t("modelLoadFailed"));
+    instance.renderer.render(instance.scene, instance.camera);
+  };
+
+  if (typeof window.fetch === "function") {
+    window.fetch(instance.glbUrl, { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`GLB request failed: ${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((buffer) => loader.parse(buffer, "", onLoaded, onFailed))
+      .catch(onFailed);
+  } else {
+    loader.load(instance.glbUrl, onLoaded, undefined, onFailed);
+  }
 }
 
 function normalizeThreeMaterial(material) {
@@ -3077,6 +3107,7 @@ function disposeThreePreview(previewId) {
     else node.material?.dispose?.();
   });
   instance.renderer?.dispose();
+  instance.renderer?.forceContextLoss?.();
   threePreviewInstances.delete(previewId);
 }
 

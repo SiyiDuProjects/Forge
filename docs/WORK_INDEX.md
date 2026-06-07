@@ -20,6 +20,14 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Preview WebGL Load-State Guard
+
+- Scope: fix the right-inspector preview state exposed during live model generation where the model artifact was generated but the badge stayed on `正在加载 3D 模型`. The frontend now starts preview drawing immediately after model DOM render, records the model URL on the canvas, fetches GLB bytes explicitly before `GLTFLoader.parse`, catches Three/WebGL preview creation failures, marks preview failure instead of infinite loading, and forces WebGL context loss on preview disposal to reduce repeated reload/context exhaustion.
+- Status: implemented in the current working tree.
+- Code handles: `app.js`, `tests/core_pipeline.test.mjs`
+- Verification: full `npm run check` passes with 120 tests. Browser verification on `http://127.0.0.1:8766/?cacheBust=preview-context-loss-fix` confirms the existing generated revision has a valid GLB URL (`/data/models/rev-20260607114525-bdxdxi/model.glb`) and no longer stays in infinite loading; the current in-app browser reports `Error creating WebGL context.` and displays `3D 模型加载失败`, making the real WebGL exhaustion visible instead of implying the GLB is still loading.
+- Boundary: this does not change ProductPlan, GeometrySpec, GLB/STL/STEP generation, validation, or Codex orchestration. It only hardens frontend preview loading/status handling.
+
 ### 2026-06-07 - Codex-Native Conversation Orchestration V1
 
 - Scope: make Codex SDK/thread the default product conversation entry before ProductPlan exists. Blank/new projects now create a conversation workspace and stream through `/api/conversations/turn/stream`; Forge does not create ProductPlan/revision/GeometrySpec/artifacts from ordinary messages. ProductPlan creation is exposed as an explicit `createProductPlan` Forge tool, guarded so greetings/meta chat cannot create product state. Codex prompt/project guidance now states that Codex is the conversation brain and Forge only provides tools, state, validation, generation, and guardrails. The misleading 2D/fake preview path is hidden when no real GLB is loaded.

@@ -479,6 +479,9 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.doesNotMatch(app, /apiPostStream\("\/api\/plans\/stream"/);
   assert.match(app, /chatConversationNotice: "Codex 已回复，尚未创建 ProductPlan"/);
   assert.match(app, /chatConversationNotice: "Codex replied; no ProductPlan created"/);
+  assert.match(app, /window\.fetch\(instance\.glbUrl, \{ cache: "no-store" \}\)/);
+  assert.match(app, /previewError = error instanceof Error \? error\.message : "Could not create Three\.js preview\."/);
+  assert.match(app, /forceContextLoss/);
   assert.match(app, /async function restorePersistedProjects/);
   assert.match(app, /compactRestoredProjectList\(\(response\.workspaces \|\| \[\]\)/);
   assert.match(app, /function compactRestoredProjectList/);
