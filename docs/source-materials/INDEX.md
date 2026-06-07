@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### Electronics Validation Power And Route V1
+
+- File: `docs/source-materials/2026-06-07-electronics-validation-power-route-v1.md`
+- Status: implemented by adding Core V1 `powerPath` and `connectionRequirements` derivation to ElectronicsSpec, blocking obvious voltage/rail, USB-C power-route, and connector-route mismatches, and adding regression coverage.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/CONTRACTS.md`
+- Key handles: electronics validation, voltage compatibility, USB-C power path, interface route alignment, connector mismatch, GeometrySpec route linkage, prototype readiness.
+
 ### ElectronicsDescriptor Trust Report V1
 
 - File: `docs/source-materials/2026-06-07-electronics-descriptor-trust-report-v1.md`

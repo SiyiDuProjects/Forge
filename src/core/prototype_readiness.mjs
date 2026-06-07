@@ -486,6 +486,16 @@ export function createElectronicsSpec({ productPlan = {}, geometrySpec = {}, rev
     geometrySpec,
     electronicsDescriptors
   });
+  const powerPath = powerPathFor({
+    mainController,
+    electronicsDescriptors,
+    geometrySpec
+  });
+  const connectionRequirements = connectionRequirementsFor({
+    mainController,
+    interfaceAssignments,
+    geometrySpec
+  });
 
   return {
     version: ELECTRONICS_SPEC_VERSION,
@@ -519,7 +529,9 @@ export function createElectronicsSpec({ productPlan = {}, geometrySpec = {}, rev
     powerInputs,
     peripherals,
     powerBudget,
+    powerPath,
     interfaceAssignments,
+    connectionRequirements,
     cableLinks,
     assumptions: [
       "Core V1 checks modular prototype readiness only.",
@@ -656,6 +668,22 @@ export function validateElectronicsSpec({
     rails: electronicsSpec.powerBudget.rails || []
   });
 
+  const voltageErrors = voltageCompatibilityIssues(electronicsSpec);
+  errors.push(...voltageErrors);
+  addCheck("voltage_compatibility", voltageErrors.length ? "blocked" : "pass", {
+    issueCount: voltageErrors.length,
+    toleranceVolts: 0.15
+  });
+
+  const powerPathErrors = powerPathIssues(electronicsSpec);
+  errors.push(...powerPathErrors);
+  addCheck("power_path", powerPathErrors.length ? "blocked" : "pass", {
+    controllerInputRail: electronicsSpec.powerPath?.controllerInputRail || "",
+    sourceComponentId: electronicsSpec.powerPath?.sourceComponentId || "",
+    routeId: electronicsSpec.powerPath?.routeId || "",
+    issueCount: powerPathErrors.length
+  });
+
   const assignmentErrors = [];
   for (const assignment of electronicsSpec.interfaceAssignments || []) {
     if (assignment.status === "blocked") {
@@ -668,6 +696,13 @@ export function validateElectronicsSpec({
   errors.push(...assignmentErrors);
   addCheck("interface_assignment", assignmentErrors.length ? "blocked" : "pass", {
     assignmentCount: (electronicsSpec.interfaceAssignments || []).length
+  });
+
+  const connectionErrors = connectionRequirementIssues(electronicsSpec);
+  errors.push(...connectionErrors);
+  addCheck("interface_route_alignment", connectionErrors.length ? "blocked" : "pass", {
+    requirementCount: (electronicsSpec.connectionRequirements || []).length,
+    issueCount: connectionErrors.length
   });
 
   const pinConflicts = pinConflictRecords(electronicsSpec.interfaceAssignments || []);
@@ -931,13 +966,20 @@ export function createPrototypeReadinessReport({
     electronicsSpecSummary: {
       selectedComponentIds: electronicsSpec.selectedComponentIds || [],
       powerInputCount: (electronicsSpec.powerInputs || []).length,
+      powerPath: {
+        controllerInputRail: electronicsSpec.powerPath?.controllerInputRail || "",
+        sourceComponentId: electronicsSpec.powerPath?.sourceComponentId || "",
+        routeId: electronicsSpec.powerPath?.routeId || ""
+      },
       interfaceAssignmentCount: (electronicsSpec.interfaceAssignments || []).length,
+      connectionRequirementCount: (electronicsSpec.connectionRequirements || []).length,
       cableLinkCount: (electronicsSpec.cableLinks || []).length
     },
     electronicsValidation: {
       status: electronicsValidation.status || "unknown",
       errorCount: (electronicsValidation.errors || []).length,
       warningCount: (electronicsValidation.warnings || []).length,
+      checkStatuses: Object.fromEntries((electronicsValidation.checks || []).map((check) => [check.name, check.status])),
       canEnterPrototypeBuild: electronicsValidation.canEnterPrototypeBuild === true
     },
     assemblyPlan: {
@@ -1202,6 +1244,7 @@ function peripheralRecord(descriptor, quantities = {}) {
   return {
     componentId: descriptor.componentId,
     componentType: descriptor.componentType,
+    powerRole: descriptor.power?.role || "",
     quantity,
     rail: descriptor.power?.rail || descriptor.power?.outputRail || "",
     operatingVoltage: Number(descriptor.power?.operatingVoltage || 0),
@@ -1210,6 +1253,85 @@ function peripheralRecord(descriptor, quantities = {}) {
     trustLevel: descriptor.trustLevel || "",
     reviewStatus: descriptor.reviewStatus || ""
   };
+}
+
+function powerPathFor({ mainController = null, electronicsDescriptors = [], geometrySpec = {} } = {}) {
+  const routes = Array.isArray(geometrySpec.routes) ? geometrySpec.routes : [];
+  const controllerInputRail = mainController?.power?.inputRail || "";
+  const controllerVoltage = Number(mainController?.power?.operatingVoltage || 0);
+  const inputSources = electronicsDescriptors
+    .filter((descriptor) => ["power_input", "battery_source"].includes(descriptor.power?.role))
+    .map((descriptor) => {
+      const outputRail = descriptor.power?.outputRail || descriptor.power?.rail || "";
+      const sourceConnectorId = powerSourceConnectorId(descriptor, outputRail);
+      return {
+        componentId: descriptor.componentId,
+        role: descriptor.power?.role || "",
+        rail: outputRail,
+        voltage: Number(descriptor.power?.operatingVoltage || 0),
+        availableMa: Number(descriptor.power?.maxCurrentMa || 0),
+        sourceConnectorId,
+        reviewStatus: descriptor.reviewStatus || "",
+        trustLevel: descriptor.trustLevel || ""
+      };
+    });
+  const activeInput = inputSources.find((source) => source.rail === controllerInputRail) || null;
+  const controllerConnectorId = controllerPowerConnectorId(mainController, controllerInputRail);
+  const route = activeInput && mainController?.componentId
+    ? routeForConnection(
+      routes,
+      activeInput.componentId,
+      activeInput.sourceConnectorId,
+      mainController.componentId,
+      controllerConnectorId
+    )
+    : null;
+  return {
+    controllerComponentId: mainController?.componentId || "",
+    controllerInputRail,
+    controllerVoltage,
+    sourceComponentId: activeInput?.componentId || "",
+    sourceRail: activeInput?.rail || "",
+    sourceVoltage: Number(activeInput?.voltage || 0),
+    sourceConnectorId: activeInput?.sourceConnectorId || "",
+    controllerConnectorId,
+    routeId: route?.id || "",
+    inputSources,
+    directEditingAllowed: false
+  };
+}
+
+function connectionRequirementsFor({ mainController = null, interfaceAssignments = [], geometrySpec = {} } = {}) {
+  const routes = Array.isArray(geometrySpec.routes) ? geometrySpec.routes : [];
+  return interfaceAssignments
+    .filter((assignmentRecord) => assignmentRecord.status !== "blocked")
+    .map((assignmentRecord) => {
+      const controllerConnectorId = expectedControllerConnectorForAssignment(assignmentRecord);
+      const exactRoute = routeForConnection(
+        routes,
+        assignmentRecord.componentId,
+        assignmentRecord.connectorId,
+        mainController?.componentId || "",
+        controllerConnectorId
+      );
+      const componentRoute = routes.find((route) => (
+        route.from?.componentId === assignmentRecord.componentId
+        || route.to?.componentId === assignmentRecord.componentId
+      ));
+      return {
+        assignmentId: assignmentRecord.assignmentId,
+        componentId: assignmentRecord.componentId,
+        interfaceType: assignmentRecord.interfaceType,
+        componentConnectorId: assignmentRecord.connectorId || "",
+        controllerComponentId: mainController?.componentId || "",
+        controllerConnectorId,
+        routeId: exactRoute?.id || "",
+        observedRouteId: componentRoute?.id || "",
+        status: exactRoute ? "linked" : componentRoute ? "connector_mismatch" : "missing_route",
+        reviewOnly: assignmentRecord.status === "assigned_with_review",
+        directEditingAllowed: false
+      };
+    });
 }
 
 function powerBudgetFor({ mainController = null, electronicsDescriptors = [], componentQuantities = {} }) {
@@ -1390,6 +1512,134 @@ function cableLinksFor({ geometrySpec = {}, electronicsDescriptors = [] }) {
     });
 }
 
+function powerSourceConnectorId(descriptor = {}, rail = "") {
+  const connectors = descriptor.connectors || [];
+  const railConnector = connectors.find((connector) => connector.rail === rail && connector.connectorId !== "usb_c");
+  if (railConnector?.connectorId) return railConnector.connectorId;
+  const outputConnector = connectors.find((connector) => ["power_out", "power_leads", "power_lead"].includes(connector.connectorId));
+  if (outputConnector?.connectorId) return outputConnector.connectorId;
+  const ifaceConnector = (descriptor.interfaces || []).find((iface) => iface.type === "power")?.connectorId;
+  return ifaceConnector || connectors[0]?.connectorId || "";
+}
+
+function controllerPowerConnectorId(mainController = {}, rail = "") {
+  const connector = (mainController.connectors || []).find((item) => item.rail === rail)
+    || (mainController.connectors || []).find((item) => item.interfaceType === "usb");
+  return connector?.connectorId || "";
+}
+
+function expectedControllerConnectorForAssignment(assignmentRecord = {}) {
+  if (assignmentRecord.interfaceType === "spi") return "display_port";
+  if (assignmentRecord.interfaceType === "i2c") return "i2c";
+  if (assignmentRecord.interfaceType === "gpio") return "gpio";
+  if (assignmentRecord.interfaceType === "gpio_pwm") return "speaker";
+  if (assignmentRecord.interfaceType === "camera_parallel") return "gpio";
+  return "";
+}
+
+function routeForConnection(routes = [], fromComponentId = "", fromConnectorId = "", toComponentId = "", toConnectorId = "") {
+  return routes.find((route) => (
+    endpointMatches(route.from, fromComponentId, fromConnectorId)
+    && endpointMatches(route.to, toComponentId, toConnectorId)
+  ) || (
+    endpointMatches(route.to, fromComponentId, fromConnectorId)
+    && endpointMatches(route.from, toComponentId, toConnectorId)
+  )) || null;
+}
+
+function endpointMatches(endpoint = {}, componentId = "", connectorId = "") {
+  if (!componentId || !connectorId) return false;
+  return endpoint?.componentId === componentId && endpoint?.connectorId === connectorId;
+}
+
+function voltageCompatibilityIssues(electronicsSpec = {}) {
+  const rails = new Map((electronicsSpec.powerBudget?.rails || []).map((rail) => [rail.rail, rail]));
+  const toleranceVolts = 0.15;
+  return (electronicsSpec.peripherals || [])
+    .filter((peripheral) => !["battery_source", "power_input"].includes(peripheral.powerRole))
+    .flatMap((peripheral) => {
+      if (!peripheral.rail) {
+        return [issue("voltage_rail_missing", `${peripheral.componentId} has no assigned power rail.`, {
+          componentId: peripheral.componentId
+        })];
+      }
+      const rail = rails.get(peripheral.rail);
+      if (!rail) {
+        return [issue("voltage_rail_missing", `${peripheral.componentId} references missing ${peripheral.rail} rail.`, {
+          componentId: peripheral.componentId,
+          rail: peripheral.rail
+        })];
+      }
+      const operatingVoltage = Number(peripheral.operatingVoltage || 0);
+      const railVoltage = Number(rail.voltage || 0);
+      if (operatingVoltage > 0 && railVoltage > 0 && Math.abs(operatingVoltage - railVoltage) > toleranceVolts) {
+        return [issue("voltage_mismatch", `${peripheral.componentId} expects ${operatingVoltage}V but ${peripheral.rail} is ${railVoltage}V.`, {
+          componentId: peripheral.componentId,
+          rail: peripheral.rail,
+          operatingVoltage,
+          railVoltage,
+          toleranceVolts
+        })];
+      }
+      return [];
+    });
+}
+
+function powerPathIssues(electronicsSpec = {}) {
+  const path = electronicsSpec.powerPath || {};
+  const issues = [];
+  if (!path.controllerComponentId) return issues;
+  if (!path.controllerInputRail) {
+    issues.push(issue("power_path_unresolved", `${path.controllerComponentId} has no declared controller input rail.`, {
+      componentId: path.controllerComponentId
+    }));
+    return issues;
+  }
+  if (!path.sourceComponentId) {
+    issues.push(issue("power_path_unresolved", `No controlled power source feeds ${path.controllerInputRail}.`, {
+      rail: path.controllerInputRail
+    }));
+  }
+  if (path.sourceComponentId && !path.routeId) {
+    issues.push(issue("power_path_route_missing", `${path.sourceComponentId} has no GeometrySpec route to ${path.controllerComponentId}.`, {
+      sourceComponentId: path.sourceComponentId,
+      controllerComponentId: path.controllerComponentId,
+      sourceConnectorId: path.sourceConnectorId || "",
+      controllerConnectorId: path.controllerConnectorId || ""
+    }));
+  }
+  const sourceVoltage = Number(path.sourceVoltage || 0);
+  const controllerVoltage = Number(path.controllerVoltage || 0);
+  if (sourceVoltage > 0 && controllerVoltage > 0 && Math.abs(sourceVoltage - controllerVoltage) > 0.15) {
+    issues.push(issue("power_path_voltage_mismatch", `${path.sourceComponentId} provides ${sourceVoltage}V but ${path.controllerComponentId} expects ${controllerVoltage}V.`, {
+      sourceComponentId: path.sourceComponentId || "",
+      controllerComponentId: path.controllerComponentId || "",
+      sourceVoltage,
+      controllerVoltage
+    }));
+  }
+  return issues;
+}
+
+function connectionRequirementIssues(electronicsSpec = {}) {
+  return (electronicsSpec.connectionRequirements || [])
+    .filter((requirement) => requirement.status !== "linked")
+    .map((requirement) => issue(
+      requirement.status === "connector_mismatch" ? "interface_connector_mismatch" : "interface_route_missing",
+      `${requirement.componentId} ${requirement.interfaceType} requires ${requirement.componentConnectorId} -> ${requirement.controllerConnectorId} GeometrySpec route linkage.`,
+      {
+        assignmentId: requirement.assignmentId || "",
+        componentId: requirement.componentId || "",
+        interfaceType: requirement.interfaceType || "",
+        componentConnectorId: requirement.componentConnectorId || "",
+        controllerComponentId: requirement.controllerComponentId || "",
+        controllerConnectorId: requirement.controllerConnectorId || "",
+        observedRouteId: requirement.observedRouteId || "",
+        reviewOnly: requirement.reviewOnly === true
+      }
+    ));
+}
+
 function pinConflictRecords(assignments = []) {
   const byPin = new Map();
   for (const assignment of assignments) {
@@ -1434,7 +1684,14 @@ function fixSuggestionForIssue(issueRecord = {}) {
     electronics_descriptor_evidence_incomplete: "Complete the controlled ElectronicsDescriptor evidence before treating this part as build-ready.",
     component_requires_review: "Keep the component in human review or replace it with a Forge-approved descriptor.",
     rail_current_exceeded: "Reduce module load, choose a lower-current display/module, or move this to a future reviewed power design.",
+    voltage_rail_missing: "Assign the component to a declared controller output rail before prototype bring-up.",
+    voltage_mismatch: "Select a same-voltage module or add reviewed level-shifting/power conversion in a future goal.",
+    power_path_unresolved: "Restore a controlled power source that feeds the selected controller input rail.",
+    power_path_route_missing: "Restore the GeometrySpec route between the power source connector and controller power connector.",
+    power_path_voltage_mismatch: "Use a controlled source that matches the controller input voltage or move conversion design to review.",
     interface_assignment_blocked: "Choose a supported same-type component or extend ElectronicsDescriptor/layout support in a future goal.",
+    interface_connector_mismatch: "Align the ElectronicsSpec connector assignment with the descriptor-backed GeometrySpec route endpoints.",
+    interface_route_missing: "Restore the descriptor-backed GeometrySpec cable route for this interface before bring-up.",
     pin_conflict: "Move one assignment to an unused board pin in the controlled pin map.",
     power_input_missing: "Restore a controlled USB-C power input or approved reviewed battery path."
   };

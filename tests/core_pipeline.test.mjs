@@ -1362,7 +1362,13 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   assert.equal(revision.prototypeReadinessReport.version, "prototype_readiness_report_v1");
   assert.equal(revision.prototypeReadinessReport.status, "Ready");
   assert.equal(revision.electronicsValidation.status, "pass");
+  const validationChecks = Object.fromEntries(revision.electronicsValidation.checks.map((check) => [check.name, check.status]));
+  assert.equal(validationChecks.voltage_compatibility, "pass");
+  assert.equal(validationChecks.power_path, "pass");
+  assert.equal(validationChecks.interface_route_alignment, "pass");
   assert.ok(revision.electronicsSpec.componentTrust.every((item) => item.trustLevel));
+  assert.equal(revision.electronicsSpec.powerPath.routeId, "route.usb_c_to_core_board");
+  assert.ok(revision.electronicsSpec.connectionRequirements.every((requirement) => requirement.status === "linked"));
   assert.ok(revision.electronicsSpec.interfaceAssignments.some((assignment) => assignment.interfaceType === "spi"));
   assert.ok(revision.electronicsSpec.interfaceAssignments.some((assignment) => assignment.interfaceType === "i2c"));
   assert.ok(revision.assemblyPlan.steps.some((step) => step.stepId === "connect_display" && step.routeRefs.length > 0));
@@ -1379,6 +1385,8 @@ test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-
   const ledger = JSON.parse(await readFile(join(projectWorkspacePath(productPlan.planId), "revision_ledger.json"), "utf8"));
   assert.equal(readinessReport.status, "Ready");
   assert.equal(readinessReport.electronicsDescriptorTrust.status, "pass");
+  assert.equal(readinessReport.electronicsValidation.checkStatuses.power_path, "pass");
+  assert.equal(readinessReport.electronicsSpecSummary.powerPath.routeId, "route.usb_c_to_core_board");
   assert.equal(descriptorTrustReport.status, "pass");
   assert.equal(electronicsSpec.sourceOfTruth.productPlan, "ProductPlan");
   assert.equal(assemblyPlan.sourceOfTruth.geometrySpec.includes("GeometrySpec"), true);
@@ -1441,6 +1449,78 @@ test("electronics descriptor trust report blocks incomplete controlled evidence"
   });
   assert.equal(validation.status, "blocked");
   assert.ok(validation.errors.some((error) => error.type === "electronics_descriptor_evidence_incomplete"));
+});
+
+test("prototype readiness validation blocks missing USB-C power route", () => {
+  const productPlan = createEmptyProductPlan();
+  productPlan.userIntent = "Desktop display with USB-C bench power.";
+  productPlan.requirements = {
+    ...productPlan.requirements,
+    display: true,
+    displaySizeInches: 3.5,
+    usbC: true,
+    ambientSensor: true
+  };
+  const geometrySpec = createGeometrySpec({ productPlan });
+  const readiness = createPrototypeReadinessPackage({
+    productPlan,
+    geometrySpec: {
+      ...geometrySpec,
+      routes: geometrySpec.routes.filter((route) => route.id !== "route.usb_c_to_core_board")
+    },
+    revisionId: "test_missing_usb_power_route"
+  });
+  assert.equal(readiness.electronicsValidation.status, "blocked");
+  assert.ok(readiness.electronicsValidation.errors.some((error) => error.type === "power_path_route_missing"));
+  assert.equal(readiness.prototypeReadinessReport.status, "Blocked");
+  assert.equal(readiness.prototypeReadinessReport.electronicsValidation.checkStatuses.power_path, "blocked");
+});
+
+test("prototype readiness validation blocks voltage and interface route mismatches", () => {
+  const productPlan = createEmptyProductPlan();
+  productPlan.userIntent = "Desktop display with ambient sensor.";
+  productPlan.requirements = {
+    ...productPlan.requirements,
+    display: true,
+    displaySizeInches: 3.5,
+    usbC: true,
+    ambientSensor: true
+  };
+  const geometrySpec = createGeometrySpec({ productPlan });
+  const mismatchedRouteGeometry = {
+    ...geometrySpec,
+    routes: geometrySpec.routes.map((route) => (
+      route.id === "route.display_to_core_board"
+        ? {
+          ...route,
+          from: {
+            ...route.from,
+            connectorId: "wrong_fpc"
+          }
+        }
+        : route
+    ))
+  };
+  const readiness = createPrototypeReadinessPackage({
+    productPlan,
+    geometrySpec: mismatchedRouteGeometry,
+    revisionId: "test_interface_route_mismatch"
+  });
+  assert.equal(readiness.electronicsValidation.status, "blocked");
+  assert.ok(readiness.electronicsValidation.errors.some((error) => error.type === "interface_connector_mismatch"));
+
+  const voltageMismatchSpec = structuredClone(readiness.electronicsSpec);
+  voltageMismatchSpec.peripherals = voltageMismatchSpec.peripherals.map((peripheral) => (
+    peripheral.componentId.startsWith("display_")
+      ? { ...peripheral, operatingVoltage: 12 }
+      : peripheral
+  ));
+  const voltageValidation = validateElectronicsSpec({
+    electronicsSpec: voltageMismatchSpec,
+    electronicsDescriptorTrustReport: readiness.electronicsDescriptorTrustReport,
+    geometrySpec
+  });
+  assert.ok(voltageValidation.errors.some((error) => error.type === "voltage_mismatch"));
 });
 
 test("prototype readiness validation blocks obvious GPIO exhaustion", () => {

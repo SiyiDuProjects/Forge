@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - Electronics Validation Power And Route V1
+
+- Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 Electronics Validation hardening slice. `ElectronicsSpec` now derives `powerPath` and `connectionRequirements` records from ElectronicsDescriptor facts and GeometrySpec routes; `electronics_validation_report.json` blocks obvious voltage/rail mismatches, missing USB-C-to-controller power routes, power-source voltage mismatches, missing interface routes, and connector-route mismatches. `PrototypeReadinessReport` exposes compact `checkStatuses` plus power-path and connection requirement counts.
+- Status: implemented in the current working tree; this is not completion of the full V1 goal.
+- Source note: `docs/source-materials/2026-06-07-electronics-validation-power-route-v1.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/prototype_readiness.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: electronics validation, voltage compatibility, USB-C power path, interface route alignment, connector mismatch, GeometrySpec route linkage, prototype readiness.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes with 33 tests; full `npm run check` passes with 112 tests.
+- Boundary: Core V1 only. This does not add PCB design, schematic generation, EMI/high-speed signal analysis, power simulation, certification, manufacturing readiness, supplier ordering, OTA, full firmware runtime, robotics, complex mechanisms, arbitrary user component import, or frontend redesign.
+
 ### 2026-06-07 - ElectronicsDescriptor Trust Report V1
 
 - Scope: continue the active `Forge Controlled Prototype Readiness V1` goal with a Core V1 Component Trust hardening slice. `ElectronicsDescriptor v1` seed records now include alternative/replacement relationships, and `src/core/prototype_readiness.mjs` derives `electronics_descriptor_trust_report.json` to lint selected electronic parts for required controlled evidence such as component id, MPN, controlled source, datasheet/spec source, internal measurement record, version, alternatives, trust level, review status, and Forge approval. Missing required evidence blocks electronics validation through `electronics_descriptor_evidence_incomplete`; evidence-complete reviewable parts remain `Needs Review`.

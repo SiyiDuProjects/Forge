@@ -612,6 +612,8 @@ Convenience route for an `electronics_layout` job. v1 returns UI-only preview pl
 
 Prototype readiness is currently produced as an internal `prototype_readiness` revision job, not a standalone public route. It derives `electronics_descriptor_trust_report.json`, `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, and `prototype_readiness_report.json` from ProductPlan, ComponentDescriptor, ElectronicsDescriptor, and GeometrySpec evidence.
 
+`electronics_spec.json` includes derived `powerPath` and `connectionRequirements` records. `electronics_validation_report.json` checks obvious prototype-level conflicts such as voltage/rail mismatch, missing USB-C controller power route, unsupported or exhausted pin/interface assignment, and connector-route mismatch. It does not claim PCB, schematic, EMI, high-speed signal, certification, or manufacturing readiness.
+
 ### `POST /api/quote/estimate`
 
 Convenience route for a `quote_estimate` job. v1 returns a pre-review estimate with assumptions and no low/mid/high tiers.
