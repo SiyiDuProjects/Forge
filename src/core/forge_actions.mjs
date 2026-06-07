@@ -1913,6 +1913,15 @@ function descriptorFromReferenceAndSpecs({
     depthMm: Number(descriptor.dimensionsMm?.depth || 0),
     defaultDiameterMm: descriptor.mechanicalProxy?.defaultHoleDiameterMm
   });
+  const connectorPatch = connectorsWithExtractedPositions({
+    connectors: descriptor.connectors || [],
+    connectorPositionSpecs: extracted.connectorPositionSpecs
+  });
+  descriptor.connectors = connectorPatch.connectors;
+  if (connectorPatch.appliedIds.length > 0 && !extracted.fieldNames?.includes("connectorPositionLocalMm")) {
+    extracted.fieldNames ||= [];
+    extracted.fieldNames.push("connectorPositionLocalMm");
+  }
   if (extracted.openingSizeMm) {
     descriptor.externalFeatures = externalFeaturesWithOpeningSize({
       externalFeatures: descriptor.externalFeatures || [],
@@ -2012,6 +2021,27 @@ function mountingHolesWithExtractedSpecs({
   return holes;
 }
 
+function connectorsWithExtractedPositions({
+  connectors = [],
+  connectorPositionSpecs = []
+} = {}) {
+  const patched = Array.isArray(connectors) ? clone(connectors) : [];
+  const appliedIds = [];
+  for (const spec of connectorPositionSpecs || []) {
+    const id = String(spec?.id || "").trim();
+    const positionLocalMm = spec?.positionLocalMm;
+    if (!id || !Array.isArray(positionLocalMm) || positionLocalMm.length !== 3) continue;
+    const index = patched.findIndex((connector) => connector.id === id);
+    if (index < 0) continue;
+    patched[index] = {
+      ...patched[index],
+      positionLocalMm: positionLocalMm.map((value) => Number(value))
+    };
+    appliedIds.push(id);
+  }
+  return { connectors: patched, appliedIds };
+}
+
 function inferMountingHoleZ({ mountingHoles = [], depthMm = 0 } = {}) {
   const firstZ = mountingHoles.find((hole) => Array.isArray(hole.positionLocalMm) && Number.isFinite(Number(hole.positionLocalMm[2])))?.positionLocalMm?.[2];
   if (Number.isFinite(Number(firstZ))) return Number(firstZ);
@@ -2042,11 +2072,13 @@ function extractDescriptorSpecs(specsText = "") {
     /(?:安装孔|螺丝孔|固定孔).{0,40}?(?:孔径|直径|ø|Ø)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*mm/i,
     /(?:孔径|直径|ø|Ø)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*mm.{0,40}?(?:安装孔|螺丝孔|固定孔)/i
   ]);
+  const connectorPositionSpecs = extractConnectorPositionSpecs(text);
   const extracted = {
     dimensionsMm,
     openingSizeMm,
     mountingHolePitchMm,
     mountingHoleDiameterMm,
+    connectorPositionSpecs,
     manufacturer: extractLabeledValue(text, ["manufacturer", "maker", "vendor", "厂商", "制造商"]),
     partNumber: extractLabeledValue(text, ["part number", "part no", "pn", "型号", "料号"]),
     displayName: extractLabeledValue(text, ["display name", "name", "名称"]),
@@ -2055,13 +2087,44 @@ function extractDescriptorSpecs(specsText = "") {
   };
   const fieldNames = [];
   for (const [field, value] of Object.entries(extracted)) {
-    if (field === "fieldNames") continue;
+    if (field === "fieldNames" || field === "connectorPositionSpecs") continue;
     if (Array.isArray(value) ? value.length > 0 : Boolean(value)) fieldNames.push(field);
   }
   return {
     ...extracted,
     fieldNames
   };
+}
+
+function extractConnectorPositionSpecs(text = "") {
+  const specs = [];
+  const chunks = String(text || "").split(/[;\n]+/);
+  for (const chunk of chunks) {
+    const parsed = parseConnectorPositionChunk(chunk);
+    if (parsed) specs.push(parsed);
+  }
+  return specs;
+}
+
+function parseConnectorPositionChunk(chunk = "") {
+  const text = String(chunk || "").trim();
+  if (!text) return null;
+  const labeled = text.match(/(?:connector|连接器|接口)\s+([A-Za-z0-9_.-]+).{0,80}?(?:positionLocalMm|position|pos|位置|坐标)\s*[:：=]?\s*\[?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (labeled) return connectorPositionSpecFromMatch(labeled);
+
+  const reverse = text.match(/([A-Za-z0-9_.-]+)\s+(?:connector|连接器|接口).{0,80}?(?:positionLocalMm|position|pos|位置|坐标)\s*[:：=]?\s*\[?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?\s*[,，x×\s]+\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (reverse) return connectorPositionSpecFromMatch(reverse);
+
+  const axes = text.match(/(?:connector|连接器|接口)\s+([A-Za-z0-9_.-]+).{0,80}?x\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?y\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?.{0,30}?z\s*[:：=]?\s*(-?\d+(?:\.\d+)?)\s*(?:mm)?/i);
+  if (axes) return connectorPositionSpecFromMatch(axes);
+  return null;
+}
+
+function connectorPositionSpecFromMatch(match = []) {
+  const id = String(match[1] || "").trim();
+  const positionLocalMm = [Number(match[2]), Number(match[3]), Number(match[4])];
+  if (!id || positionLocalMm.some((value) => !Number.isFinite(value))) return null;
+  return { id, positionLocalMm };
 }
 
 function parseOneAxisMm(text = "", patterns = []) {

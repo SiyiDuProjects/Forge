@@ -20,6 +20,19 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Descriptor Connector Position Spec Extraction V3 P50
+
+- Scope: extend workspace descriptor spec patching so explicit connector local-position constraints in `source-specs.md` can update existing `connectors[].positionLocalMm` fields in a draft descriptor. `descriptor-specs` now recognizes bounded English and Chinese forms such as `connector usb_c position 0, -18, -3 mm`, updates only connector ids inherited from the same-type reference descriptor, and leaves connector type/mating metadata unchanged. Bad anchors still produce `descriptor_local_position_outside_body_envelope` and block promotion.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-connector-position-spec-extraction-v3-p50.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor-specs, source-specs.md, connector position, positionLocalMm, connectorPositionLocalMm, local anchor gate, cable routes.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs` passes with 17 tests, including legal USB-C/GPIO connector coordinate extraction and a bad USB-C anchor blocked by descriptor readiness.
+- Boundary: this updates reviewable prototype descriptor anchor metadata only. It does not create connector ids, change connector types or mating endpoints, parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
 ### 2026-06-07 - 3D Descriptor Mounting Hole Spec Extraction V3 P49
 
 - Scope: extend workspace descriptor spec patching so explicit mounting-hole constraints in `source-specs.md` can become reviewable `mountingHoles` fields in a draft descriptor. `descriptor-specs` now extracts labeled mounting-hole spacing and diameter from English or Chinese source text, creates four centered mounting holes when rectangular spacing is provided, and updates existing reference-hole diameters when only a diameter is provided. The resulting descriptor still passes through the existing local-position and mounting-hole diameter envelope gates before promotion.

@@ -300,6 +300,67 @@ test("workspace descriptor specs extract mounting hole pattern constraints", asy
   ]);
 });
 
+test("workspace descriptor specs extract connector positions and gate bad anchors", async () => {
+  const plan = createActionPlan();
+  const scaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "core_board_connector_specs",
+    componentType: "core_board",
+    displayName: "Spec Board With Connector Positions"
+  });
+  assert.equal(scaffold.ok, true);
+
+  const patch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "core_board_connector_specs",
+    specsText: [
+      "dimensions 64 x 38 x 8 mm",
+      "connector usb_c position 0, -18, -3 mm",
+      "connector gpio position x=24 y=12 z=-2 mm",
+      "manufacturer Forge Test",
+      "part number CORE-CONNECTOR-SPECS",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(patch.ok, true);
+  assert.equal(patch.specsApplied, true);
+  assert.equal(patch.readyForLibraryPromotion, true);
+  assert.ok(patch.extractedFields.includes("connectorPositionLocalMm"));
+
+  const descriptorPath = join(projectWorkspacePath(plan.planId), "component-drafts", "core_board_connector_specs", "descriptor.json");
+  const descriptor = JSON.parse(await readFile(descriptorPath, "utf8"));
+  const usbC = descriptor.connectors.find((connector) => connector.id === "usb_c");
+  const gpio = descriptor.connectors.find((connector) => connector.id === "gpio");
+  assert.deepEqual(usbC.positionLocalMm, [0, -18, -3]);
+  assert.deepEqual(gpio.positionLocalMm, [24, 12, -2]);
+
+  const badScaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "core_board_bad_connector_specs",
+    componentType: "core_board",
+    displayName: "Spec Board With Bad Connector Position"
+  });
+  assert.equal(badScaffold.ok, true);
+  const badPatch = applyWorkspaceDescriptorDraftSpecs({
+    workspaceId: plan.planId,
+    draftId: "core_board_bad_connector_specs",
+    specsText: [
+      "dimensions 64 x 38 x 8 mm",
+      "connector usb_c position 100, 0, 0 mm",
+      "measurement basis datasheet mechanical drawing",
+      "reviewable"
+    ].join("; ")
+  });
+  assert.equal(badPatch.ok, true);
+  assert.equal(badPatch.specsApplied, true);
+  assert.equal(badPatch.readyForLibraryPromotion, false);
+  assert.ok(badPatch.blockingIssues.some((issue) => (
+    issue.code === "descriptor_local_position_outside_body_envelope"
+      && issue.source === "connectors.usb_c.positionLocalMm"
+  )));
+});
+
 test("descriptor draft promotion makes a same-type part selectable through ProductPlan", () => {
   const plan = createActionPlan();
   const seed = listComponentDescriptors().find((item) => item.id === "button_6mm");
