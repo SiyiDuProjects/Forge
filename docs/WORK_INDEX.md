@@ -20,6 +20,26 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Trusted Generation V3 Completion Audit
+
+- Scope: record the final requirement-by-requirement audit for the bounded Forge 3D trusted generation loop V3 goal. The audit maps ProductPlan source of truth, ComponentDescriptor v2 constraints, source-spec onboarding, explainable layout, GeometrySpec validation, explicit generation confirmation, GLB/STL/STEP artifacts, generation evidence, zero-thickness safeguards, compact runtime evidence, safe action contracts, guarded files, and read-only preview boundaries to current code, docs, and regression tests.
+- Status: completed audit document added for the current working tree.
+- Audit doc: `docs/3D_TRUSTED_GENERATION_V3_COMPLETION_AUDIT.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`
+- Key code/test handles:
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `src/core/forge_actions.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/model_preview.mjs`
+  - `tests/trusted_generation_regression.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, completion audit, ProductPlan, GeometrySpec, ComponentDescriptor, generation_evidence_report, trustedGenerated, zero thickness, read-only preview, guarded files, Codex runtime.
+- Verification: full `npm run check` passes with 107 tests after this audit/index update.
+- Boundary: this closes the current bounded MVP core goal only. It does not claim vendor-verified CAD, arbitrary PDF/spec parsing, production readiness, SolidWorks automation, checkout, supplier ordering, or CAD/model editing.
+
 ### 2026-06-07 - 3D GLB Thin Mesh Audit Diagnostics V3 P55
 
 - Scope: strengthen generated artifact visual/structure audit diagnostics for suspected zero-thickness GLB preview geometry. `analyzeGlbThinMeshPrimitives` now returns both a count and compact node-level samples with semantic node names, mesh/accessor indexes, thin axes, measured spans in millimeters, and the configured minimum span. GLB post-write audit writes `thinMeshPrimitiveSamples` into `generation_evidence_report.json`, and ContextPack carries the compact samples in artifact audit diagnostics without raw GLB bytes.
