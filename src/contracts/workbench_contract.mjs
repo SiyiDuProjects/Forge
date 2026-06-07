@@ -11,6 +11,11 @@ export const WORKBENCH_CHAIN = [
   "generate_model_artifacts",
   "validate_geometry",
   "draft_electronics_layout",
+  "derive_electronics_spec",
+  "validate_electronics",
+  "draft_assembly_plan",
+  "draft_development_board_scaffold",
+  "draft_prototype_readiness_report",
   "draft_firmware",
   "draft_dfm_packet"
 ];
@@ -29,6 +34,7 @@ export const PRODUCT_PLAN_STATUS = {
 export const JOB_CAPABILITY = {
   MODEL_GENERATION: "model_generation",
   ELECTRONICS_LAYOUT: "electronics_layout",
+  PROTOTYPE_READINESS: "prototype_readiness",
   QUOTE_ESTIMATE: "quote_estimate",
   REVIEW_PACKET: "review_packet",
   AI_CHAT_RESERVED: "ai_chat_reserved"

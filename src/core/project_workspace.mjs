@@ -280,6 +280,11 @@ export function persistRevision({
   writeJson(join(revisionPath, "component_descriptors.json"), geometrySpec.componentDescriptors || []);
   writeJson(join(revisionPath, "component_asset_manifest.json"), geometrySpec.componentAssetManifest || {});
   writeJson(join(revisionPath, "validation_report.json"), validation);
+  writeJson(join(revisionPath, "electronics_spec.json"), revision.electronicsSpec || {});
+  writeJson(join(revisionPath, "electronics_validation_report.json"), revision.electronicsValidation || {});
+  writeJson(join(revisionPath, "assembly_plan.json"), revision.assemblyPlan || {});
+  writeJson(join(revisionPath, "development_board_scaffold.json"), revision.developmentBoardScaffold || {});
+  writeJson(join(revisionPath, "prototype_readiness_report.json"), revision.prototypeReadinessReport || {});
   if (generationEvidence) {
     writeJson(join(revisionPath, "generation_evidence_report.json"), generationEvidence);
   }
@@ -299,10 +304,15 @@ export function persistRevision({
       productPlan: "product_plan.json",
       geometrySpec: "geometry-spec.json",
       componentSelections: "component_selections.json",
-      componentDescriptors: "component_descriptors.json"
+      componentDescriptors: "component_descriptors.json",
+      electronicsSpec: "electronics_spec.json"
     },
     derivedArtifacts: {
       validationReport: "validation_report.json",
+      electronicsValidationReport: "electronics_validation_report.json",
+      assemblyPlan: "assembly_plan.json",
+      developmentBoardScaffold: "development_board_scaffold.json",
+      prototypeReadinessReport: "prototype_readiness_report.json",
       ...(generationEvidence ? { generationEvidenceReport: "generation_evidence_report.json" } : {}),
       componentAssetManifest: "component_asset_manifest.json",
       designSummary: "design_summary.md",
@@ -644,6 +654,7 @@ function generationInputsForRevision(revision) {
     quote: revision.quote || {},
     generationStatus: revision.generationStatus || "",
     generationConfirmed: Boolean(revision.generationConfirmed),
+    prototypeReadinessStatus: revision.prototypeReadinessStatus || "",
     modelProvider: revision.modelArtifacts?.provider || "",
     targetProvider: revision.modelArtifacts?.targetProvider || ""
   };
@@ -678,6 +689,7 @@ function designSummaryForRevision(revision, validation) {
 - Finish: ${constraints.finish || "unspecified"}
 - Shape: ${shape}
 - Generation status: ${revision.generationStatus || "unknown"}
+- Prototype readiness: ${revision.prototypeReadinessStatus || "unknown"}
 
 ## Components
 

@@ -7,6 +7,7 @@ import { createGenerationJob } from "../src/core/jobs.mjs";
 import { createGeometrySpec, generateModelArtifacts } from "../src/core/geometry_generation.mjs";
 import { createDeviceConfig, createDraft, listCatalogModules, submitReview } from "../src/core/pipeline.mjs";
 import { addProductPlanTurn, createProductPlan, revertProductPlanRevision, submitProductPlanReview } from "../src/core/product_plan.mjs";
+import { createPrototypeReadinessPackage } from "../src/core/prototype_readiness.mjs";
 import { processUserTurn } from "../src/core/sparker_orchestrator.mjs";
 import { resolveComponentAsset } from "../src/core/component_asset_resolver.mjs";
 import { listComponentDescriptorValidation, listComponentDescriptors } from "../src/core/component_library.mjs";
@@ -1338,6 +1339,68 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   });
   assert.match(quoteJob.output.quoteEstimate.range, /^\$\d+-\$\d+$/);
   assert.equal(quoteJob.output.quoteEstimate.requiresHumanQuote, true);
+});
+
+test("prototype readiness job derives ElectronicsSpec, assembly plan, and bring-up scaffold", async () => {
+  const { productPlan } = createProductPlan({
+    initialMessage: "Small graphite 5 inch desktop display with weather, ambient light sensor, and one button."
+  });
+  const { revision } = addProductPlanTurn({
+    planId: productPlan.planId,
+    message: "生成模型"
+  });
+  assert.equal(revision.modelArtifacts.status, "generated");
+  assert.equal(revision.electronicsSpec.version, "electronics_spec_v1");
+  assert.equal(revision.electronicsValidation.version, "electronics_validation_v1");
+  assert.equal(revision.prototypeReadinessReport.version, "prototype_readiness_report_v1");
+  assert.equal(revision.prototypeReadinessReport.status, "Ready");
+  assert.equal(revision.electronicsValidation.status, "pass");
+  assert.ok(revision.electronicsSpec.componentTrust.every((item) => item.trustLevel));
+  assert.ok(revision.electronicsSpec.interfaceAssignments.some((assignment) => assignment.interfaceType === "spi"));
+  assert.ok(revision.electronicsSpec.interfaceAssignments.some((assignment) => assignment.interfaceType === "i2c"));
+  assert.ok(revision.assemblyPlan.steps.some((step) => step.stepId === "connect_display" && step.routeRefs.length > 0));
+  assert.equal(revision.developmentBoardScaffold.status, "generated");
+  assert.ok(revision.developmentBoardScaffold.files.some((file) => file.path === "firmware/bringup/pin_map.json"));
+  assert.ok(productPlan.jobs.some((job) => job.capability === JOB_CAPABILITY.PROTOTYPE_READINESS));
+
+  const revisionPath = join(projectWorkspacePath(productPlan.planId), "revisions", revision.revisionId);
+  const readinessReport = JSON.parse(await readFile(join(revisionPath, "prototype_readiness_report.json"), "utf8"));
+  const electronicsSpec = JSON.parse(await readFile(join(revisionPath, "electronics_spec.json"), "utf8"));
+  const assemblyPlan = JSON.parse(await readFile(join(revisionPath, "assembly_plan.json"), "utf8"));
+  const manifest = JSON.parse(await readFile(join(revisionPath, "revision_manifest.json"), "utf8"));
+  const ledger = JSON.parse(await readFile(join(projectWorkspacePath(productPlan.planId), "revision_ledger.json"), "utf8"));
+  assert.equal(readinessReport.status, "Ready");
+  assert.equal(electronicsSpec.sourceOfTruth.productPlan, "ProductPlan");
+  assert.equal(assemblyPlan.sourceOfTruth.geometrySpec.includes("GeometrySpec"), true);
+  assert.equal(manifest.derivedArtifacts.prototypeReadinessReport, "prototype_readiness_report.json");
+  assert.ok(ledger.revisions.at(-1).artifactManifest.derivedOutputs.some((item) => (
+    item.key === "prototypeReadinessReport"
+    && item.present === true
+  )));
+});
+
+test("prototype readiness validation blocks obvious GPIO exhaustion", () => {
+  const productPlan = createEmptyProductPlan();
+  productPlan.userIntent = "Six button desktop display internal prototype.";
+  productPlan.requirements = {
+    ...productPlan.requirements,
+    display: true,
+    displaySizeInches: 3.5,
+    usbC: true,
+    buttons: 6,
+    ambientSensor: true
+  };
+  const geometrySpec = createGeometrySpec({ productPlan });
+  const readiness = createPrototypeReadinessPackage({
+    productPlan,
+    geometrySpec,
+    revisionId: "test_gpio_exhaustion"
+  });
+  assert.equal(readiness.electronicsSpec.componentTrust.every((item) => item.componentId), true);
+  assert.equal(readiness.electronicsValidation.status, "blocked");
+  assert.ok(readiness.electronicsValidation.errors.some((error) => error.type === "interface_assignment_blocked"));
+  assert.equal(readiness.prototypeReadinessReport.status, "Blocked");
+  assert.equal(readiness.developmentBoardScaffold.status, "missing_information");
 });
 
 test("geometry spec is deterministic and blocks missing module geometry", async () => {

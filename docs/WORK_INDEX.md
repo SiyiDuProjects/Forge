@@ -20,6 +20,25 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - Controlled Prototype Readiness V1 Foundation
+
+- Scope: implement the first Core V1 backend slice for the active `Forge Controlled Prototype Readiness V1` goal. Added a `prototype_readiness` job and `src/core/prototype_readiness.mjs` to derive controlled `ElectronicsDescriptor` seed evidence, `ElectronicsSpec`, prototype-level electronics validation, GeometrySpec-linked `AssemblyPlan`, development-board bring-up scaffold, and `PrototypeReadinessReport` for each ProductPlan revision. Revision folders now persist `electronics_spec.json`, `electronics_validation_report.json`, `assembly_plan.json`, `development_board_scaffold.json`, and `prototype_readiness_report.json`; revision manifest, revision ledger, and ContextPack expose compact status.
+- Status: implemented in the current working tree; this is not completion of the full V1 goal.
+- Source note: `docs/source-materials/2026-06-07-controlled-prototype-readiness-v1-foundation.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `README.md`, `AGENTS.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/prototype_readiness.mjs`
+  - `src/core/jobs.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: prototype readiness, ElectronicsDescriptor, ElectronicsSpec, electronics validation, GPIO exhaustion, AssemblyPlan, development board scaffold, PrototypeReadinessReport, revision context.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes with 30 tests; full `npm run check` passes with 109 tests.
+- Boundary: Core V1 only. This does not add custom PCB, manufacturing readiness, supplier ordering, OTA, full firmware runtime, arbitrary user component import, production certification, robotics, complex mechanisms, or frontend redesign.
+
 ### 2026-06-07 - Controlled Parts Only Boundary
 
 - Scope: tighten the Forge component onboarding product boundary after user correction. ComponentDescriptor draft/spec/scaffold/promote/select remains a controlled internal/operator/Codex product-agent or vetted supplier-source library pipeline. It must not be described as a user-facing arbitrary part upload workflow, because Forge intends to produce physical prototypes from Forge-controlled parts.

@@ -20,6 +20,13 @@ Source notes should preserve reusable raw or semi-raw context. Durable decisions
 
 ## 2026-06-07
 
+### Controlled Prototype Readiness V1 Foundation
+
+- File: `docs/source-materials/2026-06-07-controlled-prototype-readiness-v1-foundation.md`
+- Status: implemented by adding the Core V1 backend foundation for ElectronicsDescriptor seed evidence, derived ElectronicsSpec, electronics validation, GeometrySpec-linked AssemblyPlan, development-board bring-up scaffold, PrototypeReadinessReport, revision persistence, and regression coverage.
+- Related docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/CONTRACTS.md`
+- Key handles: prototype readiness, ElectronicsDescriptor, ElectronicsSpec, electronics validation, AssemblyPlan, development board scaffold, PrototypeReadinessReport.
+
 ### Controlled Parts Only Boundary
 
 - File: `docs/source-materials/2026-06-07-controlled-parts-only-boundary.md`

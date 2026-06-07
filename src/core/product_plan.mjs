@@ -370,6 +370,18 @@ function createRevisionForTurn({
       modelJob
     }
   });
+  const prototypeReadinessJob = createGenerationJob({
+    planId: plan.planId,
+    revisionId,
+    capability: JOB_CAPABILITY.PROTOTYPE_READINESS,
+    input: {
+      productPlan: structuredProductPlan,
+      geometrySpec: modelJob.output?.geometrySpec,
+      electronicsLayout: layoutJob.output?.electronicsLayout,
+      modelJob,
+      layoutJob
+    }
+  });
   const quoteJob = createGenerationJob({
     planId: plan.planId,
     revisionId,
@@ -405,6 +417,12 @@ function createRevisionForTurn({
     generationConfirmed: modelJob.output?.modelArtifacts?.status === "generated",
     modelPreview: modelJob.output?.modelPreview,
     electronicsLayout: layoutJob.output?.electronicsLayout,
+    electronicsSpec: prototypeReadinessJob.output?.electronicsSpec,
+    electronicsValidation: prototypeReadinessJob.output?.electronicsValidation,
+    assemblyPlan: prototypeReadinessJob.output?.assemblyPlan,
+    developmentBoardScaffold: prototypeReadinessJob.output?.developmentBoardScaffold,
+    prototypeReadinessReport: prototypeReadinessJob.output?.prototypeReadinessReport,
+    prototypeReadinessStatus: prototypeReadinessJob.output?.prototypeReadinessReport?.status || "unknown",
     assumptions: quoteJob.output?.quoteEstimate?.assumptions || [],
     quoteEstimate: quoteJob.output?.quoteEstimate,
     createdAt: new Date().toISOString()
@@ -421,7 +439,7 @@ function createRevisionForTurn({
   plan.currentRevisionId = revision.revisionId;
   plan.requiredInputs = requiredInputsFor(requestText, draft);
   plan.revisions.push(revision);
-  plan.jobs.push(modelJob, layoutJob, quoteJob);
+  plan.jobs.push(modelJob, layoutJob, prototypeReadinessJob, quoteJob);
   plan.updatedAt = revision.createdAt;
   if (plan.workspaceState) {
     plan.workspaceState.productPlan = clone(structuredProductPlan);

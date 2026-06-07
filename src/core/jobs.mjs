@@ -2,6 +2,7 @@ import { JOB_CAPABILITY, JOB_PROVIDER, JOB_STATUS } from "../contracts/workbench
 import { createElectronicsLayout } from "./electronics_layout.mjs";
 import { createGeometrySpec, generateModelArtifacts } from "./geometry_generation.mjs";
 import { createModelPreview } from "./model_preview.mjs";
+import { createPrototypeReadinessPackage } from "./prototype_readiness.mjs";
 import { createQuoteEstimate } from "./quote_plan.mjs";
 import { makeId } from "./utils.mjs";
 
@@ -102,6 +103,16 @@ function runJob(job) {
         modelPreview
       })
     };
+  }
+
+  if (job.capability === JOB_CAPABILITY.PROTOTYPE_READINESS) {
+    const geometrySpec = job.input.geometrySpec || job.input.modelJob?.output?.geometrySpec || {};
+    return createPrototypeReadinessPackage({
+      productPlan: job.input.productPlan,
+      geometrySpec,
+      electronicsLayout: job.input.electronicsLayout || job.input.layoutJob?.output?.electronicsLayout || null,
+      revisionId: job.revisionId
+    });
   }
 
   if (job.capability === JOB_CAPABILITY.QUOTE_ESTIMATE) {

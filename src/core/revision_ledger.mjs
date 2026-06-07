@@ -16,6 +16,11 @@ const DERIVED_REVISION_FILES = {
   componentDescriptors: "component_descriptors.json",
   componentAssetManifest: "component_asset_manifest.json",
   validationReport: "validation_report.json",
+  electronicsSpec: "electronics_spec.json",
+  electronicsValidationReport: "electronics_validation_report.json",
+  assemblyPlan: "assembly_plan.json",
+  developmentBoardScaffold: "development_board_scaffold.json",
+  prototypeReadinessReport: "prototype_readiness_report.json",
   generationEvidenceReport: "generation_evidence_report.json",
   designSummary: "design_summary.md",
   generationInputs: "generation_inputs.json"
@@ -130,6 +135,8 @@ function revisionRecord(revision = {}, currentRevisionId = "") {
       productCategory: revision.productCategory || "",
       generationStatus: revision.generationStatus || revision.modelArtifacts?.status || "unknown",
       validationStatus: validation.status || "unknown",
+      electronicsValidationStatus: revision.electronicsValidation?.status || "unknown",
+      prototypeReadinessStatus: revision.prototypeReadinessStatus || revision.prototypeReadinessReport?.status || "unknown",
       modelArtifactsStatus: revision.modelArtifacts?.status || "unknown",
       generated: revision.modelArtifacts?.status === "generated",
       trustedGenerated: artifactAuditPassed(revision)
@@ -367,6 +374,11 @@ function derivedOutputRecords(revision = {}) {
     componentDescriptors: Array.isArray(revision.geometrySpec?.componentDescriptors),
     componentAssetManifest: Boolean(revision.geometrySpec?.componentAssetManifest),
     validationReport: Boolean(revision.geometryValidation || revision.modelArtifacts?.validation),
+    electronicsSpec: Boolean(revision.electronicsSpec),
+    electronicsValidationReport: Boolean(revision.electronicsValidation),
+    assemblyPlan: Boolean(revision.assemblyPlan),
+    developmentBoardScaffold: Boolean(revision.developmentBoardScaffold),
+    prototypeReadinessReport: Boolean(revision.prototypeReadinessReport),
     generationEvidenceReport: Boolean(generationEvidence),
     designSummary: Boolean(revisionId),
     generationInputs: Boolean(revisionId)
