@@ -30,6 +30,8 @@ export function createModelPreview({ spec = {}, modules = [], geometrySpec = nul
   }));
 
   const artifactStatus = modelArtifacts?.status || "pending_confirmation";
+  const artifactAudit = modelArtifacts?.generationEvidence?.artifactAudit || null;
+  const trustedGenerated = artifactStatus === "generated" && artifactAudit?.passed === true;
   return {
     viewerType: generatedAssets.glb
       ? "interactive_glb_preview"
@@ -38,6 +40,14 @@ export function createModelPreview({ spec = {}, modules = [], geometrySpec = nul
         : "geometry_validation_preview",
     generationMode: modelArtifacts?.provider || "ai_provider_reserved",
     targetProvider: modelArtifacts?.targetProvider || "cadquery_open_cascade",
+    artifactTrust: {
+      generated: artifactStatus === "generated",
+      trustedGenerated,
+      auditStatus: artifactAudit?.status || (artifactStatus === "generated" ? "unavailable" : ""),
+      auditPassed: artifactAudit?.passed === true,
+      findingCount: Array.isArray(artifactAudit?.findings) ? artifactAudit.findings.length : 0,
+      source: artifactAudit ? "generation_evidence_report" : ""
+    },
     interactionPolicy: {
       orbit: true,
       zoom: true,
@@ -88,7 +98,9 @@ export function createModelPreview({ spec = {}, modules = [], geometrySpec = nul
       "This is a read-only 3D prototype preview.",
       "Component geometry is descriptor-driven proxy geometry unless the asset manifest lists verified vendor assets.",
       generatedAssets.glb
-        ? "Generated 3D model is for orbit, zoom, and pan preview only; users cannot edit parts or geometry."
+        ? trustedGenerated
+          ? "Generated 3D model passed post-write artifact audit and remains read-only."
+          : "Generated 3D model is available but has not passed post-write artifact audit."
         : artifactStatus === "pending_confirmation"
           ? "3D model generation is waiting for explicit confirmation."
           : "No 3D model file is emitted when geometry is blocked or incomplete.",

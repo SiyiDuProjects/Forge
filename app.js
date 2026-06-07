@@ -143,6 +143,9 @@ const copy = {
     modelReviewReady: "人工审核前预览",
     modelArtifacts: "3D 模型状态",
     modelArtifactSummary: "3D 模型已生成",
+    modelArtifactTrusted: "生成自检通过",
+    modelArtifactAuditFailed: "生成自检未通过",
+    modelArtifactAuditUnavailable: "生成自检待确认",
     modelFullscreenAria: "3D 预览全屏",
     openModelFullscreen: "全屏查看 3D 预览",
     closeModelFullscreen: "收起全屏预览",
@@ -317,6 +320,9 @@ const copy = {
     modelReviewReady: "Pre-review preview",
     modelArtifacts: "3D model status",
     modelArtifactSummary: "3D model generated",
+    modelArtifactTrusted: "Generation audit passed",
+    modelArtifactAuditFailed: "Generation audit failed",
+    modelArtifactAuditUnavailable: "Generation audit pending",
     modelFullscreenAria: "Fullscreen 3D preview",
     openModelFullscreen: "Open 3D preview fullscreen",
     closeModelFullscreen: "Exit fullscreen preview",
@@ -2334,7 +2340,29 @@ function artifactSummary(revision) {
   const artifacts = revision.modelArtifacts?.artifacts || revision.modelPreview?.assets || {};
   const ready = ["glb", "shellFront", "shellBack", "stl", "step"].filter((key) => artifacts[key]);
   if (ready.length === 0) return state.lang === "zh" ? "待生成" : "pending";
+  const trust = artifactTrustForRevision(revision);
+  if (revision.modelArtifacts?.status === "generated" || trust.generated) {
+    if (trust.trustedGenerated) return t("modelArtifactTrusted");
+    if (trust.auditStatus && trust.auditStatus !== "unavailable" && trust.auditPassed === false) {
+      return t("modelArtifactAuditFailed");
+    }
+    return t("modelArtifactAuditUnavailable");
+  }
   return t("modelArtifactSummary");
+}
+
+function artifactTrustForRevision(revision) {
+  const previewTrust = revision?.modelPreview?.artifactTrust || {};
+  const artifactAudit = revision?.modelArtifacts?.generationEvidence?.artifactAudit || {};
+  const generated = previewTrust.generated === true || revision?.modelArtifacts?.status === "generated";
+  const auditStatus = previewTrust.auditStatus || artifactAudit.status || "";
+  const auditPassed = previewTrust.auditPassed === true || artifactAudit.passed === true;
+  return {
+    generated,
+    trustedGenerated: previewTrust.trustedGenerated === true || (generated && auditPassed),
+    auditStatus: auditStatus || (generated ? "unavailable" : ""),
+    auditPassed
+  };
 }
 
 function generationIsPending(revision) {

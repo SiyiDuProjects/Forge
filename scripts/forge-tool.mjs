@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { hydrateProductPlanFromWorkspace } from "../src/core/product_plan.mjs";
+import { projectWorkspacePath } from "../src/core/project_workspace.mjs";
 import { executeForgeToolWithPolicy } from "../src/core/tool_executor.mjs";
 
 const COMMANDS = {
   summary: runSummary,
   "search-component": runSearchComponent,
+  "component-package": runComponentPackage,
+  "descriptor-draft": runDescriptorDraft,
+  "descriptor-drafts": runDescriptorDrafts,
+  "descriptor-scaffold": runDescriptorScaffold,
+  "descriptor-specs": runDescriptorSpecs,
+  "descriptor-promote": runDescriptorPromote,
+  "descriptor-select": runDescriptorSelect,
+  "descriptor-retire": runDescriptorRetire,
   propose: runPropose,
   stage: runStage,
   commit: runCommit,
@@ -34,7 +43,7 @@ async function main() {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     writeJson({
       ok: true,
-      usage: "forge-tool <summary|search-component|propose|stage|commit|apply|validate|generate|revert|artifacts|review|reject> [--key value]",
+      usage: "forge-tool <summary|search-component|component-package|descriptor-draft|descriptor-drafts|descriptor-scaffold|descriptor-specs|descriptor-promote|descriptor-select|descriptor-retire|propose|stage|commit|apply|validate|generate|revert|artifacts|review|reject> [--key value]",
       note: "Run from a Forge project workspace or pass --workspaceId."
     });
     return;
@@ -80,6 +89,7 @@ async function main() {
   }
 
   const result = await handler({
+    workspace,
     workspaceId: workspace.workspaceId,
     options
   });
@@ -103,6 +113,135 @@ function runSearchComponent({ workspaceId, options }) {
       componentType: options.componentType || options.type || "",
       limit: numberOption(options.limit, 10)
     }
+  });
+}
+
+function runComponentPackage({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "inspectComponentPackage",
+    input: {
+      componentId: required(options.componentId || options.component || options.id, "componentId")
+    }
+  });
+}
+
+function runDescriptorDraft({ workspaceId, options }) {
+  const descriptorFile = required(options.descriptorFile || options.file, "descriptorFile");
+  const sourcesFile = options.sourcesFile || options.sources || "";
+  return runTool({
+    workspaceId,
+    toolName: "inspectComponentDescriptorDraft",
+    input: {
+      descriptorJson: readFileSync(resolve(descriptorFile), "utf8"),
+      expectedId: options.expectedId || options.id || "",
+      sourcesText: sourcesFile ? readFileSync(resolve(sourcesFile), "utf8") : ""
+    }
+  });
+}
+
+function runDescriptorDrafts({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "inspectWorkspaceComponentDescriptorDrafts",
+    input: {
+      draftId: options.draftId || options.id || "",
+      limit: numberOption(options.limit, 20)
+    }
+  });
+}
+
+function runDescriptorScaffold({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "scaffoldWorkspaceComponentDescriptorDraft",
+    input: {
+      draftId: required(options.draftId || options.id, "draftId"),
+      componentType: required(options.componentType || options.type, "componentType"),
+      displayName: options.displayName || options.name || "",
+      overwrite: Boolean(options.overwrite)
+    },
+    userMessage: "scaffold workspace descriptor draft",
+    mode: "confirmed"
+  });
+}
+
+function runDescriptorSpecs({ workspace, workspaceId, options }) {
+  const specsFile = options.specsFile || options.file || "";
+  const specsInput = readDescriptorSpecsInput({
+    workspace,
+    specsFile,
+    specsText: options.specsText || options.specs || ""
+  });
+  return runTool({
+    workspaceId,
+    toolName: "applyWorkspaceDescriptorDraftSpecs",
+    input: {
+      draftId: required(options.draftId || options.id, "draftId"),
+      specsText: required(specsInput.specsText, "specsText"),
+      specsSourcePath: specsInput.specsSourcePath,
+      baseComponentId: options.baseComponentId || options.base || "",
+      markReviewable: Boolean(options.markReviewable || options.reviewable)
+    },
+    userMessage: "apply workspace descriptor draft specs",
+    mode: "confirmed"
+  });
+}
+
+function runDescriptorPromote({ workspaceId, options }) {
+  if (options.draftId) {
+    return runTool({
+      workspaceId,
+      toolName: "promoteWorkspaceComponentDescriptorDraft",
+      input: {
+        draftId: options.draftId,
+        replaceExisting: Boolean(options.replaceExisting)
+      },
+      userMessage: "promote workspace descriptor draft",
+      mode: "confirmed"
+    });
+  }
+  const descriptorFile = required(options.descriptorFile || options.file, "descriptorFile");
+  const sourcesFile = options.sourcesFile || options.sources || "";
+  return runTool({
+    workspaceId,
+    toolName: "promoteComponentDescriptorDraft",
+    input: {
+      descriptorJson: readFileSync(resolve(descriptorFile), "utf8"),
+      expectedId: options.expectedId || options.id || "",
+      sourcesText: sourcesFile ? readFileSync(resolve(sourcesFile), "utf8") : "",
+      replaceExisting: Boolean(options.replaceExisting)
+    },
+    userMessage: "promote descriptor draft",
+    mode: "confirmed"
+  });
+}
+
+function runDescriptorSelect({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "selectComponentDescriptor",
+    input: {
+      componentId: required(options.componentId || options.component || options.id, "componentId"),
+      quantity: numberOption(options.quantity, 1),
+      message: options.message || ""
+    },
+    userMessage: options.message || "select component descriptor",
+    mode: "confirmed"
+  });
+}
+
+function runDescriptorRetire({ workspaceId, options }) {
+  return runTool({
+    workspaceId,
+    toolName: "retirePromotedComponentDescriptor",
+    input: {
+      componentId: required(options.componentId || options.component || options.id, "componentId"),
+      reason: options.reason || "",
+      clearPreference: options.clearPreference !== "false"
+    },
+    userMessage: options.reason || "retire promoted descriptor",
+    mode: "confirmed"
   });
 }
 
@@ -270,7 +409,7 @@ function compactCliToolResult({
   resultSummary = null
 } = {}) {
   if (!result || result.ok === false) return result;
-  if (toolName === "getWorkspaceSummary" || toolName === "searchComponentLibrary" || toolName === "getRevisionArtifacts") {
+  if (toolName === "getWorkspaceSummary" || toolName === "searchComponentLibrary" || toolName === "inspectComponentPackage" || toolName === "inspectComponentDescriptorDraft" || toolName === "inspectWorkspaceComponentDescriptorDrafts" || toolName === "getRevisionArtifacts") {
     return omitLargeState(result);
   }
 
@@ -290,11 +429,42 @@ function compactCliToolResult({
     "reverted",
     "rejected",
     "submitted",
+    "selected",
+    "promoted",
+    "retired",
+    "scaffolded",
+    "specsApplied",
+    "draftId",
+    "draftCount",
+    "readyForPromotionCount",
     "reviewId",
     "requiresConfirmation",
     "canCommit",
-    "summary"
+    "summary",
+    "componentId",
+    "componentType",
+    "quantity",
+    "packageStatus",
+    "readyForSelection",
+    "readyForReviewableGeneration",
+    "readyForLibraryPromotion",
+    "componentPreferencePath",
+    "packagePath",
+    "descriptorPath",
+    "sourcesPath",
+    "specsSourcePath",
+    "overwritten",
+    "previousStatus",
+    "clearedComponentPreference",
+    "directGeometryMutationAllowed",
+    "rawArtifactMutationAllowed"
   ]);
+  if (Array.isArray(result.authoringChecklist)) compact.authoringChecklist = result.authoringChecklist;
+  if (Array.isArray(result.extractedFields)) compact.extractedFields = result.extractedFields;
+  if (Array.isArray(result.blockingIssues)) compact.blockingIssues = result.blockingIssues;
+  if (Array.isArray(result.reviewWarnings)) compact.reviewWarnings = result.reviewWarnings;
+  if (result.draftReport) compact.draftReport = result.draftReport;
+  if (result.packageReport) compact.packageReport = result.packageReport;
   if (Array.isArray(result.results)) compact.results = result.results;
   if (Array.isArray(result.warnings)) compact.warnings = result.warnings;
   if (Array.isArray(result.errors)) compact.errors = result.errors;
@@ -306,6 +476,8 @@ function compactCliToolResult({
   if (result.expectedWarnings) compact.expectedWarnings = result.expectedWarnings;
   if (result.artifactPaths) compact.artifactPaths = result.artifactPaths;
   if (result.artifactStatus) compact.artifactStatus = result.artifactStatus;
+  if (result.libraryStatus) compact.libraryStatus = result.libraryStatus;
+  if (result.replacement) compact.replacement = result.replacement;
   if (result.submission) compact.submission = result.submission;
   if (resultSummary) compact.resultSummary = resultSummary;
   return compact;
@@ -349,9 +521,58 @@ function normalizeKey(key) {
     "revision-id": "revisionId",
     "patches-file": "patchesFile",
     "patch-file": "patchesFile",
-    "component-type": "componentType"
+    "component-type": "componentType",
+    "descriptor-file": "descriptorFile",
+    "sources-file": "sourcesFile",
+    "specs-file": "specsFile",
+    "specs-text": "specsText",
+    "expected-id": "expectedId",
+    "draft-id": "draftId",
+    "display-name": "displayName",
+    "base-component-id": "baseComponentId",
+    "mark-reviewable": "markReviewable",
+    "replace-existing": "replaceExisting"
   };
   return aliases[key] || key;
+}
+
+function readDescriptorSpecsInput({
+  workspace = {},
+  specsFile = "",
+  specsText = ""
+} = {}) {
+  if (!specsFile) {
+    return {
+      specsText,
+      specsSourcePath: ""
+    };
+  }
+  const absoluteSpecsPath = resolve(specsFile);
+  const workspacePath = workspace.workspacePath || projectWorkspacePath(workspace.workspaceId, {
+    rootDir: workspace.rootDir || undefined
+  });
+  const specsSourcePath = workspaceRelativePath({
+    workspacePath,
+    absolutePath: absoluteSpecsPath
+  });
+  if (!specsSourcePath) {
+    const error = new Error("--specs-file must point to a file inside the Forge project workspace.");
+    error.code = "SPECS_FILE_OUTSIDE_WORKSPACE";
+    throw error;
+  }
+  return {
+    specsText: readFileSync(absoluteSpecsPath, "utf8"),
+    specsSourcePath
+  };
+}
+
+function workspaceRelativePath({
+  workspacePath = "",
+  absolutePath = ""
+} = {}) {
+  const rel = relative(resolve(workspacePath), resolve(absolutePath)).replace(/\\/g, "/");
+  if (!rel || rel === ".." || rel.startsWith("../") || isAbsolute(rel)) return "";
+  return rel;
 }
 
 function resolveWorkspace(options = {}) {

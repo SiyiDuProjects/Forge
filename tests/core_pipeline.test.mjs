@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { test } from "node:test";
 import { API_CONTRACT, JOB_CAPABILITY, PRODUCT_PLAN_STATUS, RISK_STATUS, SUPPORTED_LANGUAGES, WORKBENCH_CHAIN } from "../src/contracts/workbench_contract.mjs";
 import { createGenerationJob } from "../src/core/jobs.mjs";
@@ -11,6 +12,8 @@ import { resolveComponentAsset } from "../src/core/component_asset_resolver.mjs"
 import { listComponentDescriptorValidation, listComponentDescriptors } from "../src/core/component_library.mjs";
 import { validateComponentDescriptorV2 } from "../src/core/component_descriptor_schema.mjs";
 import { selectComponents } from "../src/core/component_selection.mjs";
+import { projectWorkspacePath } from "../src/core/project_workspace.mjs";
+import { validatePrototypeGeometry } from "../src/core/validation_engine.mjs";
 import { applyUserMessageToPlan, applyWorkspacePatches, createEmptyProductPlan } from "../src/core/workspace_state.mjs";
 
 async function readGlbJson(localPath) {
@@ -20,6 +23,44 @@ async function readGlbJson(localPath) {
   const jsonType = buffer.readUInt32LE(16);
   assert.equal(jsonType, 0x4e4f534a);
   return JSON.parse(buffer.slice(20, 20 + jsonLength).toString("utf8"));
+}
+
+function glbMeshSummaries(glbJson) {
+  const rows = [];
+  for (const node of glbJson.nodes || []) {
+    if (node.mesh === undefined || node.mesh === null) continue;
+    const mesh = glbJson.meshes?.[node.mesh];
+    for (const primitive of mesh?.primitives || []) {
+      const positionAccessor = glbJson.accessors?.[primitive.attributes?.POSITION];
+      const spanMm = positionAccessor?.min && positionAccessor?.max
+        ? positionAccessor.max.map((value, index) => Number(((value - positionAccessor.min[index]) * 100).toFixed(3)))
+        : [];
+      rows.push({
+        nodeName: node.name,
+        mode: primitive.mode ?? 4,
+        spanMm
+      });
+    }
+  }
+  return rows;
+}
+
+function assertNoZeroThicknessPreviewMeshes(glbJson) {
+  const summaries = glbMeshSummaries(glbJson);
+  assert.equal(
+    summaries.some((summary) => summary.mode === 1),
+    false,
+    "3D preview should use thick semantic route meshes instead of zero-width GL_LINES"
+  );
+  const thin = summaries.filter((summary) => summary.spanMm.some((span) => span < 1.15));
+  assert.deepEqual(thin, [], "visible GLB preview meshes should keep a non-zero physical thickness");
+}
+
+function assertNodeHasPhysicalSpan(glbJson, nodeName, minSpanMm = 1.15) {
+  const summaries = glbMeshSummaries(glbJson).filter((summary) => summary.nodeName === nodeName);
+  assert.ok(summaries.length > 0, `${nodeName} should exist as a visible GLB mesh`);
+  const thin = summaries.filter((summary) => summary.spanMm.some((span) => span < minSpanMm));
+  assert.deepEqual(thin, [], `${nodeName} should keep physical thickness on every axis`);
 }
 
 test("draft pipeline creates a reviewable woodgrain desktop display packet", () => {
@@ -192,10 +233,14 @@ test("ComponentDescriptor v2 assets validate and resolve to proxy assets", async
     assert.equal(descriptor.validationStatus, "unverified_proxy");
     assert.ok(descriptor.dimensionsMm.width > 0);
     assert.ok(Array.isArray(descriptor.connectors));
+    assert.equal(descriptor.mechanicalConstraints.trustLevel, "proxy_seed");
+    assert.equal(descriptor.mechanicalConstraints.requiresHumanValidation, true);
+    assert.ok(descriptor.mechanicalConstraints.mounting.method);
   }
 
   const descriptorValidation = listComponentDescriptorValidation();
   assert.ok(descriptorValidation.every((item) => item.valid));
+  assert.equal(descriptorValidation.every((item) => item.errors.length === 0), true);
   assert.equal(descriptors.find((item) => item.id === "camera_module_basic").risk.requiresManualValidation, true);
   assert.equal(descriptors.find((item) => item.id === "battery_lipo_2000").risk.requiresManualValidation, true);
 
@@ -209,6 +254,33 @@ test("ComponentDescriptor v2 assets validate and resolve to proxy assets", async
   assert.equal(validation.resolvedType, "descriptor_data");
   const manufacturing = resolveComponentAsset("display_3_5_tft", "manufacturing");
   assert.equal(manufacturing.resolvedType, "descriptor_driven_shell_features_only");
+});
+
+test("ComponentDescriptor intake blocks invalid package references", () => {
+  const descriptors = listComponentDescriptors();
+  const connectorMap = new Map(descriptors.map((descriptor) => [
+    descriptor.id,
+    new Set((descriptor.connectors || []).map((connector) => connector.id))
+  ]));
+  const display = descriptors.find((descriptor) => descriptor.id === "display_3_5_tft");
+  const invalid = JSON.parse(JSON.stringify(display));
+  invalid.connectors[0].mating = ["core_board_esp32_s3.nope"];
+  invalid.interfaces[0].connectorId = "missing_fpc";
+  invalid.accessVolumes[0].connectorId = "missing_fpc";
+  invalid.cableExitDirections[0].connectorId = "missing_fpc";
+
+  const validation = validateComponentDescriptorV2(invalid, {
+    expectedId: "display_3_5_tft",
+    knownConnectorIdsByComponentId: connectorMap,
+    sourcesFileExists: false
+  });
+
+  assert.equal(validation.valid, false);
+  assert.ok(validation.errors.some((error) => error.includes("mates with missing connector core_board_esp32_s3.nope")));
+  assert.ok(validation.errors.some((error) => error.includes("display_ribbon references missing connector missing_fpc")));
+  assert.ok(validation.errors.some((error) => error.includes("fpc_bend_volume references missing connector missing_fpc")));
+  assert.ok(validation.errors.some((error) => error.includes("cableExitDirection references missing connector missing_fpc")));
+  assert.ok(validation.errors.some((error) => error.includes("companion source notes file is missing")));
 });
 
 test("mock conversation patches ProductPlan and finite component selection", () => {
@@ -239,6 +311,42 @@ test("mock conversation patches ProductPlan and finite component selection", () 
   assert.ok(selection.selectedComponentIds.includes("usb_c_breakout"));
   assert.ok(selection.selectedComponentIds.includes("ambient_sensor_basic"));
   assert.deepEqual(selection.riskModuleIds, []);
+});
+
+test("component selection honors same-type ComponentDescriptor preferences", async () => {
+  const productPlan = createEmptyProductPlan();
+  productPlan.requirements.display = true;
+  productPlan.requirements.displaySizeInches = 3.5;
+  productPlan.requirements.usbC = true;
+  productPlan.requirements.battery = true;
+  productPlan.requirements.portable = true;
+  productPlan.componentPreferences = {
+    battery: "battery_18650_holder"
+  };
+
+  const selection = selectComponents(productPlan);
+  assert.ok(selection.selectedComponentIds.includes("battery_18650_holder"));
+  assert.equal(selection.selectedComponentIds.includes("battery_lipo_2000"), false);
+  assert.ok(selection.riskModuleIds.includes("battery_18650_holder"));
+
+  const geometrySpec = createGeometrySpec({ productPlan });
+  assert.ok(geometrySpec.componentSelections.selectedComponentIds.includes("battery_18650_holder"));
+  assert.equal(geometrySpec.componentSelections.selectedComponentIds.includes("battery_lipo_2000"), false);
+  const batteryRoute = geometrySpec.routes.find((route) => route.id === "route.battery_to_core_board");
+  assert.equal(batteryRoute.from.componentId, "battery_18650_holder");
+  assert.equal(batteryRoute.from.connectorId, "power_leads");
+  assert.equal(batteryRoute.to.componentId, "core_board_esp32_s3");
+  assert.equal(batteryRoute.to.connectorId, "usb_c");
+  assert.equal(geometrySpec.validationErrors.length, 0);
+
+  const generated = generateModelArtifacts({
+    geometrySpec,
+    revisionId: "test-descriptor-preferred-battery"
+  });
+  assert.equal(generated.status, "generated");
+  const glbJson = await readGlbJson(generated.artifacts.glb.localPath);
+  assert.ok(glbJson.nodes.some((node) => node.name === "module.battery_18650_holder"));
+  assertNodeHasPhysicalSpan(glbJson, "route.battery_to_core_board.segment.1");
 });
 
 test("Sparker creates structured component and geometry patches", () => {
@@ -559,8 +667,13 @@ test("frontend keeps Chinese and English language assets", async () => {
   assert.match(app, /placed parts/);
   assert.match(app, /只读 3D 预览/);
   assert.match(app, /3D 模型已生成/);
+  assert.match(app, /生成自检通过/);
+  assert.match(app, /生成自检未通过/);
   assert.match(app, /read-only 3D preview/);
   assert.match(app, /3D model generated/);
+  assert.match(app, /Generation audit passed/);
+  assert.match(app, /Generation audit failed/);
+  assert.match(app, /artifactTrustForRevision/);
   assert.match(app, /modelFitChecks/);
   assert.match(app, /<span>\$\{escapeHtml\(t\("modelArtifacts"\)\)\} <strong>\$\{escapeHtml\(artifactSummary\(revision\)\)\}<\/strong><\/span>/);
   assert.doesNotMatch(app, /componentAssetsTitle/);
@@ -608,7 +721,7 @@ test("demo transcript creates multiple revisions before generating the 3D model"
   );
 });
 
-test("ProductPlan creates revisions and preview outputs", () => {
+test("ProductPlan creates revisions and preview outputs", async () => {
   const { productPlan, revision, assistantMessage } = createProductPlan({
     initialMessage: "Small woodgrain desktop screen for weather and photos, 3.5 inch, USB-C powered.",
     language: "en"
@@ -654,6 +767,20 @@ test("ProductPlan creates revisions and preview outputs", () => {
   assert.ok(generated.revision.modelArtifacts.artifacts.glb.localPath);
   assert.ok(generated.revision.modelArtifacts.artifacts.stl.localPath);
   assert.ok(generated.revision.modelArtifacts.artifacts.step.localPath);
+  assert.ok(generated.revision.modelArtifacts.artifacts.generationEvidenceReport.localPath);
+  assert.ok(generated.productPlan.assets.some((asset) => asset.type === "generation_evidence_report"));
+  const workspacePath = projectWorkspacePath(generated.productPlan.planId);
+  const revisionPath = join(workspacePath, "revisions", generated.revision.revisionId);
+  const persistedEvidence = JSON.parse(await readFile(join(revisionPath, "generation_evidence_report.json"), "utf8"));
+  assert.equal(persistedEvidence.version, "generation_evidence_report_v1");
+  assert.equal(persistedEvidence.status, "generated");
+  assert.equal(persistedEvidence.sourceOfTruth.geometrySpec, "geometry-spec.json");
+  assert.equal(persistedEvidence.generatedArtifactsPresent, true);
+  assert.equal(persistedEvidence.artifactIntegrity.glb.present, true);
+  assert.equal(persistedEvidence.artifactAudit.status, "passed");
+  assert.equal(persistedEvidence.artifactAudit.checks.glb.passed, true);
+  const revisionManifest = JSON.parse(await readFile(join(revisionPath, "revision_manifest.json"), "utf8"));
+  assert.equal(revisionManifest.derivedArtifacts.generationEvidenceReport, "generation_evidence_report.json");
 });
 
 test("conversational revision engine evolves shape, components, placement, diff, and revert", async () => {
@@ -672,6 +799,39 @@ test("conversational revision engine evolves shape, components, placement, diff,
   assert.ok(clock.revision.diff.changes.some((change) => change.type === "component_added" && change.componentType === "button"));
   assert.ok(clock.revision.geometrySpec.componentSelections.selectedComponentIds.includes("button_6mm"));
   assert.ok(clock.revision.geometrySpec.features.some((feature) => feature.type === "button_hole" && feature.face === "right"));
+  const buttonDescriptorFeature = clock.revision.geometrySpec.componentDescriptors
+    .find((descriptor) => descriptor.id === "button_6mm")
+    .externalFeatures.find((feature) => feature.id === "button_hole");
+  assert.deepEqual(
+    clock.revision.geometrySpec.features.find((feature) => feature.id === "feature.opening.button_1").sizeMm,
+    buttonDescriptorFeature.openingSizeMm
+  );
+  const buttonRetentions = clock.revision.geometrySpec.features.filter((feature) => feature.type === "panel_button_retention");
+  assert.equal(buttonRetentions.length, 2);
+  assert.ok(buttonRetentions.every((feature) => (
+    feature.mountingMethod === "panel_button"
+    && feature.face === "right"
+    && Number(feature.collarWidthMm) >= 1.2
+    && Number(feature.buttonTravelMm) >= 5
+  )));
+  const missingButtonRetentionValidation = validatePrototypeGeometry({
+    productPlan: clock.revision.geometrySpec.productPlan,
+    componentSelection: {
+      ...clock.revision.geometrySpec.componentSelections,
+      componentDescriptors: clock.revision.geometrySpec.componentDescriptors
+    },
+    layout: {
+      enclosure: clock.revision.geometrySpec.enclosure,
+      placements: clock.revision.geometrySpec.placements,
+      routes: clock.revision.geometrySpec.routes,
+      features: clock.revision.geometrySpec.features.filter((feature) => feature.type !== "panel_button_retention")
+    }
+  });
+  assert.equal(missingButtonRetentionValidation.canGenerateArtifacts, false);
+  assert.ok(missingButtonRetentionValidation.errors.some((error) => (
+    error.type === "missing_panel_button_retention"
+    && error.componentId === "button_6mm"
+  )));
 
   const catEar = addProductPlanTurn({
     planId: productPlan.planId,
@@ -682,6 +842,59 @@ test("conversational revision engine evolves shape, components, placement, diff,
   assert.equal(catEar.revision.productPlanSnapshot.geometryPreferences.placements.usb_c.semanticPosition, "back_left");
   assert.ok(catEar.revision.geometrySpec.componentSelections.selectedComponentIds.includes("speaker_20mm"));
   assert.ok(catEar.revision.geometrySpec.features.some((feature) => feature.type === "decorative_cat_ear"));
+  const speakerDescriptorFeature = catEar.revision.geometrySpec.componentDescriptors
+    .find((descriptor) => descriptor.id === "speaker_20mm")
+    .externalFeatures.find((feature) => feature.id === "speaker_vents");
+  assert.deepEqual(
+    catEar.revision.geometrySpec.features.find((feature) => feature.id === "feature.opening.speaker_vents").sizeMm,
+    speakerDescriptorFeature.openingSizeMm
+  );
+  const speakerRetention = catEar.revision.geometrySpec.features.find((feature) => feature.id === "feature.retention.speaker_20mm.grille_mount");
+  assert.equal(speakerRetention.mountingMethod, "grille_mount");
+  assert.equal(speakerRetention.ventCount, speakerDescriptorFeature.ventCount);
+  assert.ok(Number(speakerRetention.rimWidthMm) >= 1.2);
+  const speakerRoute = catEar.revision.geometrySpec.routes.find((route) => route.id === "route.speaker_to_core_board");
+  assert.equal(speakerRoute.from.componentId, "speaker_20mm");
+  assert.equal(speakerRoute.from.connectorId, "signal");
+  assert.equal(speakerRoute.to.componentId, "core_board_esp32_s3");
+  assert.equal(speakerRoute.to.connectorId, "speaker");
+  const missingSpeakerRetentionValidation = validatePrototypeGeometry({
+    productPlan: catEar.revision.geometrySpec.productPlan,
+    componentSelection: {
+      ...catEar.revision.geometrySpec.componentSelections,
+      componentDescriptors: catEar.revision.geometrySpec.componentDescriptors
+    },
+    layout: {
+      enclosure: catEar.revision.geometrySpec.enclosure,
+      placements: catEar.revision.geometrySpec.placements,
+      routes: catEar.revision.geometrySpec.routes,
+      features: catEar.revision.geometrySpec.features.filter((feature) => feature.type !== "grille_mount_retention")
+    }
+  });
+  assert.equal(missingSpeakerRetentionValidation.canGenerateArtifacts, false);
+  assert.ok(missingSpeakerRetentionValidation.errors.some((error) => (
+    error.type === "missing_grille_mount_retention"
+    && error.componentId === "speaker_20mm"
+  )));
+  const missingSpeakerRouteValidation = validatePrototypeGeometry({
+    productPlan: catEar.revision.geometrySpec.productPlan,
+    componentSelection: {
+      ...catEar.revision.geometrySpec.componentSelections,
+      componentDescriptors: catEar.revision.geometrySpec.componentDescriptors
+    },
+    layout: {
+      enclosure: catEar.revision.geometrySpec.enclosure,
+      placements: catEar.revision.geometrySpec.placements,
+      routes: catEar.revision.geometrySpec.routes.filter((route) => route.id !== "route.speaker_to_core_board"),
+      features: catEar.revision.geometrySpec.features
+    }
+  });
+  assert.equal(missingSpeakerRouteValidation.canGenerateArtifacts, false);
+  assert.ok(missingSpeakerRouteValidation.errors.some((error) => (
+    error.type === "missing_descriptor_connector_route"
+    && error.componentId === "speaker_20mm"
+    && error.to.connectorId === "speaker"
+  )));
   const usbCutout = catEar.revision.geometrySpec.features.find((feature) => feature.type === "usb_cutout");
   assert.ok(usbCutout.positionMm[0] < 0);
   assert.ok(catEar.revision.diff.changes.some((change) => change.type === "placement_changed" && change.target === "usb_c"));
@@ -695,7 +908,15 @@ test("conversational revision engine evolves shape, components, placement, diff,
   assert.ok(generated.revision.modelArtifacts.artifacts.glb.localPath);
   const glbJson = await readGlbJson(generated.revision.modelArtifacts.artifacts.glb.localPath);
   assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.button_1"));
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.button_1_panel_button.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.button_1_panel_button.top");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.speaker_20mm_grille_mount.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.speaker_20mm_grille_mount.top");
+  assertNodeHasPhysicalSpan(glbJson, "module.button_6mm.access.button_wire_access");
+  assertNodeHasPhysicalSpan(glbJson, "module.speaker_20mm.access.speaker_wire_access");
+  assertNodeHasPhysicalSpan(glbJson, "route.speaker_to_core_board.segment.1");
   assert.ok(glbJson.nodes.some((node) => node.name === "feature.decorative.cat_ear_left"));
+  assertNoZeroThicknessPreviewMeshes(glbJson);
 
   const reverted = revertProductPlanRevision({
     planId: productPlan.planId,
@@ -769,7 +990,7 @@ test("non-standard products become manual expansion drafts", () => {
   assert.equal(revision.productCategory, "manual_expansion");
 });
 
-test("camera and battery display plans remain standard with review risks", () => {
+test("camera and battery display plans remain standard with review risks", async () => {
   const { productPlan, revision } = createProductPlan({
     initialMessage: "A portable 5 inch desktop screen with camera recognition and battery power."
   });
@@ -788,6 +1009,104 @@ test("camera and battery display plans remain standard with review risks", () =>
   });
   assert.equal(generated.revision.geometryValidation.status, "passed_with_warnings");
   assert.equal(generated.revision.modelArtifacts.status, "generated");
+  const cameraDescriptorFeature = generated.revision.geometrySpec.componentDescriptors
+    .find((descriptor) => descriptor.id === "camera_module_basic")
+    .externalFeatures.find((feature) => feature.id === "camera_window");
+  assert.deepEqual(
+    generated.revision.geometrySpec.features.find((feature) => feature.id === "feature.opening.camera").sizeMm,
+    cameraDescriptorFeature.openingSizeMm
+  );
+  const cameraRetention = generated.revision.geometrySpec.features.find((feature) => feature.id === "feature.retention.camera_module_basic.front_window_review");
+  assert.equal(cameraRetention.mountingMethod, "front_window_review");
+  assert.equal(cameraRetention.reviewOnly, true);
+  assert.equal(cameraRetention.humanReviewRequired, true);
+  assert.equal(cameraRetention.privacyReviewRequired, true);
+  const batteryDescriptor = generated.revision.geometrySpec.componentDescriptors
+    .find((descriptor) => descriptor.id === "battery_lipo_2000");
+  const batteryBay = generated.revision.geometrySpec.features.find((feature) => feature.id === "feature.battery_bay");
+  assert.equal(batteryBay.mountingMethod, batteryDescriptor.mechanicalProxy.mountingMethod);
+  assert.equal(batteryBay.reviewOnly, true);
+  assert.equal(batteryBay.humanReviewRequired, true);
+  assert.ok(Number(batteryBay.retentionLipMm) >= 1.8);
+  const cameraRoute = generated.revision.geometrySpec.routes.find((route) => route.id === "route.camera_to_core_board");
+  assert.equal(cameraRoute.from.componentId, "camera_module_basic");
+  assert.equal(cameraRoute.to.componentId, "core_board_esp32_s3");
+  assert.equal(cameraRoute.to.connectorId, "gpio");
+  const batteryRoute = generated.revision.geometrySpec.routes.find((route) => route.id === "route.battery_to_core_board");
+  assert.equal(batteryRoute.from.componentId, "battery_lipo_2000");
+  assert.equal(batteryRoute.from.connectorId, "power_lead");
+  assert.equal(batteryRoute.to.componentId, "core_board_esp32_s3");
+  assert.equal(batteryRoute.to.connectorId, "usb_c");
+  const missingBatteryBayValidation = validatePrototypeGeometry({
+    productPlan: generated.revision.geometrySpec.productPlan,
+    componentSelection: {
+      ...generated.revision.geometrySpec.componentSelections,
+      componentDescriptors: generated.revision.geometrySpec.componentDescriptors
+    },
+    layout: {
+      enclosure: generated.revision.geometrySpec.enclosure,
+      placements: generated.revision.geometrySpec.placements,
+      routes: generated.revision.geometrySpec.routes,
+      features: generated.revision.geometrySpec.features.filter((feature) => feature.type !== "battery_bay")
+    }
+  });
+  assert.equal(missingBatteryBayValidation.canGenerateArtifacts, false);
+  assert.ok(missingBatteryBayValidation.errors.some((error) => (
+    error.type === "missing_review_battery_bay"
+    && error.componentId === "battery_lipo_2000"
+  )));
+  const missingCameraRetentionValidation = validatePrototypeGeometry({
+    productPlan: generated.revision.geometrySpec.productPlan,
+    componentSelection: {
+      ...generated.revision.geometrySpec.componentSelections,
+      componentDescriptors: generated.revision.geometrySpec.componentDescriptors
+    },
+    layout: {
+      enclosure: generated.revision.geometrySpec.enclosure,
+      placements: generated.revision.geometrySpec.placements,
+      routes: generated.revision.geometrySpec.routes,
+      features: generated.revision.geometrySpec.features.filter((feature) => feature.type !== "optical_window_retention")
+    }
+  });
+  assert.equal(missingCameraRetentionValidation.canGenerateArtifacts, false);
+  assert.ok(missingCameraRetentionValidation.errors.some((error) => (
+    error.type === "missing_optical_window_retention"
+    && error.componentId === "camera_module_basic"
+  )));
+  const missingReviewRiskRouteValidation = validatePrototypeGeometry({
+    productPlan: generated.revision.geometrySpec.productPlan,
+    componentSelection: {
+      ...generated.revision.geometrySpec.componentSelections,
+      componentDescriptors: generated.revision.geometrySpec.componentDescriptors
+    },
+    layout: {
+      enclosure: generated.revision.geometrySpec.enclosure,
+      placements: generated.revision.geometrySpec.placements,
+      routes: generated.revision.geometrySpec.routes.filter((route) => (
+        route.id !== "route.camera_to_core_board" && route.id !== "route.battery_to_core_board"
+      )),
+      features: generated.revision.geometrySpec.features
+    }
+  });
+  assert.equal(missingReviewRiskRouteValidation.canGenerateArtifacts, false);
+  assert.ok(missingReviewRiskRouteValidation.errors.some((error) => (
+    error.type === "missing_descriptor_connector_route"
+    && error.componentId === "camera_module_basic"
+    && error.to.connectorId === "gpio"
+  )));
+  assert.ok(missingReviewRiskRouteValidation.errors.some((error) => (
+    error.type === "missing_descriptor_connector_route"
+    && error.componentId === "battery_lipo_2000"
+    && error.to.connectorId === "usb_c"
+  )));
+  const glbJson = await readGlbJson(generated.revision.modelArtifacts.artifacts.glb.localPath);
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.camera_module_basic_front_window_review.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.camera_module_basic_front_window_review.top");
+  assertNodeHasPhysicalSpan(glbJson, "feature.battery_bay");
+  assertNodeHasPhysicalSpan(glbJson, "feature.battery_bay.rail.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.battery_bay.rail.top");
+  assertNodeHasPhysicalSpan(glbJson, "route.camera_to_core_board.segment.1");
+  assertNodeHasPhysicalSpan(glbJson, "route.battery_to_core_board.segment.1");
 });
 
 test("generation jobs expose model, layout, and quote outputs", async () => {
@@ -803,8 +1122,65 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   });
   assert.equal(modelJob.status, "succeeded");
   assert.equal(modelJob.output.modelPreview.viewerType, "interactive_glb_preview");
+  assert.equal(modelJob.output.modelPreview.artifactTrust.generated, true);
+  assert.equal(modelJob.output.modelPreview.artifactTrust.trustedGenerated, true);
+  assert.equal(modelJob.output.modelPreview.artifactTrust.auditStatus, "passed");
+  assert.equal(modelJob.output.modelPreview.artifactTrust.auditPassed, true);
+  assert.equal(modelJob.output.modelPreview.artifactTrust.findingCount, 0);
   assert.equal(modelJob.output.geometryValidation.canGenerateArtifacts, true);
+  assert.ok(modelJob.output.geometryValidation.checks.includes("mechanical_constraints_report"));
+  assert.ok(modelJob.output.geometryValidation.checks.includes("layout_explanation_report"));
+  assert.ok(modelJob.output.geometrySpec.requiredArtifacts.includes("generation_evidence_report"));
   assert.ok(modelJob.output.geometrySpec.modules.some((module) => module.role === "front_display"));
+  assert.equal(modelJob.output.geometrySpec.mechanicalConstraints.version, "mechanical_constraints_v1");
+  assert.equal(modelJob.output.geometrySpec.mechanicalConstraints.coverage.proxyComponentCount >= 3, true);
+  assert.ok(modelJob.output.geometrySpec.mechanicalConstraints.components.some((component) => (
+    component.componentId === "usb_c_breakout"
+    && component.interfaces.requiredExternalAccessConnectorIds.includes("usb_c")
+    && component.shellFeatures.maxInsertionClearanceMm >= 8
+  )));
+  assert.equal(modelJob.output.geometrySpec.layoutExplanation.version, "layout_explanation_v1");
+  assert.equal(modelJob.output.geometrySpec.layoutExplanation.coverage.placementCount, modelJob.output.geometrySpec.placements.length);
+  assert.equal(modelJob.output.geometrySpec.layoutExplanation.coverage.featureCount, modelJob.output.geometrySpec.features.length);
+  assert.equal(modelJob.output.geometrySpec.layoutExplanation.coverage.routeCount, modelJob.output.geometrySpec.routes.length);
+  const descriptorFeatureById = new Map(modelJob.output.geometrySpec.componentDescriptors.flatMap((descriptor) => (
+    (descriptor.externalFeatures || []).map((feature) => [`${descriptor.id}.${feature.id}`, feature])
+  )));
+  const screenOpening = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.opening.screen");
+  const usbOpening = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.opening.usb_c");
+  const sensorOpening = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.opening.ambient_sensor");
+  const sensorRetention = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.retention.ambient_sensor_basic.front_window");
+  const displayRetention = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.retention.display_3_5_tft.captured_panel");
+  const displayDescriptor = modelJob.output.geometrySpec.componentDescriptors.find((descriptor) => descriptor.id === "display_3_5_tft");
+  const sensorDescriptorFeature = descriptorFeatureById.get("ambient_sensor_basic.ambient_sensor_window");
+  const usbRetention = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.retention.usb_c_breakout.edge_capture");
+  const usbDescriptor = modelJob.output.geometrySpec.componentDescriptors.find((descriptor) => descriptor.id === "usb_c_breakout");
+  assert.deepEqual(screenOpening.sizeMm, descriptorFeatureById.get("display_3_5_tft.screen_opening").openingSizeMm);
+  assert.deepEqual(usbOpening.sizeMm, descriptorFeatureById.get("usb_c_breakout.usb_c_cutout").openingSizeMm);
+  assert.deepEqual(sensorOpening.sizeMm, sensorDescriptorFeature.openingSizeMm);
+  assert.equal(sensorRetention.mountingMethod, "front_window");
+  assert.equal(sensorRetention.visibilityConeDeg, sensorDescriptorFeature.visibilityConeDeg);
+  assert.equal(displayRetention.mountingMethod, "captured_panel");
+  assert.equal(displayRetention.bezelMm, displayDescriptor.mechanicalProxy.bezelMm);
+  assert.equal(displayRetention.retainerWidthMm >= 1.8, true);
+  assert.equal(usbRetention.mountingMethod, "edge_capture");
+  assert.equal(usbRetention.retentionLipMm, usbDescriptor.mechanicalProxy.retentionLipMm);
+  assert.ok(modelJob.output.geometrySpec.layoutExplanation.placements.some((item) => (
+    item.componentId === "usb_c_breakout"
+    && item.reason.includes("USB-C connector")
+  )));
+  assert.ok(modelJob.output.geometrySpec.layoutExplanation.routes.some((item) => (
+    item.routeId === "route.display_to_core_board"
+    && item.reason.includes("descriptor connector metadata")
+  )));
+  const coreBoard = modelJob.output.geometrySpec.modules.find((module) => module.componentId === "core_board_esp32_s3");
+  const firstStandoff = modelJob.output.geometrySpec.features.find((feature) => feature.id === "feature.standoff.core_board.1");
+  assert.ok(coreBoard);
+  assert.ok(firstStandoff);
+  assert.ok(
+    Math.abs((firstStandoff.positionMm[2] + firstStandoff.heightMm) - (coreBoard.positionMm.z - 1.6 / 2)) < 0.001,
+    "core board standoffs should reach the PCB underside in the generated GeometrySpec"
+  );
   assert.ok(modelJob.output.modelArtifacts.artifacts.glb);
   assert.ok(modelJob.output.modelArtifacts.artifacts.stl);
   assert.ok(modelJob.output.modelArtifacts.artifacts.shellFront);
@@ -812,15 +1188,27 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   assert.ok(modelJob.output.modelArtifacts.artifacts.step);
   assert.ok(modelJob.output.modelArtifacts.artifacts.componentDescriptors);
   assert.ok(modelJob.output.modelArtifacts.artifacts.componentAssetManifest);
+  assert.ok(modelJob.output.modelArtifacts.artifacts.generationEvidenceReport);
   assert.equal((await readFile(modelJob.output.modelArtifacts.artifacts.glb.localPath)).slice(0, 4).toString("utf8"), "glTF");
   const glbJson = await readGlbJson(modelJob.output.modelArtifacts.artifacts.glb.localPath);
   assert.ok(glbJson.nodes.some((node) => node.name === "shell.standard_desktop_display_shell"));
   assert.ok(glbJson.nodes.some((node) => node.name === "shell.front"));
   assert.ok(glbJson.nodes.some((node) => node.name === "shell.back"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "shell.join.front_back_overlap"));
+  assertNodeHasPhysicalSpan(glbJson, "shell.join.lip.left");
+  assertNodeHasPhysicalSpan(glbJson, "shell.join.front_seat.left");
   assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.screen"));
   assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.usb_c"));
   assert.ok(glbJson.nodes.some((node) => node.name === "feature.opening.ambient_sensor"));
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.screen.top");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.screen.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.ambient_sensor_basic_front_window.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.ambient_sensor_basic_front_window.top");
+  assertNodeHasPhysicalSpan(glbJson, "feature.clearance.usb_c_plug_access");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.usb_c_breakout_edge_capture.left");
+  assertNodeHasPhysicalSpan(glbJson, "feature.retention.usb_c_breakout_edge_capture.top");
   assert.ok(glbJson.nodes.some((node) => node.name?.startsWith("feature.standoff.core_board.")));
+  assertNodeHasPhysicalSpan(glbJson, "feature.standoff.core_board.1.board_contact");
   assert.ok(glbJson.nodes.some((node) => node.name === "module.display_3_5_tft"));
   assert.ok(glbJson.nodes.some((node) => node.name === "module.core_board_esp32_s3"));
   assert.ok(glbJson.nodes.some((node) => node.name === "module.usb_c_breakout"));
@@ -829,11 +1217,24 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   assert.ok(glbJson.nodes.some((node) => node.name === "interface.usb_c.port"));
   assert.ok(glbJson.nodes.some((node) => node.name === "interface.display_3_5_tft.fpc"));
   assert.ok(glbJson.nodes.some((node) => node.name === "interface.ambient_sensor_basic.signal"));
+  assertNodeHasPhysicalSpan(glbJson, "module.display_3_5_tft.keepout.front_viewing_clearance");
+  assertNodeHasPhysicalSpan(glbJson, "module.display_3_5_tft.access.fpc_bend_volume");
+  assertNodeHasPhysicalSpan(glbJson, "module.core_board_esp32_s3.access.usb_c_service_access");
+  assertNodeHasPhysicalSpan(glbJson, "module.ambient_sensor_basic.access.sensor_wire_access");
+  const displayAccess = glbJson.nodes.find((node) => node.name === "module.display_3_5_tft.access.fpc_bend_volume");
+  assert.equal(displayAccess.extras.role, "access_volume_marker");
+  assert.equal(displayAccess.extras.constraintSource, "component_descriptor_v2.accessVolumes");
+  assert.match(displayAccess.extras.descriptorPath, /src\/core\/component_assets\/display_3_5_tft\/descriptor\.json/);
+  assert.match(displayAccess.extras.sourcesPath, /src\/core\/component_assets\/display_3_5_tft\/sources\.md/);
   assert.ok(glbJson.nodes.some((node) => node.name === "route.coarse_cable_paths"));
   assert.ok(glbJson.nodes.some((node) => node.name === "route.display_to_core_board"));
   assert.ok(glbJson.nodes.some((node) => node.name === "route.sensor_to_core_board"));
+  assert.ok(glbJson.nodes.some((node) => node.name === "route.display_to_core_board.segment.1"));
+  assertNoZeroThicknessPreviewMeshes(glbJson);
   assert.equal(glbJson.extras.placedModuleCount >= 3, true);
   assert.ok(glbJson.extras.componentAssetManifest.components.some((component) => component.componentId === "display_3_5_tft"));
+  assert.equal(glbJson.extras.mechanicalConstraintCoverage.proxyComponentCount >= 3, true);
+  assert.equal(glbJson.extras.layoutExplanationCoverage.placementCount, modelJob.output.geometrySpec.placements.length);
   assert.equal(glbJson.extras.directEditingAllowed, false);
   for (const accessor of glbJson.accessors.filter((accessor) => accessor.type === "VEC3")) {
     assert.ok(Array.isArray(accessor.min), "POSITION accessor should expose min");
@@ -846,10 +1247,64 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   assert.doesNotMatch(frontStl, /display_3_5_tft|core_board_esp32_s3|ambient_sensor_basic/);
   assert.doesNotMatch(backStl, /display_3_5_tft|core_board_esp32_s3|ambient_sensor_basic/);
   assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.componentDescriptors.localPath, "utf8"), /component_descriptor_v2/);
-  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.componentAssetManifest.localPath, "utf8"), /procedural_visual_proxy/);
-  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.step.localPath, "utf8"), /ISO-10303-21/);
-  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.step.localPath, "utf8"), /module_placements/);
-  assert.match(await readFile(modelJob.output.modelArtifacts.artifacts.designSummary.localPath, "utf8"), /Mechanical Proxy Notice/);
+  const assetManifest = JSON.parse(await readFile(modelJob.output.modelArtifacts.artifacts.componentAssetManifest.localPath, "utf8"));
+  assert.equal(assetManifest.mechanicalConstraintCoverage.proxyComponentCount >= 3, true);
+  assert.equal(assetManifest.components.find((component) => component.componentId === "display_3_5_tft").mechanicalConstraints.mounting.method, "captured_panel");
+  assert.match(JSON.stringify(assetManifest), /procedural_visual_proxy/);
+  const validationReport = JSON.parse(await readFile(modelJob.output.modelArtifacts.artifacts.validationReport.localPath, "utf8"));
+  assert.equal(validationReport.mechanicalConstraints.version, "mechanical_constraints_v1");
+  assert.equal(validationReport.layoutExplanation.version, "layout_explanation_v1");
+  assert.ok(validationReport.issues.some((issue) => issue.code === "mechanical_constraint_trust_not_verified"));
+  const generationEvidence = JSON.parse(await readFile(modelJob.output.modelArtifacts.artifacts.generationEvidenceReport.localPath, "utf8"));
+  assert.equal(generationEvidence.version, "generation_evidence_report_v1");
+  assert.equal(generationEvidence.status, "generated");
+  assert.equal(generationEvidence.sourceOfTruth.generatedFromRawChat, false);
+  assert.equal(generationEvidence.directEditingAllowed, false);
+  assert.equal(generationEvidence.generatedArtifactsPresent, true);
+  assert.equal(generationEvidence.layoutEvidence.coverage.placementCount, modelJob.output.geometrySpec.placements.length);
+  assert.equal(generationEvidence.descriptorEvidence.mechanicalConstraintCoverage.proxyComponentCount >= 3, true);
+  assert.equal(generationEvidence.artifactIntegrity.glb.present, true);
+  assert.equal(generationEvidence.artifactIntegrity.glb.bytes, (await readFile(modelJob.output.modelArtifacts.artifacts.glb.localPath)).length);
+  assert.equal(generationEvidence.artifactIntegrity.step.sha256.length, 64);
+  assert.equal(generationEvidence.artifactAudit.version, "artifact_post_write_audit_v1");
+  assert.equal(generationEvidence.artifactAudit.status, "passed");
+  assert.equal(generationEvidence.artifactAudit.passed, true);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.format.glbMagic, true);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.format.version, 2);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.linePrimitiveCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.thinMeshPrimitiveCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.vec3AccessorMissingBoundsCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.semanticNodePrefixes["shell."] >= 1, true);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.semanticNodePrefixes["module."] >= 3, true);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.semanticNodePrefixes["feature."] >= 1, true);
+  assert.equal(generationEvidence.artifactAudit.checks.glb.semanticNodePrefixes["route."] >= 1, true);
+  assert.equal(generationEvidence.artifactAudit.checks.stl.format.startsWithSolid, true);
+  assert.equal(generationEvidence.artifactAudit.checks.stl.format.hasEndSolid, true);
+  assert.equal(generationEvidence.artifactAudit.checks.stl.geometry.degenerateFacetCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.stl.geometry.thinAxisCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.shellFront.format.facetCount > 0, true);
+  assert.equal(generationEvidence.artifactAudit.checks.shellFront.geometry.degenerateFacetCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.shellFront.geometry.thinAxisCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.shellBack.format.facetCount > 0, true);
+  assert.equal(generationEvidence.artifactAudit.checks.shellBack.geometry.degenerateFacetCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.shellBack.geometry.thinAxisCount, 0);
+  assert.equal(generationEvidence.artifactAudit.checks.step.format.hasStepHeader, true);
+  assert.equal(generationEvidence.artifactAudit.checks.step.format.hasShellDimensions, true);
+  assert.equal(generationEvidence.artifactAudit.checks.step.format.hasComponentAssetManifest, true);
+  assert.equal(generationEvidence.artifactAudit.checks.step.format.hasModulePlacements, true);
+  assert.equal(generationEvidence.artifactAudit.checks.step.metadata.shellDimensionsPositive, true);
+  assert.equal(generationEvidence.artifactAudit.checks.step.metadata.directEditingBoundaryPresent, true);
+  assert.equal(generationEvidence.artifactAudit.findings.length, 0);
+  assert.ok(generationEvidence.artifactGroups.generated.includes("step"));
+  const stepHandoff = await readFile(modelJob.output.modelArtifacts.artifacts.step.localPath, "utf8");
+  assert.match(stepHandoff, /ISO-10303-21/);
+  assert.match(stepHandoff, /module_placements/);
+  assert.match(stepHandoff, /mechanical_constraints/);
+  assert.match(stepHandoff, /layout_explanation/);
+  const designSummary = await readFile(modelJob.output.modelArtifacts.artifacts.designSummary.localPath, "utf8");
+  assert.match(designSummary, /Mechanical Proxy Notice/);
+  assert.match(designSummary, /Mechanical Constraint Evidence/);
+  assert.match(designSummary, /Layout Explanation Evidence/);
 
   const pendingModelJob = createGenerationJob({
     capability: JOB_CAPABILITY.MODEL_GENERATION,
@@ -861,6 +1316,9 @@ test("generation jobs expose model, layout, and quote outputs", async () => {
   });
   assert.equal(pendingModelJob.output.modelArtifacts.status, "pending_confirmation");
   assert.equal(pendingModelJob.output.modelArtifacts.artifacts.glb, null);
+  assert.equal(pendingModelJob.output.modelArtifacts.artifacts.generationEvidenceReport, null);
+  assert.equal(pendingModelJob.output.modelPreview.artifactTrust.generated, false);
+  assert.equal(pendingModelJob.output.modelPreview.artifactTrust.trustedGenerated, false);
 
   const layoutJob = createGenerationJob({
     capability: JOB_CAPABILITY.ELECTRONICS_LAYOUT,
@@ -901,8 +1359,16 @@ test("geometry spec is deterministic and blocks missing module geometry", async 
   assert.ok(first.componentDescriptors.some((descriptor) => descriptor.id === "core_board_esp32_s3"));
   assert.ok(first.componentAssetManifest.components.some((component) => component.componentId === "display_5_tft"));
   assert.ok(first.componentAssetManifest.components.every((component) => component.validationStatus === "unverified_proxy"));
+  assert.equal(first.mechanicalConstraints.version, "mechanical_constraints_v1");
+  assert.equal(first.mechanicalConstraints.coverage.unverifiedProxyCount, first.componentDescriptors.length);
+  assert.ok(first.mechanicalConstraints.components.some((component) => component.componentId === "core_board_esp32_s3" && component.mounting.holeCount === 4));
+  assert.equal(first.layoutExplanation.version, "layout_explanation_v1");
+  assert.equal(first.layoutExplanation.coverage.explainedPlacementCount, first.layoutExplanation.coverage.placementCount);
+  assert.equal(first.layoutExplanation.coverage.explainedFeatureCount, first.layoutExplanation.coverage.featureCount);
+  assert.equal(first.layoutExplanation.coverage.explainedRouteCount, first.layoutExplanation.coverage.routeCount);
   assert.ok(first.placements.length >= 3);
   assert.ok(first.features.some((feature) => feature.type === "screen_opening"));
+  assert.ok(first.features.some((feature) => feature.type === "captured_panel_retention"));
   assert.ok(first.features.some((feature) => feature.type === "usb_cutout"));
   assert.ok(first.features.every((feature) => feature.source || feature.type === "split_line"));
   assert.ok(first.features.filter((feature) => feature.type === "standoff").length >= 4);
@@ -912,6 +1378,67 @@ test("geometry spec is deterministic and blocks missing module geometry", async 
   assert.deepEqual(first.metadata.riskModuleIds, []);
   assert.equal(first.metadata.directEditingAllowed, false);
   assert.ok(first.metadata.assetQualitySummary.some((item) => item.assetQuality === "mechanical_proxy"));
+  assert.equal(first.metadata.mechanicalConstraintSummary.proxyComponentCount, first.componentDescriptors.length);
+  assert.equal(first.metadata.layoutExplanationSummary.routeCount, first.routes.length);
+  const mismatchedOpeningValidation = validatePrototypeGeometry({
+    productPlan: first.productPlan,
+    componentSelection: {
+      ...first.componentSelections,
+      componentDescriptors: first.componentDescriptors
+    },
+    layout: {
+      enclosure: first.enclosure,
+      placements: first.placements,
+      routes: first.routes,
+      features: first.features.map((feature) => (
+        feature.id === "feature.opening.usb_c"
+          ? { ...feature, sizeMm: [1, 1] }
+          : feature
+      ))
+    }
+  });
+  assert.equal(mismatchedOpeningValidation.canGenerateArtifacts, false);
+  assert.ok(mismatchedOpeningValidation.errors.some((error) => (
+    error.type === "external_feature_opening_size_mismatch"
+    && error.componentId === "usb_c_breakout"
+    && error.featureId === "usb_c_cutout"
+  )));
+  const missingCapturedPanelValidation = validatePrototypeGeometry({
+    productPlan: first.productPlan,
+    componentSelection: {
+      ...first.componentSelections,
+      componentDescriptors: first.componentDescriptors
+    },
+    layout: {
+      enclosure: first.enclosure,
+      placements: first.placements,
+      routes: first.routes,
+      features: first.features.filter((feature) => feature.type !== "captured_panel_retention")
+    }
+  });
+  assert.equal(missingCapturedPanelValidation.canGenerateArtifacts, false);
+  assert.ok(missingCapturedPanelValidation.errors.some((error) => (
+    error.type === "missing_captured_panel_retention"
+    && error.componentId === "display_5_tft"
+  )));
+  const missingEdgeCaptureValidation = validatePrototypeGeometry({
+    productPlan: first.productPlan,
+    componentSelection: {
+      ...first.componentSelections,
+      componentDescriptors: first.componentDescriptors
+    },
+    layout: {
+      enclosure: first.enclosure,
+      placements: first.placements,
+      routes: first.routes,
+      features: first.features.filter((feature) => feature.type !== "edge_capture_retention")
+    }
+  });
+  assert.equal(missingEdgeCaptureValidation.canGenerateArtifacts, false);
+  assert.ok(missingEdgeCaptureValidation.errors.some((error) => (
+    error.type === "missing_edge_capture_retention"
+    && error.componentId === "usb_c_breakout"
+  )));
 
   const blockedSpec = createGeometrySpec({
     spec: draft.spec,
@@ -936,6 +1463,14 @@ test("geometry spec is deterministic and blocks missing module geometry", async 
   assert.equal(blocked.artifacts.glb, null);
   assert.equal(blocked.artifacts.stl, null);
   assert.equal(blocked.artifacts.step, null);
+  assert.equal(blocked.artifacts.generationEvidenceReport.type, "generation_evidence_report");
+  const blockedEvidence = JSON.parse(await readFile(blocked.artifacts.generationEvidenceReport.localPath, "utf8"));
+  assert.equal(blockedEvidence.status, "blocked");
+  assert.equal(blockedEvidence.generatedArtifactsPresent, false);
+  assert.equal(blockedEvidence.validation.canGenerateArtifacts, false);
+  assert.equal(blockedEvidence.artifactIntegrity.geometrySpec.present, true);
+  assert.equal(blockedEvidence.artifactAudit.status, "not_required_blocked");
+  assert.equal(blockedEvidence.artifactAudit.generatedArtifactKeys.length, 0);
   assert.match(await readFile(blocked.artifacts.validationReport.localPath, "utf8"), /missing_module_geometry/);
 });
 

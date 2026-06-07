@@ -125,9 +125,10 @@ export function addProductPlanTurn({ planId, message, assetIds = [], assets = []
   });
 
   const previous = currentRevision(plan);
-  const previousProductPlan = previous?.productPlanSnapshot
-    || plan.workspaceState?.productPlan
-    || createEmptyProductPlan();
+  const previousProductPlan = productPlanWithWorkspaceComponentLibrary(
+    previous?.productPlanSnapshot || plan.workspaceState?.productPlan || createEmptyProductPlan(),
+    plan.workspaceState?.productPlan
+  );
   const sparkerResult = processUserTurn({
     workspaceState: plan.workspaceState,
     currentProductPlan: previousProductPlan,
@@ -225,9 +226,10 @@ export function createProductPlanRevisionFromPatches({
   const plan = getPlanOrThrow(planId);
   ensureWorkspaceCollections(plan);
   const previous = currentRevision(plan);
-  const previousProductPlan = previous?.productPlanSnapshot
-    || plan.workspaceState?.productPlan
-    || createEmptyProductPlan();
+  const previousProductPlan = productPlanWithWorkspaceComponentLibrary(
+    previous?.productPlanSnapshot || plan.workspaceState?.productPlan || createEmptyProductPlan(),
+    plan.workspaceState?.productPlan
+  );
   const patchResult = applyWorkspacePatches(previousProductPlan, patches);
   if (patchResult.rejectedPatches.length > 0) {
     const error = new Error("One or more patches were rejected.");
@@ -457,12 +459,14 @@ function generatedAssetsFromRevision(revision) {
     assets.componentAssetManifest,
     assets.geometrySpec,
     assets.validationReport,
+    assets.generationEvidenceReport,
     assets.designSummary,
     assets.cadqueryScript,
     artifactAssets.productPlan,
     artifactAssets.geometrySpec,
     artifactAssets.componentSelections,
     artifactAssets.validationReport,
+    artifactAssets.generationEvidenceReport,
     artifactAssets.designSummary,
     artifactAssets.cadqueryScript,
     artifactAssets.glb,
@@ -515,6 +519,36 @@ function ensureWorkspaceCollections(plan) {
   if (!Array.isArray(plan.workspaceState.proposals)) plan.workspaceState.proposals = [];
   if (!Array.isArray(plan.workspaceState.revisions)) plan.workspaceState.revisions = [];
   plan.proposals = plan.workspaceState.proposals;
+}
+
+function productPlanWithWorkspaceComponentLibrary(baseProductPlan = createEmptyProductPlan(), workspaceProductPlan = null) {
+  const next = clone(baseProductPlan || createEmptyProductPlan());
+  const baseLibrary = normalizeComponentLibrary(next.componentLibrary);
+  const workspaceLibrary = normalizeComponentLibrary(workspaceProductPlan?.componentLibrary);
+  const byId = new Map();
+  for (const entry of baseLibrary.descriptors) byId.set(componentIdForLibraryEntry(entry), entry);
+  for (const entry of workspaceLibrary.descriptors) byId.set(componentIdForLibraryEntry(entry), entry);
+  next.componentLibrary = {
+    version: "product_plan_component_library_v1",
+    descriptors: [...byId.values()].filter((entry) => componentIdForLibraryEntry(entry))
+  };
+  if (workspaceProductPlan && Object.hasOwn(workspaceProductPlan, "componentPreferences")) {
+    next.componentPreferences = clone(workspaceProductPlan.componentPreferences || {});
+  }
+  return next;
+}
+
+function normalizeComponentLibrary(componentLibrary = {}) {
+  return {
+    version: componentLibrary?.version || "product_plan_component_library_v1",
+    descriptors: Array.isArray(componentLibrary?.descriptors)
+      ? componentLibrary.descriptors.map((entry) => clone(entry)).filter(Boolean)
+      : []
+  };
+}
+
+function componentIdForLibraryEntry(entry = {}) {
+  return entry.componentId || entry.descriptor?.identity?.id || entry.descriptor?.id || entry.identity?.id || entry.id || "";
 }
 
 function createTurn({ role, text, assetIds = [], createdAt = new Date().toISOString() }) {

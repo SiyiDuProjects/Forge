@@ -1,5 +1,4 @@
 export function generateLayout(productPlan = {}, componentDescriptors = []) {
-  const descriptorById = new Map(componentDescriptors.map((descriptor) => [descriptor.id, descriptor]));
   const enclosure = enclosureForProductPlan(productPlan, componentDescriptors);
   const placements = [];
   const features = [];
@@ -7,37 +6,49 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
   const warnings = [];
 
   const display = firstDescriptor(componentDescriptors, "display");
-  const core = descriptorById.get("core_board_esp32_s3");
-  const usb = descriptorById.get("usb_c_breakout");
-  const sensor = descriptorById.get("ambient_sensor_basic");
-  const speaker = descriptorById.get("speaker_20mm");
-  const button = descriptorById.get("button_6mm");
-  const camera = descriptorById.get("camera_module_basic");
-  const battery = descriptorById.get("battery_lipo_2000") || descriptorById.get("battery_18650_holder");
+  const core = firstDescriptor(componentDescriptors, "core_board");
+  const usb = firstDescriptor(componentDescriptors, "interface");
+  const sensor = firstDescriptor(componentDescriptors, "sensor");
+  const speaker = firstDescriptor(componentDescriptors, "speaker");
+  const button = firstDescriptor(componentDescriptors, "button");
+  const camera = firstDescriptor(componentDescriptors, "camera");
+  const battery = firstDescriptor(componentDescriptors, "battery");
   const placementPreferences = productPlan.geometryPreferences?.placements || {};
 
   if (display) {
-    placements.push(placement(display, {
+    const displayPlacement = {
       role: "front_display",
       face: "front",
       positionMm: { x: 0, y: 0, z: enclosure.dimensionsMm.depth / 2 - display.dimensionsMm.depth / 2 - 1 },
       orientation: "front"
+    };
+    placements.push(placement(display, {
+      role: displayPlacement.role,
+      face: displayPlacement.face,
+      positionMm: displayPlacement.positionMm,
+      orientation: displayPlacement.orientation
     }));
-    features.push(screenOpeningFeature(display, enclosure));
+    const screenOpening = screenOpeningFeature(display, enclosure);
+    features.push(screenOpening);
+    if (display.mechanicalProxy?.mountingMethod === "captured_panel") {
+      features.push(capturedPanelRetentionFeature(display, displayPlacement, screenOpening));
+    }
   }
 
   if (core) {
     const coreZ = -enclosure.dimensionsMm.depth / 2 + enclosure.wallThicknessMm + 7 + core.dimensionsMm.depth / 2;
+    const corePosition = { x: 0, y: -2, z: coreZ };
     placements.push(placement(core, {
       role: "core_board",
       face: "internal_back",
-      positionMm: { x: 0, y: -2, z: coreZ },
+      positionMm: corePosition,
       orientation: "internal"
     }));
-    features.push(...coreStandoffFeatures(core, { x: 0, y: -2, z: -enclosure.dimensionsMm.depth / 2 + enclosure.wallThicknessMm }, enclosure));
+    features.push(...coreStandoffFeatures(core, { x: 0, y: -2, z: -enclosure.dimensionsMm.depth / 2 + enclosure.wallThicknessMm }, enclosure, corePosition));
   }
 
   if (usb) {
+    const usbCutoutFeature = descriptorExternalFeature(usb, "usb_c_cutout", "usb_cutout");
     const usbPosition = semanticPosition({
       semanticPosition: placementPreferences.usb_c?.semanticPosition || "back",
       descriptor: usb,
@@ -54,19 +65,23 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
     features.push({
       id: "feature.opening.usb_c",
       type: "usb_cutout",
-      source: descriptorSource(usb, "externalFeatures", "usb_c_cutout"),
+      source: descriptorSource(usb, "externalFeatures", usbCutoutFeature?.id || "usb_c_cutout"),
       targetModuleId: usb.id,
       targetComponentId: usb.id,
-      targetFeatureId: "usb_c_cutout",
+      targetFeatureId: usbCutoutFeature?.id || "usb_c_cutout",
       targetConnectorId: "usb_c",
       face: usbPosition.face,
       positionMm: objectPointToArray(usbPosition.featurePositionMm),
-      sizeMm: [11, 5],
+      sizeMm: descriptorOpeningSize(usbCutoutFeature, [11, 5]),
       role: `${usbPosition.face}_usb_c_cutout`
     });
+    if (usb.mechanicalProxy?.mountingMethod === "edge_capture") {
+      features.push(edgeCaptureRetentionFeature(usb, usbPosition));
+    }
   }
 
   if (sensor) {
+    const sensorWindowFeature = descriptorExternalFeature(sensor, "ambient_sensor_window", "sensor_window");
     const sensorPosition = semanticPosition({
       semanticPosition: placementPreferences.ambient_sensor?.semanticPosition || "front_right",
       descriptor: sensor,
@@ -80,21 +95,27 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
       positionMm: sensorPosition.positionMm,
       orientation: sensorPosition.orientation
     }));
-    features.push({
+    const sensorOpening = {
       id: "feature.opening.ambient_sensor",
       type: "sensor_window",
-      source: descriptorSource(sensor, "externalFeatures", "ambient_sensor_window"),
+      source: descriptorSource(sensor, "externalFeatures", sensorWindowFeature?.id || "ambient_sensor_window"),
       targetModuleId: sensor.id,
       targetComponentId: sensor.id,
-      targetFeatureId: "ambient_sensor_window",
+      targetFeatureId: sensorWindowFeature?.id || "ambient_sensor_window",
       face: sensorPosition.face,
       positionMm: objectPointToArray(sensorPosition.featurePositionMm),
-      sizeMm: [6, 4],
+      sizeMm: descriptorOpeningSize(sensorWindowFeature, [6, 4]),
+      visibilityConeDeg: sensorWindowFeature?.visibilityConeDeg,
       role: `${sensorPosition.face}_ambient_sensor_window`
-    });
+    };
+    features.push(sensorOpening);
+    if (sensor.mechanicalProxy?.mountingMethod === "front_window") {
+      features.push(opticalWindowRetentionFeature(sensor, sensorPosition, sensorOpening));
+    }
   }
 
   if (speaker) {
+    const speakerVentFeature = descriptorExternalFeature(speaker, "speaker_vents", "speaker_vents");
     const speakerPosition = semanticPosition({
       semanticPosition: placementPreferences.speaker?.semanticPosition || "back_right",
       descriptor: speaker,
@@ -108,22 +129,27 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
       positionMm: speakerPosition.positionMm,
       orientation: speakerPosition.orientation
     }));
-    features.push({
+    const speakerVent = {
       id: "feature.opening.speaker_vents",
       type: "speaker_vents",
-      source: descriptorSource(speaker, "externalFeatures", "speaker_vents"),
+      source: descriptorSource(speaker, "externalFeatures", speakerVentFeature?.id || "speaker_vents"),
       targetModuleId: speaker.id,
       targetComponentId: speaker.id,
-      targetFeatureId: "speaker_vents",
+      targetFeatureId: speakerVentFeature?.id || "speaker_vents",
       face: speakerPosition.face,
       positionMm: objectPointToArray(speakerPosition.featurePositionMm),
-      sizeMm: [24, 12],
-      ventCount: 5,
+      sizeMm: descriptorOpeningSize(speakerVentFeature, [24, 12]),
+      ventCount: Number(speakerVentFeature?.ventCount || 5),
       role: `speaker_${speakerPosition.face}_vents`
-    });
+    };
+    features.push(speakerVent);
+    if (speaker.mechanicalProxy?.mountingMethod === "grille_mount") {
+      features.push(grilleMountRetentionFeature(speaker, speakerPosition, speakerVent));
+    }
   }
 
   if (button) {
+    const buttonHoleFeature = descriptorExternalFeature(button, "button_hole", "button_hole");
     const buttonCount = Math.max(0, Math.min(4, Number(productPlan.requirements?.buttons || 0)));
     const buttonBase = semanticPosition({
       semanticPosition: placementPreferences.buttons?.semanticPosition || "front_bottom",
@@ -142,22 +168,28 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
         orientation: shifted.orientation,
         instanceLabel: `button_${index + 1}`
       }));
-      features.push({
+      const buttonOpening = {
         id: `feature.opening.button_${index + 1}`,
         type: "button_hole",
-        source: descriptorSource(button, "externalFeatures", "button_hole"),
+        source: descriptorSource(button, "externalFeatures", buttonHoleFeature?.id || "button_hole"),
         targetModuleId: button.id,
         targetComponentId: button.id,
-        targetFeatureId: "button_hole",
+        targetFeatureId: buttonHoleFeature?.id || "button_hole",
         face: shifted.face,
         positionMm: objectPointToArray(shifted.featurePositionMm),
-        sizeMm: [6, 6],
+        sizeMm: descriptorOpeningSize(buttonHoleFeature, [6, 6]),
+        instanceLabel: `button_${index + 1}`,
         role: `${shifted.face}_button_hole`
-      });
+      };
+      features.push(buttonOpening);
+      if (button.mechanicalProxy?.mountingMethod === "panel_button") {
+        features.push(panelButtonRetentionFeature(button, shifted, index, buttonOpening));
+      }
     }
   }
 
   if (camera) {
+    const cameraWindowFeature = descriptorExternalFeature(camera, "camera_window", "camera_window");
     const cameraY = enclosure.dimensionsMm.height / 2 - 16;
     placements.push(placement(camera, {
       role: "front_camera_review",
@@ -165,18 +197,26 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
       positionMm: { x: 0, y: cameraY, z: enclosure.dimensionsMm.depth / 2 - camera.dimensionsMm.depth / 2 - 0.6 },
       orientation: "front"
     }));
-    features.push({
+    const cameraOpening = {
       id: "feature.opening.camera",
       type: "camera_window",
-      source: descriptorSource(camera, "externalFeatures", "camera_window"),
+      source: descriptorSource(camera, "externalFeatures", cameraWindowFeature?.id || "camera_window"),
       targetModuleId: camera.id,
       targetComponentId: camera.id,
-      targetFeatureId: "camera_window",
+      targetFeatureId: cameraWindowFeature?.id || "camera_window",
       face: "front",
       positionMm: [0, cameraY, enclosure.dimensionsMm.depth / 2],
-      sizeMm: [8, 8],
+      sizeMm: descriptorOpeningSize(cameraWindowFeature, [8, 8]),
+      privacyReviewRequired: Boolean(cameraWindowFeature?.privacyReviewRequired),
       role: "front_camera_window"
-    });
+    };
+    features.push(cameraOpening);
+    if (camera.mechanicalProxy?.mountingMethod === "front_window_review") {
+      features.push(opticalWindowRetentionFeature(camera, {
+        face: "front",
+        positionMm: { x: 0, y: cameraY, z: enclosure.dimensionsMm.depth / 2 - camera.dimensionsMm.depth / 2 - 0.6 }
+      }, cameraOpening));
+    }
     warnings.push({
       type: "manual_validation_required",
       moduleId: camera.id,
@@ -186,6 +226,8 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
   }
 
   if (battery) {
+    const batteryBayClearanceMm = 2;
+    const batteryBayLipMm = Number(battery.mechanicalProxy?.retentionLipMm || 1.8);
     placements.push(placement(battery, {
       role: "battery_review_volume",
       face: "internal_back",
@@ -201,7 +243,16 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
       targetFeatureId: "battery_bay",
       face: "internal_back",
       positionMm: [0, -enclosure.dimensionsMm.height / 2 + 28, -enclosure.dimensionsMm.depth / 2 + 7],
-      sizeMm: [battery.dimensionsMm.width + 4, battery.dimensionsMm.height + 4],
+      sizeMm: [
+        battery.dimensionsMm.width + batteryBayClearanceMm * 2,
+        battery.dimensionsMm.height + batteryBayClearanceMm * 2
+      ],
+      depthMm: Math.max(4, Number(battery.dimensionsMm.depth || 8) + batteryBayLipMm),
+      bayClearanceMm: batteryBayClearanceMm,
+      retentionLipMm: batteryBayLipMm,
+      mountingMethod: battery.mechanicalProxy?.mountingMethod || "review_only_retained_bay",
+      reviewOnly: true,
+      humanReviewRequired: true,
       role: "battery_tray"
     });
     warnings.push({
@@ -213,34 +264,32 @@ export function generateLayout(productPlan = {}, componentDescriptors = []) {
   }
 
   if (display && core) {
-    routes.push(route("route.display_to_core_board", `${display.id}.fpc`, "core_board_esp32_s3.display_port", [
-      [0, -display.dimensionsMm.height / 2 + 4, enclosure.dimensionsMm.depth / 2 - 5],
-      [0, -display.dimensionsMm.height / 2 - 6, 0],
-      [0, -2, -enclosure.dimensionsMm.depth / 2 + 16]
-    ], "fpc"));
+    const displayRoute = routeToCore(display, core, "", "route.display_to_core_board", "fpc", placements, enclosure);
+    if (displayRoute) routes.push(displayRoute);
   }
   if (sensor && core) {
-    const sensorPlacement = placements.find((item) => item.componentId === sensor.id);
-    routes.push(route("route.sensor_to_core_board", "ambient_sensor_basic.signal", "core_board_esp32_s3.i2c", [
-      [sensorPlacement.positionMm.x, sensorPlacement.positionMm.y, enclosure.dimensionsMm.depth / 2 - 4],
-      [sensorPlacement.positionMm.x - 14, sensorPlacement.positionMm.y - 18, 0],
-      [0, -2, -enclosure.dimensionsMm.depth / 2 + 16]
-    ], "i2c"));
+    const sensorRoute = routeToCore(sensor, core, "", "route.sensor_to_core_board", "i2c", placements, enclosure);
+    if (sensorRoute) routes.push(sensorRoute);
   }
   if (button && core && Number(productPlan.requirements?.buttons || 0) > 0) {
-    const buttonPlacement = placements.find((item) => item.componentId === button.id);
-    routes.push(route("route.button_to_core_board", "button_6mm.signal", "core_board_esp32_s3.gpio", [
-      [buttonPlacement.positionMm.x, buttonPlacement.positionMm.y, buttonPlacement.positionMm.z],
-      [buttonPlacement.positionMm.x / 2, buttonPlacement.positionMm.y / 2, 0],
-      [0, -2, -enclosure.dimensionsMm.depth / 2 + 16]
-    ], "gpio"));
+    const buttonRoute = routeToCore(button, core, "", "route.button_to_core_board", "gpio", placements, enclosure);
+    if (buttonRoute) routes.push(buttonRoute);
+  }
+  if (speaker && core) {
+    const speakerRoute = routeToCore(speaker, core, "", "route.speaker_to_core_board", "audio", placements, enclosure);
+    if (speakerRoute) routes.push(speakerRoute);
+  }
+  if (camera && core) {
+    const cameraRoute = routeToCore(camera, core, "", "route.camera_to_core_board", "camera_fpc", placements, enclosure);
+    if (cameraRoute) routes.push(cameraRoute);
+  }
+  if (battery && core) {
+    const batteryRoute = routeToCore(battery, core, "", "route.battery_to_core_board", "battery_power", placements, enclosure);
+    if (batteryRoute) routes.push(batteryRoute);
   }
   if (usb && core) {
-    routes.push(route("route.usb_c_to_core_board", "usb_c_breakout.power_out", "core_board_esp32_s3.usb_c", [
-      [0, -enclosure.dimensionsMm.height / 2 + 14, -enclosure.dimensionsMm.depth / 2 + 6],
-      [0, -enclosure.dimensionsMm.height / 2 + 20, -6],
-      [0, -2, -enclosure.dimensionsMm.depth / 2 + 16]
-    ], "power"));
+    const usbRoute = routeToCore(usb, core, "", "route.usb_c_to_core_board", "power", placements, enclosure);
+    if (usbRoute) routes.push(usbRoute);
   }
 
   features.push(...decorativeShapeFeatures(enclosure));
@@ -311,17 +360,41 @@ function screenOpeningFeature(display, enclosure) {
     targetFeatureId: "screen_opening",
     face: "front",
     positionMm: [0, 0, enclosure.dimensionsMm.depth / 2],
-    sizeMm: [display.dimensionsMm.width + margin * 2, display.dimensionsMm.height + margin * 2],
+    sizeMm: descriptorOpeningSize(openingFeature, [display.dimensionsMm.width + margin * 2, display.dimensionsMm.height + margin * 2]),
     bezelMm: bezel,
     role: "front_screen_opening"
   };
 }
 
-function coreStandoffFeatures(core, origin, enclosure) {
+function capturedPanelRetentionFeature(display, displayPlacement, openingFeature) {
+  const bezelMm = Number(display.mechanicalProxy?.bezelMm || openingFeature.bezelMm || 4);
+  const retainerWidthMm = Math.max(1.8, bezelMm * 0.55);
+  return {
+    id: `feature.retention.${display.id}.captured_panel`,
+    type: "captured_panel_retention",
+    source: descriptorSource(display, "mechanicalProxy", "mountingMethod"),
+    targetModuleId: display.id,
+    targetComponentId: display.id,
+    targetFeatureId: openingFeature.targetFeatureId || "screen_opening",
+    face: displayPlacement.face,
+    positionMm: objectPointToArray(displayPlacement.positionMm),
+    sizeMm: [display.dimensionsMm.width, display.dimensionsMm.height],
+    depthMm: display.dimensionsMm.depth,
+    bezelMm,
+    retainerWidthMm,
+    mountingMethod: display.mechanicalProxy?.mountingMethod || "captured_panel",
+    role: "front_display_captured_panel_retention"
+  };
+}
+
+function coreStandoffFeatures(core, origin, enclosure, corePosition) {
   const holes = core.mounting?.mountingHoles || [];
+  const pcbThicknessMm = Number(core.mechanicalProxy?.pcbThicknessMm || 1.6);
+  const boardUndersideZ = Number(corePosition?.z || 0) - pcbThicknessMm / 2;
   return holes.map((hole, index) => {
     const position = Array.isArray(hole) ? hole : hole.positionLocalMm || [0, 0, 0];
     const [x, y] = position;
+    const baseZ = origin.z;
     return {
       id: `feature.standoff.core_board.${index + 1}`,
       type: "standoff",
@@ -331,13 +404,105 @@ function coreStandoffFeatures(core, origin, enclosure) {
       targetFeatureId: hole.id || `mount_${index + 1}`,
       targetMountId: hole.id || `mount_${index + 1}`,
       face: "internal_back",
-      positionMm: [origin.x + x, origin.y + y, origin.z],
+      positionMm: [origin.x + x, origin.y + y, baseZ],
       outerDiameterMm: core.mounting?.standoffOuterDiameterMm || 5,
       holeDiameterMm: core.mounting?.holeDiameterMm || hole.diameterMm || 2.4,
-      heightMm: Math.max(6, enclosure.dimensionsMm.depth / 2 - 10),
+      heightMm: Math.max(6, boardUndersideZ - baseZ),
       role: "core_board_standoff"
     };
   });
+}
+
+function edgeCaptureRetentionFeature(descriptor, position) {
+  const retentionLipMm = Number(descriptor.mechanicalProxy?.retentionLipMm || 1.2);
+  return {
+    id: `feature.retention.${descriptor.id}.edge_capture`,
+    type: "edge_capture_retention",
+    source: descriptorSource(descriptor, "mechanicalProxy", "retentionLipMm"),
+    targetModuleId: descriptor.id,
+    targetComponentId: descriptor.id,
+    targetFeatureId: "edge_capture",
+    face: position.face,
+    positionMm: objectPointToArray(position.positionMm),
+    sizeMm: [descriptor.dimensionsMm.width, descriptor.dimensionsMm.height],
+    depthMm: descriptor.dimensionsMm.depth,
+    retentionLipMm,
+    mountingMethod: descriptor.mechanicalProxy?.mountingMethod || "edge_capture",
+    role: `${position.face}_${descriptor.id}_edge_capture_retention`
+  };
+}
+
+function grilleMountRetentionFeature(descriptor, position, openingFeature) {
+  const openingWidth = Number(openingFeature.sizeMm?.[0] || descriptor.dimensionsMm.width || 24);
+  const openingHeight = Number(openingFeature.sizeMm?.[1] || descriptor.dimensionsMm.height || 12);
+  const rimWidthMm = Math.max(1.2, Math.min(3, Math.abs(Number(descriptor.dimensionsMm.width || openingWidth) - openingWidth) / 2 || 1.8));
+  return {
+    id: `feature.retention.${descriptor.id}.grille_mount`,
+    type: "grille_mount_retention",
+    source: descriptorSource(descriptor, "mechanicalProxy", "mountingMethod"),
+    targetModuleId: descriptor.id,
+    targetComponentId: descriptor.id,
+    targetFeatureId: openingFeature.targetFeatureId || "speaker_vents",
+    face: position.face,
+    positionMm: openingFeature.positionMm,
+    sizeMm: [openingWidth, openingHeight],
+    depthMm: Math.max(1.8, Number(descriptor.dimensionsMm.depth || 6) * 0.7),
+    rimWidthMm,
+    ventCount: openingFeature.ventCount,
+    mountingMethod: descriptor.mechanicalProxy?.mountingMethod || "grille_mount",
+    role: `${position.face}_${descriptor.id}_grille_mount_retention`
+  };
+}
+
+function panelButtonRetentionFeature(descriptor, position, index, openingFeature) {
+  const openingWidth = Number(openingFeature.sizeMm?.[0] || 6);
+  const openingHeight = Number(openingFeature.sizeMm?.[1] || 6);
+  const collarWidthMm = Math.max(1.2, Math.min(2.4, (Number(descriptor.dimensionsMm.width || 8) - openingWidth) / 2 || 1.2));
+  const travelKeepout = (descriptor.keepouts || []).find((keepout) => keepout.type === "mechanical_travel");
+  const buttonTravelMm = Number(travelKeepout?.sizeMm?.[2] || descriptor.dimensionsMm.depth || 5);
+  return {
+    id: `feature.retention.button_${index + 1}.panel_button`,
+    type: "panel_button_retention",
+    source: descriptorSource(descriptor, "mechanicalProxy", "mountingMethod"),
+    targetModuleId: descriptor.id,
+    targetComponentId: descriptor.id,
+    targetFeatureId: openingFeature.targetFeatureId || "button_hole",
+    targetInstanceLabel: `button_${index + 1}`,
+    face: position.face,
+    positionMm: openingFeature.positionMm,
+    sizeMm: [openingWidth, openingHeight],
+    depthMm: Math.max(1.8, buttonTravelMm),
+    collarWidthMm,
+    buttonTravelMm,
+    mountingMethod: descriptor.mechanicalProxy?.mountingMethod || "panel_button",
+    role: `${position.face}_button_${index + 1}_panel_retention`
+  };
+}
+
+function opticalWindowRetentionFeature(descriptor, position, openingFeature) {
+  const width = Number(openingFeature.sizeMm?.[0] || descriptor.dimensionsMm.width || 8);
+  const height = Number(openingFeature.sizeMm?.[1] || descriptor.dimensionsMm.height || 8);
+  const rimWidthMm = Math.max(1.2, Math.min(2.4, Math.max(width, height) * 0.18));
+  const mountingMethod = descriptor.mechanicalProxy?.mountingMethod || "front_window";
+  return {
+    id: `feature.retention.${descriptor.id}.${mountingMethod}`,
+    type: "optical_window_retention",
+    source: descriptorSource(descriptor, "mechanicalProxy", "mountingMethod"),
+    targetModuleId: descriptor.id,
+    targetComponentId: descriptor.id,
+    targetFeatureId: openingFeature.targetFeatureId,
+    face: position.face,
+    positionMm: openingFeature.positionMm,
+    sizeMm: [width, height],
+    depthMm: Math.max(1.8, Number(descriptor.dimensionsMm.depth || 4)),
+    rimWidthMm,
+    mountingMethod,
+    visibilityConeDeg: openingFeature.visibilityConeDeg,
+    privacyReviewRequired: Boolean(openingFeature.privacyReviewRequired),
+    reviewOnly: mountingMethod.includes("review"),
+    humanReviewRequired: mountingMethod.includes("review"),
+    role: `${position.face}_${descriptor.id}_optical_window_retention`
+  };
 }
 
 function placement(descriptor, data) {
@@ -370,6 +535,7 @@ function placement(descriptor, data) {
     validationStatus: descriptor.validationStatus,
     componentDescriptorVersion: descriptor.versioning?.descriptorVersion,
     descriptorPath: descriptor.descriptorPath,
+    sourcesPath: descriptor.sourcesPath,
     mechanicalProxy: descriptor.mechanicalProxy || {},
     clearanceMm: descriptor.clearanceMm || {},
     capabilities: capabilitiesForDescriptor(descriptor),
@@ -502,6 +668,52 @@ function route(id, from, to, points, type) {
   };
 }
 
+function routeToCore(descriptor, core, coreConnectorId, routeId, routeType, placements, enclosure) {
+  const matingPair = connectorMatingTo(descriptor, core.id, coreConnectorId);
+  if (!matingPair) return null;
+  const componentPlacement = placements.find((item) => item.componentId === descriptor.id);
+  const corePlacement = placements.find((item) => item.componentId === core.id);
+  if (!componentPlacement || !corePlacement) return null;
+  const start = connectorWorldPoint(componentPlacement, descriptor, matingPair.connector.id);
+  const end = connectorWorldPoint(corePlacement, core, matingPair.target.connectorId);
+  return route(routeId, `${descriptor.id}.${matingPair.connector.id}`, `${core.id}.${matingPair.target.connectorId}`, [
+    start,
+    routeMidpoint(start, end, enclosure),
+    end
+  ], routeType);
+}
+
+function connectorMatingTo(descriptor = {}, targetComponentId, targetConnectorId = "") {
+  for (const connector of descriptor.connectors || []) {
+    for (const mate of connector.mating || []) {
+      const endpoint = routeEndpoint(mate);
+      if (endpoint.componentId === targetComponentId && (!targetConnectorId || endpoint.connectorId === targetConnectorId)) {
+        return { connector, target: endpoint };
+      }
+    }
+  }
+  return null;
+}
+
+function connectorWorldPoint(placement = {}, descriptor = {}, connectorId = "") {
+  const connector = (descriptor.connectors || []).find((item) => item.id === connectorId);
+  const position = placement.positionMm || placement.placement?.positionMm || {};
+  const local = connector?.positionLocalMm || [0, 0, 0];
+  return [
+    Number(position.x || 0) + Number(local[0] || 0),
+    Number(position.y || 0) + Number(local[1] || 0),
+    Number(position.z || 0) + Number(local[2] || 0)
+  ];
+}
+
+function routeMidpoint(start = [], end = [], enclosure = {}) {
+  return [
+    (Number(start[0] || 0) + Number(end[0] || 0)) / 2,
+    (Number(start[1] || 0) + Number(end[1] || 0)) / 2,
+    Math.max(-4, -Number(enclosure.dimensionsMm?.depth || 32) / 8)
+  ];
+}
+
 function routeEndpoint(value) {
   if (value && typeof value === "object") return value;
   const [componentId, connectorId] = String(value || "").split(".");
@@ -510,6 +722,18 @@ function routeEndpoint(value) {
 
 function firstDescriptor(descriptors, type) {
   return descriptors.find((descriptor) => descriptor.type === type);
+}
+
+function descriptorExternalFeature(descriptor, id, type = id) {
+  return (descriptor.externalFeatures || []).find((feature) => feature.id === id || feature.type === type);
+}
+
+function descriptorOpeningSize(feature, fallback) {
+  const size = Array.isArray(feature?.openingSizeMm) ? feature.openingSizeMm : fallback;
+  return [
+    Number(size?.[0] || fallback[0]),
+    Number(size?.[1] || fallback[1])
+  ];
 }
 
 function descriptorSource(descriptor, field, id) {

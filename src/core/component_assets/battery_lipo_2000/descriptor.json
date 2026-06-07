@@ -11,11 +11,17 @@
   "versioning": {
     "descriptorVersion": "0.2.0",
     "updated": "2026-06-04",
-    "compatibility": ["reference_build_001"]
+    "compatibility": [
+      "reference_build_001"
+    ]
   },
   "assetQuality": "mechanical_proxy",
   "validationStatus": "unverified_proxy",
-  "dimensionsMm": { "width": 58, "height": 36, "depth": 8 },
+  "dimensionsMm": {
+    "width": 58,
+    "height": 36,
+    "depth": 8
+  },
   "coordinateSystem": {
     "origin": "component_center",
     "units": "mm",
@@ -39,39 +45,72 @@
     {
       "id": "power_lead",
       "type": "jst",
-      "positionLocalMm": [0, 18, 0],
+      "positionLocalMm": [
+        0,
+        18,
+        0
+      ],
       "orientation": "+y",
-      "mating": ["core_board_esp32_s3.usb_c"]
+      "mating": [
+        "core_board_esp32_s3.usb_c"
+      ]
     }
   ],
   "interfaces": [
-    { "id": "battery_power", "connectorId": "power_lead", "signalType": "battery_power", "requiredClearanceMm": 8 }
+    {
+      "id": "battery_power",
+      "connectorId": "power_lead",
+      "signalType": "battery_power",
+      "requiredClearanceMm": 8
+    }
   ],
   "externalFeatures": [],
   "keepouts": [
     {
       "id": "battery_swell_clearance",
       "type": "safety_clearance",
-      "positionLocalMm": [0, 0, 0],
-      "sizeMm": [64, 42, 12]
+      "positionLocalMm": [
+        0,
+        0,
+        0
+      ],
+      "sizeMm": [
+        64,
+        42,
+        12
+      ]
     }
   ],
   "accessVolumes": [
     {
       "id": "battery_service_volume",
+      "type": "battery_service_access",
       "connectorId": "power_lead",
-      "positionLocalMm": [0, 22, 0],
-      "sizeMm": [64, 18, 12]
+      "positionLocalMm": [
+        0,
+        22,
+        0
+      ],
+      "sizeMm": [
+        64,
+        18,
+        12
+      ]
     }
   ],
   "cableExitDirections": [
-    { "connectorId": "power_lead", "direction": "+y_to_core_board" }
+    {
+      "connectorId": "power_lead",
+      "direction": "+y_to_core_board"
+    }
   ],
   "riskFlags": {
     "requiresManualValidation": true,
     "severity": "warning",
     "reason": "Battery placement requires human electrical and safety review.",
-    "warnings": ["Battery is review-only in the standard MVP path."]
+    "warnings": [
+      "Battery is review-only in the standard MVP path."
+    ]
   },
   "assetPaths": {
     "proxyVisualGlb": null,
@@ -83,5 +122,19 @@
     "summary": "Proxy LiPo battery envelope for review-risk visualization.",
     "sourcesFile": "sources.md",
     "confidence": "proxy_seed"
+  },
+  "trustLevel": "proxy_seed",
+  "reviewStatus": "reviewable",
+  "sourceEvidence": {
+    "sourceType": "proxy_seed",
+    "sourceConfidence": "proxy_seed",
+    "measurementBasis": "descriptor_proxy_dimensions",
+    "lastReviewed": "2026-06-06",
+    "references": [
+      {
+        "kind": "local_source_note",
+        "path": "sources.md"
+      }
+    ]
   }
 }

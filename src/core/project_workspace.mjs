@@ -12,6 +12,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeId } from "./utils.mjs";
 import { clone } from "./workspace_state.mjs";
+import { buildRevisionLedger } from "./revision_ledger.mjs";
 import { listToolMetadata } from "./tool_registry.mjs";
 
 export const PROJECT_WORKSPACE_VERSION = "forge_project_workspace_v1";
@@ -37,6 +38,12 @@ export function readRuntimePlan({ workspaceId, rootDir = defaultProjectWorkspace
   if (!workspaceId) return null;
   const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
   return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), manifest.runtimePlanPath || "runtime_plan.json"));
+}
+
+export function readRevisionLedger({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  if (!workspaceId) return null;
+  const manifest = readProjectManifest({ workspaceId, rootDir }) || {};
+  return readJsonIfExists(join(projectWorkspacePath(workspaceId, { rootDir }), manifest.revisionLedgerPath || "revision_ledger.json"));
 }
 
 export function readRuntimeBinding({ workspaceId, rootDir = defaultProjectWorkspaceRoot() } = {}) {
@@ -156,6 +163,7 @@ export function ensureProjectWorkspace({ plan, rootDir = defaultProjectWorkspace
   writeJson(join(workspacePath, "project_manifest.json"), manifest);
   writeJson(join(workspacePath, manifest.runtimePlanPath || "runtime_plan.json"), plan);
   writeJson(join(workspacePath, "product_plan.json"), plan.workspaceState?.productPlan || {});
+  writeRevisionLedger({ workspacePath, plan, manifest, rootDir });
   writeMarkdownIndexes({ workspacePath, plan, manifest });
 
   if (created) {
@@ -234,6 +242,12 @@ export function persistProposal({
       summary: proposal.summary || proposal.assistantSummary || ""
     }
   });
+  writeRevisionLedger({
+    workspacePath,
+    plan,
+    manifest: projectManifestFor(plan, readJsonIfExists(join(workspacePath, "project_manifest.json")) || {}),
+    rootDir
+  });
   writeMarkdownIndexes({
     workspacePath,
     plan,
@@ -258,6 +272,7 @@ export function persistRevision({
 
   const artifactSummary = copyRevisionArtifacts({ revision, revisionPath });
   const validation = revision.geometryValidation || revision.modelArtifacts?.validation || {};
+  const generationEvidence = revision.modelArtifacts?.generationEvidence || null;
   const geometrySpec = revision.geometrySpec || {};
   writeJson(join(revisionPath, "product_plan.json"), revision.productPlanSnapshot || {});
   writeJson(join(revisionPath, "geometry-spec.json"), geometrySpec);
@@ -265,6 +280,9 @@ export function persistRevision({
   writeJson(join(revisionPath, "component_descriptors.json"), geometrySpec.componentDescriptors || []);
   writeJson(join(revisionPath, "component_asset_manifest.json"), geometrySpec.componentAssetManifest || {});
   writeJson(join(revisionPath, "validation_report.json"), validation);
+  if (generationEvidence) {
+    writeJson(join(revisionPath, "generation_evidence_report.json"), generationEvidence);
+  }
   writeFileSync(join(revisionPath, "design_summary.md"), designSummaryForRevision(revision, validation));
   writeJson(join(revisionPath, "generation_inputs.json"), generationInputsForRevision(revision));
 
@@ -285,6 +303,7 @@ export function persistRevision({
     },
     derivedArtifacts: {
       validationReport: "validation_report.json",
+      ...(generationEvidence ? { generationEvidenceReport: "generation_evidence_report.json" } : {}),
       componentAssetManifest: "component_asset_manifest.json",
       designSummary: "design_summary.md",
       generationInputs: "generation_inputs.json",
@@ -325,6 +344,12 @@ export function persistRevision({
       });
     }
   }
+  writeRevisionLedger({
+    workspacePath,
+    plan,
+    manifest: projectManifestFor(plan, readJsonIfExists(join(workspacePath, "project_manifest.json")) || {}),
+    rootDir
+  });
 
   return {
     workspacePath,
@@ -342,8 +367,8 @@ export function persistValidationEvent({
   rootDir = defaultProjectWorkspaceRoot()
 } = {}) {
   if (!plan) throw new Error("persistValidationEvent requires plan.");
-  ensureProjectWorkspace({ plan, rootDir });
-  return appendWorkspaceEvent({
+  const { workspacePath } = ensureProjectWorkspace({ plan, rootDir });
+  const event = appendWorkspaceEvent({
     plan,
     rootDir,
     type: "validation_completed",
@@ -355,6 +380,13 @@ export function persistValidationEvent({
       currentRevisionId: plan.currentRevisionId || ""
     }
   });
+  writeRevisionLedger({
+    workspacePath,
+    plan,
+    manifest: projectManifestFor(plan, readJsonIfExists(join(workspacePath, "project_manifest.json")) || {}),
+    rootDir
+  });
+  return event;
 }
 
 export function persistRevisionRevert({
@@ -370,7 +402,7 @@ export function persistRevisionRevert({
     plan,
     manifest: projectManifestFor(plan, readJsonIfExists(join(workspacePath, "project_manifest.json")) || {})
   });
-  return appendWorkspaceEvent({
+  const event = appendWorkspaceEvent({
     plan,
     rootDir,
     type: "revision_reverted",
@@ -381,6 +413,13 @@ export function persistRevisionRevert({
       currentRevisionId: plan.currentRevisionId || ""
     }
   });
+  writeRevisionLedger({
+    workspacePath,
+    plan,
+    manifest: projectManifestFor(plan, readJsonIfExists(join(workspacePath, "project_manifest.json")) || {}),
+    rootDir
+  });
+  return event;
 }
 
 export function persistReviewSubmission({
@@ -403,7 +442,7 @@ export function persistReviewSubmission({
     join(workspacePath, "review", "human_review_notes.md"),
     reviewNotesForSubmission(reviewRequest)
   );
-  return appendWorkspaceEvent({
+  const event = appendWorkspaceEvent({
     plan,
     rootDir,
     type: submission?.accepted === false ? "review_submission_failed" : "review_submitted",
@@ -414,6 +453,13 @@ export function persistReviewSubmission({
       reviewId: submission?.reviewId || ""
     }
   });
+  writeRevisionLedger({
+    workspacePath,
+    plan,
+    manifest: projectManifestFor(plan, readJsonIfExists(join(workspacePath, "project_manifest.json")) || {}),
+    rootDir
+  });
+  return event;
 }
 
 export function readWorkspaceEvents({
@@ -458,6 +504,7 @@ function projectManifestFor(plan, previous = {}) {
     currentRevisionId: plan.currentRevisionId || "",
     currentProductPlanPath: "product_plan.json",
     runtimePlanPath: "runtime_plan.json",
+    revisionLedgerPath: "revision_ledger.json",
     eventsPath: "events.jsonl",
     proposalsPath: "proposals/",
     revisionsPath: "revisions/",
@@ -535,6 +582,19 @@ function scrubLegacyRuntimeFields(plan) {
   if (!plan?.workspaceState || typeof plan.workspaceState !== "object") return;
   delete plan.workspaceState.codexThreadId;
   delete plan.workspaceState.runtimeBinding;
+}
+
+function writeRevisionLedger({ workspacePath, plan, manifest, rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  const ledger = buildRevisionLedger({
+    plan,
+    rootDir,
+    events: readWorkspaceEvents({
+      workspaceId: plan?.planId || plan?.workspaceState?.workspaceId,
+      rootDir
+    })
+  });
+  writeJson(join(workspacePath, manifest?.revisionLedgerPath || "revision_ledger.json"), ledger);
+  return ledger;
 }
 
 function statMtimeIso(path) {
@@ -664,6 +724,7 @@ Do not write these files directly:
 - \`project_manifest.json\`
 - \`product_plan.json\`
 - \`runtime_plan.json\`
+- \`revision_ledger.json\`
 - \`events.jsonl\`
 - \`proposals/*.json\`
 - \`revisions/*/revision_manifest.json\`
@@ -671,6 +732,8 @@ Do not write these files directly:
 - \`revisions/*/geometry-spec.json\`
 - \`revisions/*/component_descriptors.json\`
 - \`revisions/*/artifacts/*\`
+- \`component-drafts/*/descriptor.json\`
+- \`component-drafts/*/sources.md\`
 - GLB/STL/STEP artifacts
 - ComponentDescriptor source-of-truth files outside this project workspace
 
@@ -678,6 +741,7 @@ Allowed scratch space:
 
 - \`source-materials/notes/\`
 - new markdown notes that do not replace the generated state files
+- raw component source notes such as \`component-drafts/<draftId>/source-specs.md\`
 
 ## Current Project
 
@@ -728,6 +792,7 @@ Project folder runtime index for Codex SDK. JSON files remain the source of trut
 - Workspace: ${manifest.workspaceId}
 - Current revision: ${manifest.currentRevisionId || "none"}
 - ProductPlan: ${manifest.currentProductPlanPath}
+- Revision ledger: ${manifest.revisionLedgerPath || "revision_ledger.json"}
 - Events: ${manifest.eventsPath}
 - Tools: FORGE_TOOLS.md
 - Skills: skills/
@@ -774,6 +839,15 @@ Examples:
 \`\`\`bash
 ${command} summary
 ${command} search-component --query button --componentType button --limit 5
+${command} component-package --componentId button_6mm
+${command} descriptor-scaffold --draft-id button_8mm --component-type button --display-name "8 mm Button"
+${command} descriptor-draft --descriptor-file ./component-drafts/button_8mm/descriptor.json --sources-file ./component-drafts/button_8mm/sources.md --expected-id button_8mm
+${command} descriptor-drafts --draft-id button_8mm
+${command} descriptor-specs --draft-id button_8mm --specs "dimensions 10 x 10 x 6 mm; opening 8 x 8 mm; measurement basis caliper measurement; reviewable"
+${command} descriptor-specs --draft-id button_8mm --specs-file ./component-drafts/button_8mm/source-specs.md
+${command} descriptor-promote --descriptor-file ./component-drafts/button_8mm/descriptor.json --sources-file ./component-drafts/button_8mm/sources.md --expected-id button_8mm
+${command} descriptor-promote --draft-id button_8mm
+${command} descriptor-select --componentId button_8mm
 ${command} propose --message "Add two right-side buttons."
 ${command} validate
 ${command} generate --reason user_confirmed_model_generation
@@ -816,8 +890,16 @@ function writeSkillFiles({ workspacePath }) {
     "component-selection.md": `# Forge Skill: Component Selection
 
 - Search ComponentDescriptor-backed modules before adding parts.
+- Inspect a component package when changing to a specific descriptor id.
+- Use descriptor-scaffold to create a workspace draft package skeleton when a same-type component is missing and the user wants to provide specs.
+- Use descriptor-specs to apply explicit source-spec text to an existing workspace draft package. Prefer --specs-file for source notes placed inside the project workspace, such as component-drafts/<draftId>/source-specs.md; this writes draft files only and must still be followed by inspection, promotion, selection, and explicit generation.
+- Do not directly edit component-drafts/<draftId>/descriptor.json or sources.md; those canonical draft files are guarded and must be written through descriptor-scaffold or descriptor-specs.
+- Inspect a descriptor draft before asking to add a new same-type component package.
+- Promote a valid descriptor draft only when the user wants it available in this ProductPlan's component library.
 - Use supported components when possible.
 - Do not invent mechanical metadata, holes, connectors, keepouts, or cable exits.
+- If a component is missing from the loaded library, treat a valid draft as ready for library promotion only; it is not selectable until promoted into the ProductPlan component library or added to the global ComponentDescriptor library.
+- After promotion, select it through descriptor-select or a normal component patch/ProductPlan revision; do not mutate GeometrySpec directly.
 - If a component is missing or unverified, surface it as a review/validation issue.
 `,
     "3d-generation.md": `# Forge Skill: 3D Generation
@@ -855,6 +937,15 @@ function cliNameForTool(actionName) {
   const mapping = {
     getWorkspaceSummary: "summary",
     searchComponentLibrary: "search-component",
+    inspectComponentPackage: "component-package",
+    inspectComponentDescriptorDraft: "descriptor-draft",
+    inspectWorkspaceComponentDescriptorDrafts: "descriptor-drafts",
+    scaffoldWorkspaceComponentDescriptorDraft: "descriptor-scaffold",
+    applyWorkspaceDescriptorDraftSpecs: "descriptor-specs",
+    promoteComponentDescriptorDraft: "descriptor-promote",
+    promoteWorkspaceComponentDescriptorDraft: "descriptor-promote",
+    selectComponentDescriptor: "descriptor-select",
+    retirePromotedComponentDescriptor: "descriptor-retire",
     proposeDesignChange: "propose",
     stageDesignPatch: "stage",
     commitStagedChange: "commit",

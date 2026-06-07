@@ -15,7 +15,7 @@ import { confirmForgeChatTool, resolveChatRuntime, runForgeChatTurn } from "./sr
 import { createGenerationJob, getGenerationJob } from "./src/core/jobs.mjs";
 import { createDraft, createDeviceConfig, listCatalogModules, submitReview } from "./src/core/pipeline.mjs";
 import { addProductPlanTurn } from "./src/core/product_plan.mjs";
-import { listProjectWorkspaces, readProjectWorkspacePlan } from "./src/core/project_workspace.mjs";
+import { listProjectWorkspaces, readProjectWorkspacePlan, readRevisionLedger } from "./src/core/project_workspace.mjs";
 import { createProductPlanForRuntime } from "./src/core/runtime_plan_creation.mjs";
 import { getRuntimeStatus } from "./src/core/runtime_status.mjs";
 import { executeForgeToolWithPolicy } from "./src/core/tool_executor.mjs";
@@ -161,6 +161,27 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  const workspaceRevisionLedgerMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/revision-ledger$/);
+  if (request.method === "GET" && workspaceRevisionLedgerMatch) {
+    const revisionLedger = readRevisionLedger({ workspaceId: workspaceRevisionLedgerMatch[1] });
+    if (!revisionLedger) {
+      sendJson(response, 404, {
+        ok: false,
+        error: {
+          code: "REVISION_LEDGER_NOT_FOUND",
+          message: "Workspace revision ledger was not found."
+        }
+      });
+      return;
+    }
+    sendJson(response, 200, {
+      ok: true,
+      workspaceId: workspaceRevisionLedgerMatch[1],
+      revisionLedger
+    });
+    return;
+  }
+
   const workspaceContextPackMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/context-pack$/);
   if (request.method === "GET" && workspaceContextPackMatch) {
     sendActionJson(response, buildContextPack({
@@ -243,6 +264,154 @@ async function handleApi(request, response, url) {
         query: body.query || "",
         componentType: body.componentType || "",
         limit: body.limit || 10
+      }
+    });
+    return;
+  }
+
+  const workspaceComponentDraftPackageMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/draft-package$/);
+  if (request.method === "POST" && workspaceComponentDraftPackageMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentDraftPackageMatch[1],
+      toolName: "inspectComponentDescriptorDraft",
+      input: {
+        descriptor: body.descriptor || null,
+        descriptorJson: body.descriptorJson || "",
+        expectedId: body.expectedId || "",
+        sourcesText: body.sourcesText || ""
+      }
+    });
+    return;
+  }
+
+  const workspaceComponentDraftsMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/drafts$/);
+  if (request.method === "POST" && workspaceComponentDraftsMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentDraftsMatch[1],
+      toolName: "inspectWorkspaceComponentDescriptorDrafts",
+      input: {
+        draftId: body.draftId || "",
+        limit: body.limit || 20
+      }
+    });
+    return;
+  }
+
+  const workspaceComponentDraftScaffoldMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/drafts\/scaffold$/);
+  if (request.method === "POST" && workspaceComponentDraftScaffoldMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentDraftScaffoldMatch[1],
+      toolName: "scaffoldWorkspaceComponentDescriptorDraft",
+      input: {
+        draftId: body.draftId || "",
+        componentType: body.componentType || "",
+        displayName: body.displayName || "",
+        overwrite: Boolean(body.overwrite)
+      },
+      mode: "confirmed",
+      userMessage: "scaffold workspace descriptor draft"
+    });
+    return;
+  }
+
+  const workspaceComponentDraftPromoteMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/drafts\/([^/]+)\/promote$/);
+  if (request.method === "POST" && workspaceComponentDraftPromoteMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentDraftPromoteMatch[1],
+      toolName: "promoteWorkspaceComponentDescriptorDraft",
+      input: {
+        draftId: decodeURIComponent(workspaceComponentDraftPromoteMatch[2]),
+        replaceExisting: Boolean(body.replaceExisting)
+      },
+      mode: "confirmed",
+      userMessage: "promote workspace descriptor draft"
+    });
+    return;
+  }
+
+  const workspaceComponentDraftSpecsMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/drafts\/([^/]+)\/specs$/);
+  if (request.method === "POST" && workspaceComponentDraftSpecsMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentDraftSpecsMatch[1],
+      toolName: "applyWorkspaceDescriptorDraftSpecs",
+      input: {
+        draftId: decodeURIComponent(workspaceComponentDraftSpecsMatch[2]),
+        specsText: body.specsText || "",
+        specsSourcePath: body.specsSourcePath || "",
+        baseComponentId: body.baseComponentId || "",
+        markReviewable: Boolean(body.markReviewable)
+      },
+      mode: "confirmed",
+      userMessage: "apply workspace descriptor draft specs"
+    });
+    return;
+  }
+
+  const workspaceComponentPromoteDraftMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/promote-draft$/);
+  if (request.method === "POST" && workspaceComponentPromoteDraftMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentPromoteDraftMatch[1],
+      toolName: "promoteComponentDescriptorDraft",
+      input: {
+        descriptor: body.descriptor || null,
+        descriptorJson: body.descriptorJson || "",
+        expectedId: body.expectedId || "",
+        sourcesText: body.sourcesText || "",
+        replaceExisting: Boolean(body.replaceExisting)
+      },
+      mode: "confirmed",
+      userMessage: "promote descriptor draft"
+    });
+    return;
+  }
+
+  const workspaceComponentRetireMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/([^/]+)\/retire$/);
+  if (request.method === "POST" && workspaceComponentRetireMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentRetireMatch[1],
+      toolName: "retirePromotedComponentDescriptor",
+      input: {
+        componentId: decodeURIComponent(workspaceComponentRetireMatch[2]),
+        reason: body.reason || "",
+        clearPreference: body.clearPreference !== false
+      },
+      mode: "confirmed",
+      userMessage: body.reason || "retire promoted descriptor"
+    });
+    return;
+  }
+
+  const workspaceComponentSelectMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/([^/]+)\/select$/);
+  if (request.method === "POST" && workspaceComponentSelectMatch) {
+    const body = await readJsonBody(request);
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentSelectMatch[1],
+      toolName: "selectComponentDescriptor",
+      input: {
+        componentId: decodeURIComponent(workspaceComponentSelectMatch[2]),
+        quantity: body.quantity || 1,
+        message: body.message || ""
+      },
+      mode: "confirmed",
+      userMessage: body.message || "select component descriptor"
+    });
+    return;
+  }
+
+  const workspaceComponentPackageMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/components\/([^/]+)\/package$/);
+  if (request.method === "POST" && workspaceComponentPackageMatch) {
+    await sendToolActionJson(response, {
+      workspaceId: workspaceComponentPackageMatch[1],
+      toolName: "inspectComponentPackage",
+      input: {
+        componentId: decodeURIComponent(workspaceComponentPackageMatch[2])
       }
     });
     return;

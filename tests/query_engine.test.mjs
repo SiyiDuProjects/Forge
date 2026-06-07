@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { API_CONTRACT } from "../src/contracts/workbench_contract.mjs";
 import { loadChatSession } from "../src/core/chat_session_store.mjs";
 import { buildContextPack } from "../src/core/context_pack_builder.mjs";
 import { ensureCodexProjectThread, parseCodexToolIntent, runCodexProductTurn } from "../src/core/codex_runtime.mjs";
+import { scaffoldWorkspaceComponentDescriptorDraft } from "../src/core/forge_actions.mjs";
 import { runForgeChatTurn, confirmForgeChatTool, resolveChatRuntime } from "../src/core/forge_query_engine.mjs";
 import { checkToolPermission } from "../src/core/permission_gate.mjs";
 import { CodexModelAdapter, openAIResponsesUrl } from "../src/core/model_adapters.mjs";
@@ -25,6 +27,7 @@ function createChatPlan() {
 }
 
 const FORGE_TOOL = fileURLToPath(new URL("../scripts/forge-tool.mjs", import.meta.url));
+const BUTTON_DESCRIPTOR = fileURLToPath(new URL("../src/core/component_assets/button_6mm/descriptor.json", import.meta.url));
 
 function runForgeToolForCodex(cwd, args) {
   const result = spawnSync(process.execPath, [FORGE_TOOL, ...args], {
@@ -51,6 +54,28 @@ function runForgeToolForCodex(cwd, args) {
 
 function readRuntimePlan(workspacePath) {
   return JSON.parse(readFileSync(`${workspacePath}/runtime_plan.json`, "utf8"));
+}
+
+function writeWorkspaceButtonDraft(plan, draftId = "button_8mm_chat") {
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const draftDir = join(workspacePath, "component-drafts", draftId);
+  mkdirSync(draftDir, { recursive: true });
+  const descriptor = JSON.parse(readFileSync(BUTTON_DESCRIPTOR, "utf8"));
+  descriptor.identity.id = draftId;
+  descriptor.identity.displayName = "8 mm Chat Button";
+  descriptor.identity.partNumber = "BTN-8MM-CHAT";
+  descriptor.versioning.descriptorVersion = "0.1.0";
+  descriptor.dimensionsMm = { width: 10, height: 10, depth: 6 };
+  descriptor.externalFeatures[0].openingSizeMm = [8, 8];
+  descriptor.sourceNotes.summary = "Chat-promoted ProductPlan descriptor draft.";
+  descriptor.sourceNotes.confidence = "descriptor_reviewed";
+  writeFileSync(join(draftDir, "descriptor.json"), JSON.stringify(descriptor, null, 2));
+  writeFileSync(join(draftDir, "sources.md"), [
+    `# ${draftId} sources`,
+    "Received date: 2026-06-07",
+    "Context: QueryEngine workspace descriptor draft chat test.",
+    "Status: reviewable proxy, not production verified."
+  ].join("\n"));
 }
 
 test("QueryEngine runs a direct model tool loop through Forge actions", async () => {
@@ -138,6 +163,130 @@ test("QueryEngine turns finish changes into ProductPlan revisions", async () => 
   assert.equal(updated.revisions.length, initialRevisionCount + 1);
   assert.equal(updated.revisions.at(-1).productPlanSnapshot.constraints.finish, "graphite");
   assert.equal(updated.currentRevisionId, result.revision.revisionId);
+});
+
+test("QueryEngine selects explicit ComponentDescriptor ids through a narrow descriptor-selection action", async () => {
+  const plan = createChatPlan();
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_descriptor_select",
+    userMessage: "Use button_6mm quantity 1.",
+    modelProvider: "mock"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.pendingConfirmation, null);
+  assert.deepEqual(result.toolCalls.map((call) => call.name), ["selectComponentDescriptor"]);
+  assert.equal(result.toolResults.every((item) => item.ok), true);
+  assert.ok(result.assistantMessage.includes("button_6mm"));
+  assert.ok(result.assistantMessage.includes(result.revision.revisionId));
+  const revision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === result.revision.revisionId);
+  assert.equal(revision.productPlanSnapshot.componentPreferences.button, "button_6mm");
+  assert.equal(revision.modelArtifacts.status, "pending_confirmation");
+  assert.equal(result.artifactPaths.modelGlb, null);
+});
+
+test("QueryEngine inspects and promotes explicit workspace descriptor drafts before selection", async () => {
+  const plan = createChatPlan();
+  writeWorkspaceButtonDraft(plan, "button_8mm_chat");
+
+  const inspection = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_descriptor_draft_chat",
+    userMessage: "Check descriptor draft button_8mm_chat.",
+    modelProvider: "mock"
+  });
+
+  assert.equal(inspection.ok, true);
+  assert.equal(inspection.pendingConfirmation, null);
+  assert.deepEqual(inspection.toolCalls.map((call) => call.name), ["inspectWorkspaceComponentDescriptorDrafts"]);
+  assert.equal(inspection.toolResults[0].result.readyForPromotionCount, 1);
+  assert.equal(inspection.toolResults[0].result.drafts[0].readyForLibraryPromotion, true);
+  assert.ok(inspection.assistantMessage.includes("button_8mm_chat"));
+  assert.equal(inspection.revision, null);
+  assert.equal(inspection.artifactPaths.modelGlb || null, null);
+
+  const promoted = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_descriptor_draft_chat",
+    userMessage: "Promote descriptor draft button_8mm_chat.",
+    modelProvider: "mock"
+  });
+
+  assert.equal(promoted.ok, true);
+  assert.equal(promoted.pendingConfirmation, null);
+  assert.deepEqual(promoted.toolCalls.map((call) => call.name), ["promoteWorkspaceComponentDescriptorDraft"]);
+  assert.equal(promoted.toolResults[0].result.promoted, true);
+  assert.equal(promoted.toolResults[0].result.componentId, "button_8mm_chat");
+  assert.equal(promoted.toolResults[0].result.readyForSelection, true);
+  assert.ok(promoted.assistantMessage.includes("button_8mm_chat"));
+  assert.equal(promoted.revision, null);
+  assert.equal(promoted.artifactPaths.modelGlb || null, null);
+
+  const selected = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_descriptor_draft_chat",
+    userMessage: "Use button_8mm_chat quantity 1.",
+    modelProvider: "mock"
+  });
+
+  assert.equal(selected.ok, true);
+  assert.equal(selected.pendingConfirmation, null);
+  assert.deepEqual(selected.toolCalls.map((call) => call.name), ["selectComponentDescriptor"]);
+  assert.equal(selected.toolResults[0].result.selected, true);
+  assert.equal(selected.toolResults[0].result.componentId, "button_8mm_chat");
+  const revision = getProductPlan(plan.planId).revisions.find((item) => item.revisionId === selected.revision.revisionId);
+  assert.equal(revision.productPlanSnapshot.componentPreferences.button, "button_8mm_chat");
+  assert.ok(revision.productPlanSnapshot.componentLibrary.descriptors.some((entry) => entry.componentId === "button_8mm_chat"));
+  assert.equal(revision.modelArtifacts.status, "pending_confirmation");
+  assert.equal(selected.artifactPaths.modelGlb, null);
+});
+
+test("QueryEngine applies explicit specs to a workspace descriptor draft without generating artifacts", async () => {
+  const plan = createChatPlan();
+  const scaffold = scaffoldWorkspaceComponentDescriptorDraft({
+    workspaceId: plan.planId,
+    draftId: "button_8mm_specs_chat",
+    componentType: "button",
+    displayName: "8 mm Specs Chat Button"
+  });
+  assert.equal(scaffold.ok, true);
+  assert.equal(scaffold.readyForLibraryPromotion, false);
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_descriptor_specs_chat",
+    userMessage: "Apply specs to descriptor draft button_8mm_specs_chat: dimensions 10 x 10 x 6 mm; opening 8 x 8 mm; manufacturer Forge Test; part number BTN-8MM-SPECS; measurement basis caliper measurement; reviewable.",
+    modelProvider: "mock"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.pendingConfirmation, null);
+  assert.deepEqual(result.toolCalls.map((call) => call.name), ["applyWorkspaceDescriptorDraftSpecs"]);
+  assert.equal(result.toolResults[0].result.specsApplied, true);
+  assert.equal(result.toolResults[0].result.draftId, "button_8mm_specs_chat");
+  assert.equal(result.toolResults[0].result.readyForLibraryPromotion, true);
+  assert.ok(result.toolResults[0].result.extractedFields.includes("dimensionsMm"));
+  assert.ok(result.toolResults[0].result.extractedFields.includes("openingSizeMm"));
+  assert.equal(result.toolResults[0].result.specPatch.applied, true);
+  assert.ok(result.toolResults[0].result.specPatch.extractedFields.includes("dimensionsMm"));
+  assert.ok(result.assistantMessage.includes("button_8mm_specs_chat"));
+  assert.equal(result.revision, null);
+  assert.equal(result.artifactPaths.modelGlb || null, null);
+
+  const promoted = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_descriptor_specs_chat",
+    userMessage: "Promote descriptor draft button_8mm_specs_chat.",
+    modelProvider: "mock"
+  });
+  assert.equal(promoted.ok, true);
+  assert.equal(promoted.pendingConfirmation, null);
+  assert.equal(promoted.toolResults[0].result.promoted, true);
+  assert.equal(promoted.toolResults[0].result.componentId, "button_8mm_specs_chat");
+  assert.equal(promoted.revision, null);
+  assert.equal(promoted.artifactPaths.modelGlb || null, null);
 });
 
 test("QueryEngine keeps exploratory design questions as proposals", async () => {
@@ -322,6 +471,15 @@ test("QueryEngine feeds denied tool calls back to the model for correction", asy
 test("Tool schema exporter and API contract expose chat runtime surfaces", () => {
   const exported = exportToolsForModel({ tools: listToolMetadata() });
   assert.equal(exported.ok, true);
+  assert.ok(exported.tools.some((tool) => tool.name === "inspectComponentPackage" && tool.readOnly));
+  assert.ok(exported.tools.some((tool) => tool.name === "inspectComponentDescriptorDraft" && tool.readOnly));
+  assert.ok(exported.tools.some((tool) => tool.name === "inspectWorkspaceComponentDescriptorDrafts" && tool.readOnly));
+  assert.ok(exported.tools.some((tool) => tool.name === "scaffoldWorkspaceComponentDescriptorDraft" && tool.requiresConfirmation));
+  assert.ok(exported.tools.some((tool) => tool.name === "applyWorkspaceDescriptorDraftSpecs" && tool.requiresConfirmation));
+  assert.ok(exported.tools.some((tool) => tool.name === "promoteComponentDescriptorDraft" && tool.requiresConfirmation));
+  assert.ok(exported.tools.some((tool) => tool.name === "promoteWorkspaceComponentDescriptorDraft" && tool.requiresConfirmation));
+  assert.ok(exported.tools.some((tool) => tool.name === "selectComponentDescriptor" && tool.requiresConfirmation));
+  assert.ok(exported.tools.some((tool) => tool.name === "retirePromotedComponentDescriptor" && tool.requiresConfirmation));
   assert.ok(exported.tools.some((tool) => tool.name === "applyDesignPatch" && tool.requiresConfirmation));
   assert.ok(exported.tools.some((tool) => tool.name === "proposeDesignChange" && tool.createsProposal));
 
@@ -332,6 +490,12 @@ test("Tool schema exporter and API contract expose chat runtime surfaces", () =>
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/turn"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/:sessionId"));
   assert.ok(paths.includes("/api/workspaces/:workspaceId/chat/confirm"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/components/drafts"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/components/drafts/scaffold"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/components/drafts/:draftId/specs"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/components/drafts/:draftId/promote"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/components/:componentId/select"));
+  assert.ok(paths.includes("/api/workspaces/:workspaceId/components/:componentId/retire"));
 });
 
 test("runtime selection keeps Codex, Forge QueryEngine, mock, and OpenAI roles distinct", () => {
@@ -411,6 +575,8 @@ test("ContextPack remains compact and excludes raw generated artifact bytes", as
   const contextPack = buildContextPack({ workspaceId: plan.planId });
   assert.equal(contextPack.ok, true);
   assert.ok(contextPack.exclusions.includes("raw GLB/STL/STEP bytes"));
+  assert.equal(typeof contextPack.generationEvidenceSummary.available, "boolean");
+  assert.equal(typeof contextPack.generationEvidenceSummary.artifactAudit?.available, "boolean");
   assert.ok(contextPack.artifactSummary.every((artifact) => typeof artifact.bytes === "number"));
   assert.equal(JSON.stringify(contextPack).includes("glTF"), false);
 });
@@ -734,6 +900,59 @@ test("Codex runtime reports guarded direct file writes instead of accepting them
   assert.equal(result.modelResponses[0].errorCode, "GUARD_VIOLATION");
 });
 
+test("Codex runtime reports guarded direct workspace descriptor draft package writes", async () => {
+  const plan = createChatPlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const codexFactory = async () => ({
+    startThread() {
+      return {
+        id: "draft-guard-thread",
+        async run() {
+          const draftDir = join(workspacePath, "component-drafts", "button_direct_codex_guard");
+          mkdirSync(draftDir, { recursive: true });
+          writeFileSync(join(draftDir, "descriptor.json"), JSON.stringify({ tampered: true }, null, 2));
+          writeFileSync(join(draftDir, "sources.md"), "direct canonical source rewrite");
+          writeFileSync(join(draftDir, "source-specs.md"), "raw source note remains allowed");
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "I directly changed a descriptor draft package.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    },
+    resumeThread(threadId) {
+      return {
+        id: threadId,
+        async run() {
+          return {
+            finalResponse: JSON.stringify({
+              assistantMessage: "Resumed.",
+              toolCalls: []
+            })
+          };
+        }
+      };
+    }
+  });
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_guarded_draft_write",
+    userMessage: "Directly rewrite the workspace descriptor draft package.",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.assistantMessage, /component-drafts\/button_direct_codex_guard\/descriptor\.json/);
+  assert.match(result.assistantMessage, /component-drafts\/button_direct_codex_guard\/sources\.md/);
+  assert.doesNotMatch(result.assistantMessage, /source-specs\.md/);
+  assert.equal(result.modelResponses[0].ok, false);
+  assert.equal(result.modelResponses[0].errorCode, "GUARD_VIOLATION");
+});
+
 test("Codex runtime demo can drive idea, modification, generation, USB move, and revert through forge-tool", async () => {
   const plan = createProductPlan({
     initialMessage: "我想做一个带 3.5 寸屏幕的小桌面闹钟。",
@@ -875,6 +1094,118 @@ test("Codex runtime demo can drive idea, modification, generation, USB move, and
   const events = readWorkspaceEvents({ workspaceId: plan.planId });
   assert.ok(events.some((event) => event.type === "revision_reverted"));
   assert.ok(events.some((event) => event.type === "validation_completed"));
+});
+
+test("Codex runtime can onboard a workspace spec-file descriptor through forge-tool", async () => {
+  const plan = createChatPlan();
+  const workspacePath = projectWorkspacePath(plan.planId);
+  const observedToolCommands = [];
+  const codexFactory = async () => ({
+    startThread(options) {
+      return fakeSpecFileCodexThread("spec-file-thread", options);
+    },
+    resumeThread(threadId, options) {
+      return fakeSpecFileCodexThread(threadId, options);
+    }
+  });
+
+  function fakeSpecFileCodexThread(id, options) {
+    return {
+      id,
+      async run() {
+        const cwd = options.workingDirectory;
+        const draftId = "button_8mm_codex_specs";
+        const specPath = `component-drafts/${draftId}/source-specs.md`;
+        const tool = (args) => {
+          observedToolCommands.push(args.join(" "));
+          return runForgeToolForCodex(cwd, args);
+        };
+        tool([
+          "descriptor-scaffold",
+          "--draft-id",
+          draftId,
+          "--component-type",
+          "button",
+          "--display-name",
+          "Codex Spec File Button"
+        ]);
+        writeFileSync(join(cwd, specPath), [
+          "dimensions 10 x 10 x 6 mm",
+          "opening 8 x 8 mm",
+          "manufacturer Forge Codex Test",
+          "part number BTN-8MM-CODEX-SPECS",
+          "measurement basis caliper measurement",
+          "reviewable"
+        ].join("; "));
+        const specs = tool([
+          "descriptor-specs",
+          "--draft-id",
+          draftId,
+          "--specs-file",
+          specPath
+        ]);
+        const promoted = tool([
+          "descriptor-promote",
+          "--draft-id",
+          draftId
+        ]);
+        const selected = tool([
+          "descriptor-select",
+          "--componentId",
+          draftId,
+          "--quantity",
+          "1",
+          "--message",
+          "Use Codex spec-file button."
+        ]);
+        const generated = tool([
+          "generate",
+          "--revisionId",
+          selected.newRevisionId,
+          "--reason",
+          "codex_confirmed_spec_file_generation"
+        ]);
+        const artifacts = tool([
+          "artifacts",
+          "--revisionId",
+          generated.revisionId
+        ]);
+        return codexJson(`已通过 forge-tool 从规格文件 ${specs.specsSourcePath} 导入 ${promoted.componentId}，选择后生成版本 ${generated.revisionId}，trusted=${artifacts.artifactStatus.trustedGenerated}。`);
+      }
+    };
+  }
+
+  const result = await runForgeChatTurn({
+    workspaceId: plan.planId,
+    sessionId: "test_codex_spec_file_descriptor",
+    userMessage: "用规格文件添加一个 8mm 按钮零件，并生成 3D 模型。",
+    runtimeProvider: "codex",
+    codexFactory
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.bindingId, "spec-file-thread");
+  assert.equal(result.toolCalls.length, 0);
+  assert.match(result.assistantMessage, /规格文件/);
+  assert.ok(observedToolCommands.some((command) => command.includes("descriptor-specs --draft-id button_8mm_codex_specs --specs-file component-drafts/button_8mm_codex_specs/source-specs.md")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("descriptor-promote --draft-id button_8mm_codex_specs")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("descriptor-select --componentId button_8mm_codex_specs")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("generate --revisionId")));
+  assert.ok(observedToolCommands.some((command) => command.startsWith("artifacts --revisionId")));
+  const updated = getProductPlan(plan.planId);
+  const generatedRevision = updated.revisions.find((revision) => revision.revisionId === updated.currentRevisionId);
+  assert.equal(generatedRevision.modelArtifacts.status, "generated");
+  assert.ok(generatedRevision.modelArtifacts.artifacts.glb.localPath);
+  const origin = generatedRevision.modelArtifacts.generationEvidence.descriptorEvidence.componentOrigins.find((item) => item.componentId === "button_8mm_codex_specs");
+  assert.equal(origin.workspaceDraft.specPatch.specsSourcePath, "component-drafts/button_8mm_codex_specs/source-specs.md");
+  const evidenceReport = JSON.parse(readFileSync(generatedRevision.modelArtifacts.artifacts.generationEvidenceReport.localPath, "utf8"));
+  const evidenceOrigin = evidenceReport.descriptorEvidence.componentOrigins.find((item) => item.componentId === "button_8mm_codex_specs");
+  assert.equal(evidenceOrigin.workspaceDraft.specPatch.specsSourcePath, "component-drafts/button_8mm_codex_specs/source-specs.md");
+  assert.ok(readWorkspaceEvents({ workspaceId: plan.planId }).some((event) => (
+    event.type === "component_descriptor_draft_specs_applied"
+      && event.payload?.draftId === "button_8mm_codex_specs"
+      && event.payload?.specsSourcePath === "component-drafts/button_8mm_codex_specs/source-specs.md"
+  )));
 });
 
 test("Codex runtime keeps project threads isolated", async () => {

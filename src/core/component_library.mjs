@@ -55,13 +55,28 @@ function loadDescriptors() {
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b));
 
-  const validations = [];
-  const descriptors = [];
+  const rawEntries = [];
   for (const folder of folders) {
     const descriptorPath = join(componentAssetsRoot, folder, "descriptor.json");
     if (!existsSync(descriptorPath)) continue;
     const raw = JSON.parse(readFileSync(descriptorPath, "utf8"));
-    const validation = validateComponentDescriptorV2(raw, { expectedId: folder });
+    rawEntries.push({ folder, descriptorPath, raw });
+  }
+
+  const knownConnectorIdsByComponentId = new Map(rawEntries.map(({ folder, raw }) => [
+    raw.identity?.id || raw.id || folder,
+    new Set((raw.connectors || []).map((connector) => connector.id).filter(Boolean))
+  ]));
+
+  const validations = [];
+  const descriptors = [];
+  for (const { folder, descriptorPath, raw } of rawEntries) {
+    const sourcesPath = join(dirname(descriptorPath), raw.sourceNotes?.sourcesFile || "sources.md");
+    const validation = validateComponentDescriptorV2(raw, {
+      expectedId: folder,
+      knownConnectorIdsByComponentId,
+      sourcesFileExists: existsSync(sourcesPath)
+    });
     validations.push({
       componentId: raw.identity?.id || raw.id || folder,
       descriptorPath: relativeToCore(descriptorPath),
@@ -72,7 +87,7 @@ function loadDescriptors() {
     descriptors.push({
       ...normalizeComponentDescriptor(raw),
       descriptorPath: relativeToCore(descriptorPath),
-      sourcesPath: relativeToCore(join(dirname(descriptorPath), "sources.md")),
+      sourcesPath: relativeToCore(sourcesPath),
       schemaValidation: validation
     });
   }

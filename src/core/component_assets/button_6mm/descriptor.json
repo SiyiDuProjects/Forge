@@ -11,11 +11,17 @@
   "versioning": {
     "descriptorVersion": "0.2.0",
     "updated": "2026-06-04",
-    "compatibility": ["reference_build_001_optional"]
+    "compatibility": [
+      "reference_build_001_optional"
+    ]
   },
   "assetQuality": "mechanical_proxy",
   "validationStatus": "unverified_proxy",
-  "dimensionsMm": { "width": 8, "height": 8, "depth": 5 },
+  "dimensionsMm": {
+    "width": 8,
+    "height": 8,
+    "depth": 5
+  },
   "coordinateSystem": {
     "origin": "component_center",
     "units": "mm",
@@ -39,46 +45,86 @@
     {
       "id": "signal",
       "type": "gpio",
-      "positionLocalMm": [0, -4, -2],
+      "positionLocalMm": [
+        0,
+        -4,
+        -2
+      ],
       "orientation": "-y",
-      "mating": ["core_board_esp32_s3.gpio"]
+      "mating": [
+        "core_board_esp32_s3.gpio"
+      ]
     }
   ],
   "interfaces": [
-    { "id": "button_gpio", "connectorId": "signal", "signalType": "gpio", "requiredClearanceMm": 3 }
+    {
+      "id": "button_gpio",
+      "connectorId": "signal",
+      "signalType": "gpio",
+      "requiredClearanceMm": 3
+    }
   ],
   "externalFeatures": [
     {
       "id": "button_hole",
       "type": "button_hole",
       "face": "side",
-      "positionLocalMm": [0, 0, 2.5],
-      "openingSizeMm": [6, 6]
+      "positionLocalMm": [
+        0,
+        0,
+        2.5
+      ],
+      "openingSizeMm": [
+        6,
+        6
+      ]
     }
   ],
   "keepouts": [
     {
       "id": "button_travel_keepout",
       "type": "mechanical_travel",
-      "positionLocalMm": [0, 0, 5],
-      "sizeMm": [10, 10, 8]
+      "positionLocalMm": [
+        0,
+        0,
+        5
+      ],
+      "sizeMm": [
+        10,
+        10,
+        8
+      ]
     }
   ],
   "accessVolumes": [
     {
       "id": "button_wire_access",
+      "type": "wire_service_access",
       "connectorId": "signal",
-      "positionLocalMm": [0, -8, -2],
-      "sizeMm": [10, 8, 6]
+      "positionLocalMm": [
+        0,
+        -8,
+        -2
+      ],
+      "sizeMm": [
+        10,
+        8,
+        6
+      ]
     }
   ],
   "cableExitDirections": [
-    { "connectorId": "signal", "direction": "-y_to_core_board" }
+    {
+      "connectorId": "signal",
+      "direction": "-y_to_core_board"
+    }
   ],
   "riskFlags": {
     "requiresManualValidation": false,
     "severity": "none",
-    "warnings": ["Button hole, cap travel, and side placement are proxy values."]
+    "warnings": [
+      "Button hole, cap travel, and side placement are proxy values."
+    ]
   },
   "assetPaths": {
     "proxyVisualGlb": null,
@@ -90,5 +136,19 @@
     "summary": "Optional 6 mm panel-button proxy for future input controls.",
     "sourcesFile": "sources.md",
     "confidence": "proxy_seed"
+  },
+  "trustLevel": "proxy_seed",
+  "reviewStatus": "reviewable",
+  "sourceEvidence": {
+    "sourceType": "proxy_seed",
+    "sourceConfidence": "proxy_seed",
+    "measurementBasis": "descriptor_proxy_dimensions",
+    "lastReviewed": "2026-06-06",
+    "references": [
+      {
+        "kind": "local_source_note",
+        "path": "sources.md"
+      }
+    ]
   }
 }

@@ -34,6 +34,8 @@ The implementation lives in:
 - `src/core/chat_session_store.mjs`
 - `src/core/prompt_sections.mjs`
 
+ContextPack and prompt sections include a compact revision ledger summary plus generation evidence summaries for the current revision when available. Models may use the ledger summary to understand ProductPlan revision lineage, open/proposed changes, accepted/rejected patches, artifact manifest status, diff metadata, and rollback availability. Models may use generation evidence metadata to discuss source chain, validation status, descriptor/mechanical coverage, layout explanation coverage, post-write artifact audit diagnostics, finding codes, and artifact file integrity. They must not request, embed, or mutate raw GLB/STL/STEP bytes; artifact files remain read-only derived outputs, and project-changing state still goes through Forge actions.
+
 ## API
 
 Main function:
@@ -92,12 +94,19 @@ Codex runtime project workspace files:
 
 ## Tool Boundary
 
-QueryEngine never edits ProductPlan, GeometrySpec, model files, or project files directly. It calls only the Forge actions described by `src/core/tool_registry.mjs` and implemented by `src/core/forge_actions.mjs`. In Codex mode, Codex may run `scripts/forge-tool.mjs` from the project workspace; that CLI is only a wrapper around the same Forge actions.
+QueryEngine never edits ProductPlan, GeometrySpec, model files, canonical workspace draft `descriptor.json` / `sources.md`, or project state files directly. It calls only the Forge actions described by `src/core/tool_registry.mjs` and implemented by `src/core/forge_actions.mjs`. In Codex mode, Codex may run `scripts/forge-tool.mjs` from the project workspace; that CLI is only a wrapper around the same Forge actions. Raw source notes such as `component-drafts/<draftId>/source-specs.md` may be placed in the workspace before being applied through `descriptor-specs --specs-file`.
 
 Allowed V1 tool outcomes:
 
 - read project summary
 - search ComponentDescriptor-backed components
+- inspect loaded ComponentDescriptor package readiness and proposed descriptor draft intake
+- inspect workspace `component-drafts/<draftId>/` packages without mutating ProductPlan state
+- scaffold non-promotable workspace descriptor draft packages after confirmation
+- promote valid descriptor drafts into the ProductPlan component library after confirmation
+- promote valid workspace descriptor draft packages into the ProductPlan component library after confirmation
+- select ready loaded ComponentDescriptors into pending ProductPlan revisions after confirmation
+- retire ProductPlan-scoped promoted descriptors after confirmation so future revisions exclude them while history remains auditable
 - create proposal
 - stage structured patch proposal
 - commit proposal to a revision
@@ -106,6 +115,7 @@ Allowed V1 tool outcomes:
 - regenerate revision
 - revert active revision
 - retrieve derived artifact metadata
+- inspect generation evidence report metadata
 
 Disallowed:
 
@@ -179,12 +189,18 @@ This keeps the project resumable and inspectable without loading raw model artif
 `MockModelAdapter` is the deterministic local Forge adapter and is covered by tests. It maps known user messages to Forge tool calls:
 
 - add two right-side buttons: component search plus immediate structured patch
+- apply/fill specs to descriptor draft `<draft_id>`: write explicit source-spec text into the workspace draft package without promotion, selection, revision creation, or artifact generation
+- inspect/check descriptor draft `<draft_id>`: read-only workspace draft package readiness inspection
+- promote/import descriptor draft `<draft_id>`: promote a valid workspace draft package into the ProductPlan component library without creating a revision
+- use/select/choose `<component_id>`: narrow descriptor selection into a pending ProductPlan revision
 - what-if button/cat-ear questions: proposal only
 - yes/apply/use: commit open proposal
 - move USB-C back-left: structured patch, with confirmation if wording is ambiguous
 - retrieve artifacts: artifact metadata lookup
 - revert: active revision pointer change
 - unsupported flight/mains/drone requests: no unsafe tool execution
+
+Workspace descriptor draft spec patches appear in tool results, draft scans, ContextPack, revision ledger, and generated component-origin evidence as compact `specPatch` metadata. When Codex uses `forge-tool descriptor-specs --specs-file` from inside the project workspace, the safe workspace-relative source path is preserved as metadata while raw spec text stays in the workspace draft `sources.md` and is not embedded into the default model/runtime context. `ContextPack.exclusions` explicitly lists raw descriptor source/spec text, and generated component origins are re-compacted through a field whitelist, so prompt consumers can rely on path/hash/field summaries instead of source-note bodies.
 
 `CodexSdkRuntimeAdapter` exists behind `runtimeProvider: "codex"` and dynamically imports `@openai/codex-sdk`. It starts/resumes one project-bound Codex thread with the generated Forge project workspace as `workingDirectory`, passes a structured output schema, consumes `runStreamed()` when available, and snapshots guarded files around the turn. Codex can either call `forge-tool` itself and return an empty `toolCalls` array, or return a JSON tool intent (`assistantMessage`, `toolCalls`) for QueryEngine to permission-check and execute through Forge actions. Direct edits to guarded state files produce `GUARD_VIOLATION` instead of being accepted; validation-only or read-only events do not authorize unrelated ProductPlan, GeometrySpec, revision, or artifact writes.
 

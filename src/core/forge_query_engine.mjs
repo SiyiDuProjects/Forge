@@ -718,7 +718,7 @@ function revisionFromResults(toolResults = []) {
   for (const item of toolResults) {
     const result = item.result || {};
     const revisionId = result.newRevisionId || result.revisionId || result.currentRevisionId || "";
-    if (revisionId && (result.applied || result.committed || result.regenerated || result.reverted)) {
+    if (revisionId && (result.applied || result.selected || result.committed || result.regenerated || result.reverted)) {
       return {
         revisionId,
         diff: clone(result.diff || {}),

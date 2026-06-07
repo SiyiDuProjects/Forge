@@ -7,13 +7,16 @@ export const GUARDED_FILE_PATTERNS = [
   "project_manifest.json",
   "product_plan.json",
   "runtime_plan.json",
+  "revision_ledger.json",
   "events.jsonl",
   "proposals/*.json",
   "revisions/*/revision_manifest.json",
   "revisions/*/product_plan.json",
   "revisions/*/geometry-spec.json",
   "revisions/*/component_descriptors.json",
-  "revisions/*/artifacts/*"
+  "revisions/*/artifacts/*",
+  "component-drafts/*/descriptor.json",
+  "component-drafts/*/sources.md"
 ];
 
 const TOOL_EVENT_TYPES = new Set([
@@ -24,6 +27,10 @@ const TOOL_EVENT_TYPES = new Set([
   "proposal_staged",
   "proposal_committed",
   "proposal_rejected",
+  "component_descriptor_draft_scaffolded",
+  "component_descriptor_draft_specs_applied",
+  "component_descriptor_promoted",
+  "component_descriptor_retired",
   "revision_created",
   "revision_reverted",
   "validation_completed",
@@ -141,13 +148,20 @@ function allowedGuardedPatternsForEvent(event = {}) {
   switch (event.type) {
     case "workspace_created":
       return rootStatePatterns();
+    case "validation_completed":
+      return ledgerPatterns();
     case "proposal_created":
     case "proposal_staged":
     case "proposal_rejected":
+    case "component_descriptor_promoted":
+    case "component_descriptor_retired":
       return [
         ...rootStatePatterns(),
         ...proposalPatterns(payload.proposalId)
       ];
+    case "component_descriptor_draft_scaffolded":
+    case "component_descriptor_draft_specs_applied":
+      return draftPackagePatterns(payload.draftId);
     case "proposal_committed":
       return [
         ...rootStatePatterns(),
@@ -160,7 +174,10 @@ function allowedGuardedPatternsForEvent(event = {}) {
         ...revisionPatterns(payload.revisionId)
       ];
     case "artifacts_generated":
-      return artifactPatterns(payload.revisionId, payload.artifacts || []);
+      return [
+        ...ledgerPatterns(),
+        ...artifactPatterns(payload.revisionId, payload.artifacts || [])
+      ];
     case "revision_reverted":
     case "review_submitted":
     case "review_submission_failed":
@@ -174,13 +191,28 @@ function rootStatePatterns() {
   return [
     "project_manifest.json",
     "product_plan.json",
-    "runtime_plan.json"
+    "runtime_plan.json",
+    "revision_ledger.json"
   ];
+}
+
+function ledgerPatterns() {
+  return ["revision_ledger.json"];
 }
 
 function proposalPatterns(proposalId = "") {
   const safeId = safeSegment(proposalId);
   return safeId ? [`proposals/${safeId}.json`] : [];
+}
+
+function draftPackagePatterns(draftId = "") {
+  const safeId = safeSegment(draftId);
+  return safeId
+    ? [
+        `component-drafts/${safeId}/descriptor.json`,
+        `component-drafts/${safeId}/sources.md`
+      ]
+    : [];
 }
 
 function revisionPatterns(revisionId = "") {

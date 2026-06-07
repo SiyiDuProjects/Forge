@@ -40,17 +40,24 @@ const MUTATION_INTENT_PATTERNS = [
   /\bmove\b/i,
   /\bmake\b/i,
   /\bchange\b/i,
+  /\bfill\b/i,
+  /\bpatch\b/i,
   /\bturn\b/i,
   /\buse\b/i,
   /\bapply\b/i,
   /\bcommit\b/i,
   /\bconfirm\b/i,
+  /\bpromote\b/i,
+  /\bimport\b/i,
   /\byes\b/i,
   /\brevert\b/i,
   /\bregenerate\b/i,
   /\bgenerate\b/i,
   /添加/,
   /加/,
+  /填/,
+  /填充/,
+  /写入/,
   /放到/,
   /移动/,
   /移到/,
@@ -60,6 +67,10 @@ const MUTATION_INTENT_PATTERNS = [
   /确认/,
   /执行/,
   /提交/,
+  /提升/,
+  /导入/,
+  /加入/,
+  /放进/,
   /切回/,
   /回退/,
   /生成/
@@ -157,7 +168,7 @@ export function checkToolPermission({
     return allow("User explicitly confirmed committing the staged change.");
   }
 
-  if (["applyDesignPatch", "revertRevision", "regenerateRevision", "submitReviewPacket"].includes(toolName) && hasExplicitMutationIntent(userMessage)) {
+  if (["applyDesignPatch", "applyWorkspaceDescriptorDraftSpecs", "promoteWorkspaceComponentDescriptorDraft", "selectComponentDescriptor", "revertRevision", "regenerateRevision", "submitReviewPacket"].includes(toolName) && hasExplicitMutationIntent(userMessage)) {
     return allow("User explicitly requested this workspace mutation.");
   }
 

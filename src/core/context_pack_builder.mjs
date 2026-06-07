@@ -3,10 +3,13 @@ import { join } from "node:path";
 import {
   defaultProjectWorkspaceRoot,
   projectWorkspacePath,
+  readRevisionLedger,
   readWorkspaceEvents,
   runtimeBindingFromSources
 } from "./project_workspace.mjs";
+import { summarizeRevisionLedger } from "./revision_ledger.mjs";
 import { listToolMetadata } from "./tool_registry.mjs";
+import { workspaceDraftIntegrityStatus } from "./workspace_draft_integrity.mjs";
 
 export function buildContextPack({
   workspaceId,
@@ -43,6 +46,8 @@ export function buildContextPack({
     : "";
   const revisionManifest = revisionPath ? readJson(join(revisionPath, "revision_manifest.json")) : null;
   const validationReport = revisionPath ? readJson(join(revisionPath, "validation_report.json")) : null;
+  const generationEvidenceReport = revisionPath ? readJson(join(revisionPath, "generation_evidence_report.json")) : null;
+  const revisionLedger = readRevisionLedger({ workspaceId, rootDir }) || {};
   const proposals = readProposalSummaries(join(workspacePath, "proposals"));
   const events = readWorkspaceEvents({
     workspaceId,
@@ -71,8 +76,9 @@ export function buildContextPack({
       updatedAt: manifest.updatedAt,
       eventsPath: manifest.eventsPath || "events.jsonl"
     },
-    currentProductPlanSummary: productPlanSummary(productPlan),
-    currentRevisionSummary: revisionSummary(revisionManifest, validationReport),
+    currentProductPlanSummary: productPlanSummary(productPlan, { workspaceId, rootDir }),
+    currentRevisionSummary: revisionSummary(revisionManifest, validationReport, generationEvidenceReport),
+    revisionLedgerSummary: summarizeRevisionLedger(revisionLedger),
     openProposals: proposals.filter((proposal) => ["proposed", "staged"].includes(proposal.status)),
     recentEvents: events.map((event) => ({
       eventId: event.eventId,
@@ -83,6 +89,7 @@ export function buildContextPack({
     })),
     recentDecisions: decisionSummary(productPlan),
     validationWarnings: validationWarnings(validationReport),
+    generationEvidenceSummary: generationEvidenceSummary(generationEvidenceReport),
     allowedTools,
     artifactSummary: (revisionManifest?.artifactSummary || []).map((artifact) => ({
       artifactKey: artifact.artifactKey,
@@ -93,6 +100,7 @@ export function buildContextPack({
     })),
     exclusions: [
       "raw GLB/STL/STEP bytes",
+      "raw descriptor source/spec text",
       "full events.jsonl",
       "arbitrary project file contents",
       "direct GeometrySpec mutation instructions"
@@ -100,7 +108,7 @@ export function buildContextPack({
   };
 }
 
-function productPlanSummary(productPlan = {}) {
+function productPlanSummary(productPlan = {}, { workspaceId = "", rootDir = defaultProjectWorkspaceRoot() } = {}) {
   const requirements = productPlan.requirements || {};
   const constraints = productPlan.constraints || {};
   const geometryPreferences = productPlan.geometryPreferences || {};
@@ -124,13 +132,61 @@ function productPlanSummary(productPlan = {}) {
       buttons: Number(requirements.buttons || 0)
     },
     components: selectedComponents,
+    componentLibrary: productPlanComponentLibrarySummary(productPlan, { workspaceId, rootDir }),
     manufacturingMethod: constraints.manufacturingMethod || "fdm_3d_printing",
     finish: constraints.finish || "",
     shapeProfile: geometryPreferences.enclosure?.shapeProfile || constraints.preferredStyle || "rounded_rect"
   };
 }
 
-function revisionSummary(revisionManifest, validationReport) {
+function productPlanComponentLibrarySummary(productPlan = {}, { workspaceId = "", rootDir = defaultProjectWorkspaceRoot() } = {}) {
+  const descriptors = Array.isArray(productPlan.componentLibrary?.descriptors)
+    ? productPlan.componentLibrary.descriptors
+    : [];
+  const activeDescriptors = descriptors.filter((entry) => entry?.active !== false && entry?.status !== "retired");
+  const retiredDescriptors = descriptors.filter((entry) => entry?.active === false || entry?.status === "retired");
+  return {
+    version: productPlan.componentLibrary?.version || "product_plan_component_library_v1",
+    descriptorCount: descriptors.length,
+    promotedComponentIds: descriptors.map(componentIdForLibraryEntry).filter(Boolean),
+    activeComponentIds: activeDescriptors.map(componentIdForLibraryEntry).filter(Boolean),
+    retiredComponentIds: retiredDescriptors.map(componentIdForLibraryEntry).filter(Boolean),
+    descriptors: descriptors.map((entry) => ({
+      componentId: componentIdForLibraryEntry(entry),
+      componentType: entry.componentType || entry.descriptor?.identity?.category || entry.descriptor?.type || "",
+      status: entry.status || "",
+      active: entry.active !== false && entry.status !== "retired",
+      sourceType: entry.source?.type || "",
+      workspaceDraft: entry.source?.workspaceDraft
+        ? {
+          draftId: entry.source.workspaceDraft.draftId || "",
+          packagePath: entry.source.workspaceDraft.packagePath || "",
+          descriptorPath: entry.source.workspaceDraft.descriptorPath || "",
+          sourcesPath: entry.source.workspaceDraft.sourcesPath || "",
+          descriptorSha256: entry.source.workspaceDraft.descriptorSha256 || "",
+          sourcesSha256: entry.source.workspaceDraft.sourcesSha256 || "",
+          descriptorBytes: Number(entry.source.workspaceDraft.descriptorBytes || 0),
+          sourcesBytes: Number(entry.source.workspaceDraft.sourcesBytes || 0),
+          specPatch: compactSpecPatch(entry.source.workspaceDraft.specPatch),
+          integrityStatus: workspaceDraftIntegrityStatus({
+            workspaceId,
+            rootDir,
+            workspaceDraft: entry.source.workspaceDraft
+          })
+        }
+        : null,
+      promotedAt: entry.promotedAt || "",
+      retiredAt: entry.retiredAt || "",
+      retirementReason: entry.retirementReason || "",
+      replacement: compactReplacementAudit(entry.replacement),
+      replacementHistory: compactReplacementHistory(entry.replacementHistory),
+      directEditingAllowed: false
+    })),
+    directEditingAllowed: false
+  };
+}
+
+function revisionSummary(revisionManifest, validationReport, generationEvidenceReport) {
   if (!revisionManifest) {
     return {
       revisionId: "",
@@ -145,9 +201,306 @@ function revisionSummary(revisionManifest, validationReport) {
     validationStatus: revisionManifest.validationStatus || validationReport?.status || "unknown",
     sourceOfTruth: revisionManifest.sourceOfTruth || {},
     derivedArtifacts: revisionManifest.derivedArtifacts || {},
+    generationEvidence: generationEvidenceReport
+      ? {
+        version: generationEvidenceReport.version || "",
+        status: generationEvidenceReport.status || "",
+        generatedArtifactsPresent: Boolean(generationEvidenceReport.generatedArtifactsPresent),
+        artifactAudit: {
+          status: generationEvidenceReport.artifactAudit?.status || "",
+          passed: generationEvidenceReport.artifactAudit?.passed === true,
+          findingCount: (generationEvidenceReport.artifactAudit?.findings || []).length,
+          diagnostics: compactArtifactAuditDiagnostics(generationEvidenceReport.artifactAudit || {})
+        },
+        directEditingAllowed: generationEvidenceReport.directEditingAllowed === true
+      }
+      : null,
     artifactCount: Array.isArray(revisionManifest.artifactSummary) ? revisionManifest.artifactSummary.length : 0,
     directEditingAllowed: false
   };
+}
+
+function componentIdForLibraryEntry(entry = {}) {
+  return entry.componentId || entry.descriptor?.identity?.id || entry.descriptor?.id || entry.identity?.id || entry.id || "";
+}
+
+function compactReplacementAudit(replacement = null) {
+  if (!replacement) {
+    return {
+      replacedExisting: false,
+      replacementCount: 0,
+      directEditingAllowed: false
+    };
+  }
+  return {
+    replacedExisting: replacement.replacedExisting === true,
+    replacedAt: replacement.replacedAt || "",
+    replacementCount: Number(replacement.replacementCount || 0),
+    previous: compactReplacementPrevious(replacement.previous),
+    directEditingAllowed: false
+  };
+}
+
+function compactReplacementHistory(history = []) {
+  return Array.isArray(history)
+    ? history.map((item) => ({
+      replacedAt: item.replacedAt || "",
+      previous: compactReplacementPrevious(item.previous),
+      directEditingAllowed: false
+    }))
+    : [];
+}
+
+function compactReplacementPrevious(previous = null) {
+  if (!previous) return null;
+  return {
+    componentId: previous.componentId || "",
+    componentType: previous.componentType || "",
+    displayName: previous.displayName || "",
+    descriptorVersion: previous.descriptorVersion || "",
+    status: previous.status || "",
+    active: previous.active === true,
+    promotedAt: previous.promotedAt || "",
+    sourceType: previous.sourceType || "",
+    workspaceDraft: previous.workspaceDraft
+      ? {
+        draftId: previous.workspaceDraft.draftId || "",
+        packagePath: previous.workspaceDraft.packagePath || "",
+        descriptorPath: previous.workspaceDraft.descriptorPath || "",
+        sourcesPath: previous.workspaceDraft.sourcesPath || "",
+        descriptorSha256: previous.workspaceDraft.descriptorSha256 || "",
+        sourcesSha256: previous.workspaceDraft.sourcesSha256 || "",
+        descriptorBytes: Number(previous.workspaceDraft.descriptorBytes || 0),
+        sourcesBytes: Number(previous.workspaceDraft.sourcesBytes || 0),
+        specPatch: compactSpecPatch(previous.workspaceDraft.specPatch)
+      }
+      : null,
+    directEditingAllowed: false
+  };
+}
+
+function compactSpecPatch(specPatch = null) {
+  if (!specPatch) {
+    return {
+      applied: false
+    };
+  }
+  return {
+    applied: specPatch.applied === true,
+    eventId: specPatch.eventId || "",
+    timestamp: specPatch.timestamp || "",
+    draftId: specPatch.draftId || "",
+    componentId: specPatch.componentId || "",
+    componentType: specPatch.componentType || "",
+    baseComponentId: specPatch.baseComponentId || "",
+    specsSourcePath: specPatch.specsSourcePath || "",
+    extractedFields: Array.isArray(specPatch.extractedFields) ? [...specPatch.extractedFields] : [],
+    readyForLibraryPromotion: specPatch.readyForLibraryPromotion === true,
+    blockingIssueCount: Number(specPatch.blockingIssueCount || 0),
+    directGeometryMutationAllowed: false,
+    rawArtifactMutationAllowed: false
+  };
+}
+
+function generationEvidenceSummary(report) {
+  if (!report) {
+    return {
+      available: false,
+      artifactAudit: {
+        available: false
+      }
+    };
+  }
+  return {
+    available: true,
+    version: report.version || "",
+    status: report.status || "",
+    source: report.source || "",
+    sourceOfTruth: report.sourceOfTruth || {},
+    generatedArtifactsPresent: Boolean(report.generatedArtifactsPresent),
+    validation: {
+      status: report.validation?.status || "",
+      canGenerateArtifacts: Boolean(report.validation?.canGenerateArtifacts),
+      issueCounts: report.validation?.issueCounts || {}
+    },
+    descriptorEvidence: {
+      descriptorVersion: report.descriptorEvidence?.descriptorVersion || "",
+      selectedComponentIds: report.descriptorEvidence?.selectedComponentIds || [],
+      componentOrigins: compactComponentOrigins(report.descriptorEvidence?.componentOrigins || []),
+      mechanicalConstraintCoverage: report.descriptorEvidence?.mechanicalConstraintCoverage || {}
+    },
+    layoutEvidence: {
+      version: report.layoutEvidence?.version || "",
+      coverage: report.layoutEvidence?.coverage || {},
+      directEditingAllowed: report.layoutEvidence?.directEditingAllowed === true
+    },
+    artifactIntegrity: compactArtifactIntegrity(report.artifactIntegrity || {}),
+    artifactAudit: compactArtifactAudit(report.artifactAudit || {}),
+    directEditingAllowed: report.directEditingAllowed === true,
+    userFacingCadExport: report.userFacingCadExport === true
+  };
+}
+
+function compactComponentOrigins(componentOrigins = []) {
+  return Array.isArray(componentOrigins)
+    ? componentOrigins.map(compactComponentOrigin).filter((origin) => origin.componentId)
+    : [];
+}
+
+function compactComponentOrigin(origin = {}) {
+  return {
+    componentId: origin.componentId || "",
+    descriptorPath: origin.descriptorPath || "",
+    sourcesPath: origin.sourcesPath || "",
+    libraryScope: origin.libraryScope || "",
+    sourceType: origin.sourceType || "",
+    workspaceDraft: compactOriginWorkspaceDraft(origin.workspaceDraft),
+    replacement: compactReplacementAudit(origin.replacement),
+    replacementHistory: compactReplacementHistory(origin.replacementHistory),
+    directEditingAllowed: false,
+    rawArtifactMutationAllowed: false
+  };
+}
+
+function compactOriginWorkspaceDraft(workspaceDraft = null) {
+  if (!workspaceDraft) return null;
+  return {
+    draftId: workspaceDraft.draftId || "",
+    packagePath: workspaceDraft.packagePath || "",
+    descriptorPath: workspaceDraft.descriptorPath || "",
+    sourcesPath: workspaceDraft.sourcesPath || "",
+    descriptorSha256: workspaceDraft.descriptorSha256 || "",
+    sourcesSha256: workspaceDraft.sourcesSha256 || "",
+    descriptorBytes: Number(workspaceDraft.descriptorBytes || 0),
+    sourcesBytes: Number(workspaceDraft.sourcesBytes || 0),
+    specPatch: compactSpecPatch(workspaceDraft.specPatch)
+  };
+}
+
+function compactArtifactIntegrity(artifactIntegrity = {}) {
+  return Object.fromEntries(
+    Object.entries(artifactIntegrity).map(([key, value]) => [key, {
+      present: Boolean(value?.present),
+      type: value?.type || "",
+      bytes: Number(value?.bytes || 0),
+      sha256: value?.sha256 || ""
+    }])
+  );
+}
+
+function compactArtifactAudit(artifactAudit = {}) {
+  if (!artifactAudit.version) {
+    return {
+      available: false
+    };
+  }
+  return {
+    available: true,
+    version: artifactAudit.version || "",
+    status: artifactAudit.status || "",
+    passed: artifactAudit.passed === true,
+    generatedArtifactKeys: artifactAudit.generatedArtifactKeys || [],
+    findingCount: (artifactAudit.findings || []).length,
+    findingCodes: (artifactAudit.findings || []).slice(0, 8).map((finding) => ({
+      artifactKey: finding.artifactKey || "",
+      level: finding.level || "",
+      code: finding.code || ""
+    })),
+    diagnostics: compactArtifactAuditDiagnostics(artifactAudit),
+    checks: Object.fromEntries(
+      Object.entries(artifactAudit.checks || {}).map(([key, value]) => [key, {
+        passed: value?.passed === true,
+        present: value?.present === true,
+        bytes: Number(value?.bytes || 0),
+        sha256Recorded: value?.sha256Recorded === true,
+        diagnostics: compactArtifactCheckDiagnostics(key, value)
+      }])
+    )
+  };
+}
+
+function compactArtifactAuditDiagnostics(artifactAudit = {}) {
+  const checks = artifactAudit.checks || {};
+  const glb = checks.glb || {};
+  const stl = checks.stl || {};
+  const shellFront = checks.shellFront || {};
+  const shellBack = checks.shellBack || {};
+  const step = checks.step || {};
+  return {
+    glb: {
+      passed: glb.passed === true,
+      linePrimitiveCount: Number(glb.linePrimitiveCount || 0),
+      thinMeshPrimitiveCount: Number(glb.thinMeshPrimitiveCount || 0),
+      vec3AccessorMissingBoundsCount: Number(glb.vec3AccessorMissingBoundsCount || 0),
+      meshPrimitiveCount: Number(glb.meshPrimitiveCount || 0)
+    },
+    stl: {
+      passed: stl.passed === true,
+      degenerateFacetCount: Number(stl.geometry?.degenerateFacetCount || 0),
+      thinAxisCount: Number(stl.geometry?.thinAxisCount || 0),
+      shellFrontThinAxisCount: Number(shellFront.geometry?.thinAxisCount || 0),
+      shellBackThinAxisCount: Number(shellBack.geometry?.thinAxisCount || 0)
+    },
+    step: {
+      passed: step.passed === true,
+      shellDimensionsPositive: step.metadata?.shellDimensionsPositive === true,
+      componentAssetManifestPresent: step.format?.hasComponentAssetManifest === true,
+      directEditingBoundaryPresent: step.metadata?.directEditingBoundaryPresent === true
+    }
+  };
+}
+
+function compactArtifactCheckDiagnostics(key, value = {}) {
+  if (key === "glb") {
+    return {
+      format: {
+        glbMagic: value.format?.glbMagic === true,
+        version: Number(value.format?.version || 0),
+        parsedJson: value.format?.parsedJson === true,
+        binaryChunkPresent: value.format?.binaryChunkPresent === true
+      },
+      semanticNodePrefixes: value.semanticNodePrefixes || {},
+      linePrimitiveCount: Number(value.linePrimitiveCount || 0),
+      thinMeshPrimitiveCount: Number(value.thinMeshPrimitiveCount || 0),
+      minimumMeshSpanMm: Number(value.minimumMeshSpanMm || 0),
+      vec3AccessorMissingBoundsCount: Number(value.vec3AccessorMissingBoundsCount || 0),
+      meshPrimitiveCount: Number(value.meshPrimitiveCount || 0)
+    };
+  }
+  if (key === "stl" || key === "shellFront" || key === "shellBack") {
+    return {
+      format: {
+        startsWithSolid: value.format?.startsWithSolid === true,
+        hasEndSolid: value.format?.hasEndSolid === true,
+        facetCount: Number(value.format?.facetCount || 0)
+      },
+      geometry: {
+        vertexCount: Number(value.geometry?.vertexCount || 0),
+        degenerateFacetCount: Number(value.geometry?.degenerateFacetCount || 0),
+        thinAxisCount: Number(value.geometry?.thinAxisCount || 0),
+        spanMm: value.geometry?.spanMm || null,
+        minimumSpanMm: Number(value.geometry?.minimumSpanMm || 0)
+      }
+    };
+  }
+  if (key === "step") {
+    return {
+      format: {
+        hasStepHeader: value.format?.hasStepHeader === true,
+        hasStepFooter: value.format?.hasStepFooter === true,
+        hasShellDimensions: value.format?.hasShellDimensions === true,
+        hasModulePlacements: value.format?.hasModulePlacements === true,
+        hasComponentAssetManifest: value.format?.hasComponentAssetManifest === true,
+        hasMechanicalConstraints: value.format?.hasMechanicalConstraints === true,
+        hasLayoutExplanation: value.format?.hasLayoutExplanation === true
+      },
+      metadata: {
+        shellDimensionsPositive: value.metadata?.shellDimensionsPositive === true,
+        directEditingBoundaryPresent: value.metadata?.directEditingBoundaryPresent === true
+      }
+    };
+  }
+  return {};
 }
 
 function readProposalSummaries(proposalDir) {

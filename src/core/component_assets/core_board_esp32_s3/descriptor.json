@@ -11,11 +11,17 @@
   "versioning": {
     "descriptorVersion": "0.2.0",
     "updated": "2026-06-04",
-    "compatibility": ["reference_build_001"]
+    "compatibility": [
+      "reference_build_001"
+    ]
   },
   "assetQuality": "mechanical_proxy",
   "validationStatus": "unverified_proxy",
-  "dimensionsMm": { "width": 52, "height": 30, "depth": 8 },
+  "dimensionsMm": {
+    "width": 52,
+    "height": 30,
+    "depth": 8
+  },
   "coordinateSystem": {
     "origin": "component_center",
     "units": "mm",
@@ -38,85 +44,199 @@
     "defaultStandoffOuterDiameterMm": 5
   },
   "mountingHoles": [
-    { "id": "mount_tl", "positionLocalMm": [-22, 10, -4], "diameterMm": 2.4 },
-    { "id": "mount_tr", "positionLocalMm": [22, 10, -4], "diameterMm": 2.4 },
-    { "id": "mount_bl", "positionLocalMm": [-22, -10, -4], "diameterMm": 2.4 },
-    { "id": "mount_br", "positionLocalMm": [22, -10, -4], "diameterMm": 2.4 }
+    {
+      "id": "mount_tl",
+      "positionLocalMm": [
+        -22,
+        10,
+        -4
+      ],
+      "diameterMm": 2.4
+    },
+    {
+      "id": "mount_tr",
+      "positionLocalMm": [
+        22,
+        10,
+        -4
+      ],
+      "diameterMm": 2.4
+    },
+    {
+      "id": "mount_bl",
+      "positionLocalMm": [
+        -22,
+        -10,
+        -4
+      ],
+      "diameterMm": 2.4
+    },
+    {
+      "id": "mount_br",
+      "positionLocalMm": [
+        22,
+        -10,
+        -4
+      ],
+      "diameterMm": 2.4
+    }
   ],
   "connectors": [
     {
       "id": "usb_c",
       "type": "usb_c",
-      "positionLocalMm": [0, -15, -3],
+      "positionLocalMm": [
+        0,
+        -15,
+        -3
+      ],
       "orientation": "-y",
-      "mating": ["usb_c_breakout.power_out"]
+      "mating": [
+        "usb_c_breakout.power_out"
+      ]
     },
     {
       "id": "display_port",
       "type": "fpc",
-      "positionLocalMm": [0, 15, -3],
+      "positionLocalMm": [
+        0,
+        15,
+        -3
+      ],
       "orientation": "+y",
-      "mating": ["display_3_5_tft.fpc"]
+      "mating": [
+        "display_3_5_tft.fpc"
+      ]
     },
     {
       "id": "i2c",
       "type": "i2c",
-      "positionLocalMm": [22, 0, -2],
+      "positionLocalMm": [
+        22,
+        0,
+        -2
+      ],
       "orientation": "+x",
-      "mating": ["ambient_sensor_basic.signal"]
+      "mating": [
+        "ambient_sensor_basic.signal"
+      ]
     },
     {
       "id": "speaker",
       "type": "jst",
-      "positionLocalMm": [-22, 0, -2],
+      "positionLocalMm": [
+        -22,
+        0,
+        -2
+      ],
       "orientation": "-x",
-      "mating": ["speaker_20mm.signal"]
+      "mating": [
+        "speaker_20mm.signal"
+      ]
     },
     {
       "id": "gpio",
       "type": "gpio",
-      "positionLocalMm": [18, 10, -2],
+      "positionLocalMm": [
+        18,
+        10,
+        -2
+      ],
       "orientation": "+x",
-      "mating": ["button_6mm.signal"]
+      "mating": [
+        "button_6mm.signal"
+      ]
     }
   ],
   "interfaces": [
-    { "id": "power_in", "connectorId": "usb_c", "signalType": "low_voltage_power", "requiredClearanceMm": 5 },
-    { "id": "display_out", "connectorId": "display_port", "signalType": "display_fpc", "requiredClearanceMm": 4 },
-    { "id": "sensor_bus", "connectorId": "i2c", "signalType": "i2c", "requiredClearanceMm": 3 }
+    {
+      "id": "power_in",
+      "connectorId": "usb_c",
+      "signalType": "low_voltage_power",
+      "requiredClearanceMm": 5
+    },
+    {
+      "id": "display_out",
+      "connectorId": "display_port",
+      "signalType": "display_fpc",
+      "requiredClearanceMm": 4
+    },
+    {
+      "id": "sensor_bus",
+      "connectorId": "i2c",
+      "signalType": "i2c",
+      "requiredClearanceMm": 3
+    }
   ],
   "externalFeatures": [],
   "keepouts": [
     {
       "id": "component_height_keepout",
       "type": "component_height",
-      "positionLocalMm": [0, 0, -6],
-      "sizeMm": [48, 26, 10]
+      "positionLocalMm": [
+        0,
+        0,
+        -6
+      ],
+      "sizeMm": [
+        48,
+        26,
+        10
+      ]
     }
   ],
   "accessVolumes": [
     {
       "id": "usb_c_service_access",
+      "type": "connector_service_access",
       "connectorId": "usb_c",
-      "positionLocalMm": [0, -22, -3],
-      "sizeMm": [18, 16, 10]
+      "positionLocalMm": [
+        0,
+        -22,
+        -3
+      ],
+      "sizeMm": [
+        18,
+        16,
+        10
+      ]
     },
     {
       "id": "display_fpc_access",
+      "type": "fpc_service_access",
       "connectorId": "display_port",
-      "positionLocalMm": [0, 22, -3],
-      "sizeMm": [34, 16, 8]
+      "positionLocalMm": [
+        0,
+        22,
+        -3
+      ],
+      "sizeMm": [
+        34,
+        16,
+        8
+      ]
     }
   ],
   "cableExitDirections": [
-    { "connectorId": "display_port", "direction": "+y_to_display" },
-    { "connectorId": "i2c", "direction": "+x_to_sensor" },
-    { "connectorId": "usb_c", "direction": "-y_to_rear_power" }
+    {
+      "connectorId": "display_port",
+      "direction": "+y_to_display"
+    },
+    {
+      "connectorId": "i2c",
+      "direction": "+x_to_sensor"
+    },
+    {
+      "connectorId": "usb_c",
+      "direction": "-y_to_rear_power"
+    }
   ],
   "riskFlags": {
     "requiresManualValidation": false,
     "severity": "none",
-    "warnings": ["Board footprint and connector positions are proxy values until a specific dev board is selected."]
+    "warnings": [
+      "Board footprint and connector positions are proxy values until a specific dev board is selected."
+    ]
   },
   "assetPaths": {
     "proxyVisualGlb": null,
@@ -128,5 +248,19 @@
     "summary": "Proxy ESP32-S3 dev board envelope for reference build layout and standoff generation.",
     "sourcesFile": "sources.md",
     "confidence": "proxy_seed"
+  },
+  "trustLevel": "proxy_seed",
+  "reviewStatus": "reviewable",
+  "sourceEvidence": {
+    "sourceType": "proxy_seed",
+    "sourceConfidence": "proxy_seed",
+    "measurementBasis": "descriptor_proxy_dimensions",
+    "lastReviewed": "2026-06-06",
+    "references": [
+      {
+        "kind": "local_source_note",
+        "path": "sources.md"
+      }
+    ]
   }
 }

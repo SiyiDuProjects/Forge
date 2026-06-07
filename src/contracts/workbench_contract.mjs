@@ -1,4 +1,4 @@
-export const CONTRACT_VERSION = "2026-06-05";
+export const CONTRACT_VERSION = "2026-06-07";
 
 export const WORKBENCH_CHAIN = [
   "parse_request",
@@ -54,6 +54,8 @@ export const ASSET_TYPES = [
   "image",
   "reference_url",
   "geometry_spec",
+  "component_descriptors",
+  "component_asset_manifest",
   "model_preview",
   "glb",
   "stl",
@@ -61,6 +63,7 @@ export const ASSET_TYPES = [
   "cad_placeholder",
   "cadquery_script",
   "validation_report",
+  "generation_evidence_report",
   "render"
 ];
 
@@ -110,8 +113,13 @@ export const API_CONTRACT = [
   },
   {
     method: "GET",
+    path: "/api/workspaces/:workspaceId/revision-ledger",
+    response: ["ok", "workspaceId", "revisionLedger"]
+  },
+  {
+    method: "GET",
     path: "/api/workspaces/:workspaceId/context-pack",
-    response: ["ok", "workspaceId", "projectSummary", "currentProductPlanSummary", "currentRevisionSummary", "allowedTools", "artifactSummary"]
+    response: ["ok", "workspaceId", "projectSummary", "currentProductPlanSummary", "currentRevisionSummary", "revisionLedgerSummary", "allowedTools", "artifactSummary"]
   },
   {
     method: "GET",
@@ -146,6 +154,59 @@ export const API_CONTRACT = [
     path: "/api/workspaces/:workspaceId/components/search",
     body: ["query", "componentType", "limit"],
     response: ["ok", "results"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/:componentId/package",
+    response: ["ok", "componentId", "componentType", "packageStatus", "readyForSelection", "descriptorValidation", "sourceEvidence", "replacementPolicy"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/draft-package",
+    body: ["descriptor", "descriptorJson", "expectedId", "sourcesText"],
+    response: ["ok", "draft", "componentId", "componentType", "packageStatus", "readyForLibraryPromotion", "readyForSelection", "descriptorValidation", "sourceEvidence", "replacementPolicy", "libraryStatus"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/drafts",
+    body: ["draftId", "limit"],
+    response: ["ok", "workspaceId", "draftCount", "readyForPromotionCount", "drafts"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/drafts/scaffold",
+    body: ["draftId", "componentType", "displayName", "overwrite"],
+    response: ["ok", "scaffolded", "draftId", "componentType", "packagePath", "descriptorPath", "sourcesPath", "readyForLibraryPromotion", "authoringChecklist"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/drafts/:draftId/specs",
+    body: ["specsText", "specsSourcePath", "baseComponentId", "markReviewable"],
+    response: ["ok", "specsApplied", "draftId", "componentId", "componentType", "packagePath", "descriptorPath", "sourcesPath", "specsSourcePath", "extractedFields", "readyForLibraryPromotion", "blockingIssues"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/drafts/:draftId/promote",
+    body: ["replaceExisting"],
+    response: ["ok", "promoted", "draftId", "componentId", "componentType", "readyForSelection", "readyForReviewableGeneration", "componentPreferencePath", "packagePath", "libraryStatus", "replacementPolicy"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/promote-draft",
+    body: ["descriptor", "descriptorJson", "expectedId", "sourcesText", "replaceExisting"],
+    response: ["ok", "promoted", "componentId", "componentType", "readyForSelection", "readyForReviewableGeneration", "componentPreferencePath", "libraryStatus", "replacementPolicy"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/:componentId/select",
+    body: ["quantity", "message"],
+    response: ["ok", "selected", "componentId", "componentType", "newRevisionId", "componentPreferencePath", "validationReport", "artifactPaths"]
+  },
+  {
+    method: "POST",
+    path: "/api/workspaces/:workspaceId/components/:componentId/retire",
+    body: ["reason", "clearPreference"],
+    response: ["ok", "retired", "componentId", "componentType", "previousStatus", "clearedComponentPreference", "componentPreferencePath", "libraryStatus"]
   },
   {
     method: "POST",

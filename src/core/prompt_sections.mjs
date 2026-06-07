@@ -23,7 +23,8 @@ export function buildPromptSections({
         "Do not mutate files, raw GeometrySpec, GLB/STL/STEP, mesh vertices, component asset descriptors, or arbitrary project paths.",
         "Do not add shell/bash tools, CAD editor behavior, supplier ordering, PCB design, electrical validation, MCP, remote sessions, plugins, or multi-agent orchestration.",
         "Camera and battery are human-review risk items. Motion structures and flying/drone requests are outside the standard path.",
-        "The 3D model is a read-only prototype result preview; ProductPlan plus GeometrySpec remain the source objects."
+        "The 3D model is a read-only prototype result preview; ProductPlan plus GeometrySpec remain the source objects.",
+        "Use generationEvidenceSummary and artifact metadata to discuss source chain, validation, descriptor/layout coverage, post-write artifact audit, and file integrity; never request or edit raw GLB/STL/STEP bytes."
       ].join("\n")
     },
     {
@@ -33,6 +34,7 @@ export function buildPromptSections({
         `Use only tools exported from ${TOOL_PROTOCOL_VERSION}.`,
         "Discussion and exploration should use read tools or proposeDesignChange.",
         "Only create/commit/revert/regenerate revisions when the user's wording is explicit or a confirmation has been approved.",
+        "Use getRevisionArtifacts for compact generated artifact metadata, including generationEvidenceReport, without treating artifacts as editable CAD files.",
         "Return concise assistant messages that mention proposal, revision, validation warnings, and artifact state when applicable."
       ].join("\n")
     },

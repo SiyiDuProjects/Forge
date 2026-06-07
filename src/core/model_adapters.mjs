@@ -65,6 +65,59 @@ export class MockModelAdapter {
       };
     }
 
+    const draftSpecPatch = parseWorkspaceDraftSpecPatch(text);
+    if (draftSpecPatch) {
+      return {
+        ok: true,
+        finalMessage: "",
+        toolCalls: [toolCall("applyWorkspaceDescriptorDraftSpecs", {
+          workspaceId: contextPack.workspaceId || "",
+          draftId: draftSpecPatch.draftId,
+          specsText: draftSpecPatch.specsText,
+          baseComponentId: draftSpecPatch.baseComponentId,
+          markReviewable: draftSpecPatch.markReviewable
+        })]
+      };
+    }
+
+    const promotionDraftId = parseWorkspaceDraftPromotionId(text);
+    if (promotionDraftId) {
+      return {
+        ok: true,
+        finalMessage: "",
+        toolCalls: [toolCall("promoteWorkspaceComponentDescriptorDraft", {
+          workspaceId: contextPack.workspaceId || "",
+          draftId: promotionDraftId,
+          replaceExisting: parseDraftReplaceIntent(text)
+        })]
+      };
+    }
+
+    const inspectionDraftId = parseWorkspaceDraftInspectionId(text);
+    if (inspectionDraftId) {
+      return {
+        ok: true,
+        finalMessage: "",
+        toolCalls: [toolCall("inspectWorkspaceComponentDescriptorDrafts", {
+          workspaceId: contextPack.workspaceId || "",
+          draftId: inspectionDraftId
+        })]
+      };
+    }
+
+    const selectedComponentId = parseDescriptorSelectionId(text);
+    if (selectedComponentId) {
+      return {
+        ok: true,
+        finalMessage: "",
+        toolCalls: [toolCall("selectComponentDescriptor", {
+          workspaceId: contextPack.workspaceId || "",
+          componentId: selectedComponentId,
+          quantity: parseSelectionQuantity(text)
+        })]
+      };
+    }
+
     if (isCommitIntent(lower, text)) {
       const proposal = contextPack.openProposals?.[0];
       if (!proposal?.proposalId) {
@@ -357,6 +410,10 @@ function finalMessageForResults({ userMessage = "", toolResults = [] } = {}) {
   }
   const committed = summaries.find((summary) => summary.committed);
   const applied = summaries.find((summary) => summary.applied);
+  const specsApplied = summaries.find((summary) => summary.specsApplied);
+  const selected = summaries.find((summary) => summary.selected);
+  const promoted = summaries.find((summary) => summary.promoted);
+  const draftInspection = summaries.find((summary) => summary.draftInspection);
   const regenerated = summaries.find((summary) => summary.regenerated);
   const reverted = summaries.find((summary) => summary.reverted);
   const proposal = summaries.find((summary) => summary.proposalId);
@@ -366,6 +423,34 @@ function finalMessageForResults({ userMessage = "", toolResults = [] } = {}) {
       userMessage,
       `已通过 Forge action 创建新版本 ${applied.newRevisionId}；3D 模型仍需明确确认生成，未写入新的模型文件。`,
       `I created revision ${applied.newRevisionId} through Forge actions. 3D model generation still needs explicit confirmation, so no new model files were written.`
+    );
+  }
+  if (specsApplied) {
+    return localized(
+      userMessage,
+      `已把明确规格写入零件草稿 ${specsApplied.draftId}，抽取字段：${specsApplied.extractedFields.join(", ") || "无"}；readyForLibraryPromotion=${specsApplied.readyForLibraryPromotion ? "true" : "false"}。未修改 ProductPlan 版本，也未生成模型。`,
+      `I applied explicit specs to descriptor draft ${specsApplied.draftId}. Extracted fields: ${specsApplied.extractedFields.join(", ") || "none"}; readyForLibraryPromotion=${specsApplied.readyForLibraryPromotion ? "true" : "false"}. No ProductPlan revision was created and no model files were generated.`
+    );
+  }
+  if (selected) {
+    return localized(
+      userMessage,
+      `已选择零件 ${selected.componentId} 并创建新版本 ${selected.newRevisionId}；3D 模型仍需明确确认生成，未写入新的模型文件。`,
+      `I selected component ${selected.componentId} and created revision ${selected.newRevisionId}. 3D model generation still needs explicit confirmation, so no new model files were written.`
+    );
+  }
+  if (promoted) {
+    return localized(
+      userMessage,
+      `已将草稿 ${promoted.draftId} 提升为可选零件 ${promoted.componentId}；还没有选择到 ProductPlan 版本，也未生成 3D 模型。`,
+      `I promoted draft ${promoted.draftId} as selectable component ${promoted.componentId}. It has not been selected into a ProductPlan revision yet, and no 3D model files were generated.`
+    );
+  }
+  if (draftInspection) {
+    return localized(
+      userMessage,
+      `已检查零件草稿 ${draftInspection.draftId || "requested draft"}：${draftInspection.readyForPromotionCount}/${draftInspection.draftCount} 个可提升；未修改 ProductPlan，也未生成模型。`,
+      `I inspected descriptor draft ${draftInspection.draftId || "requested draft"}: ${draftInspection.readyForPromotionCount}/${draftInspection.draftCount} drafts are promotable. ProductPlan was not modified and no model files were generated.`
     );
   }
   if (committed) {
@@ -440,6 +525,96 @@ function parseRevertRevisionId(raw = "") {
   if (match) return match[1];
   const zhMatch = String(raw).match(/切回\s*([a-zA-Z0-9._-]*rev-[a-zA-Z0-9._-]+)/);
   return zhMatch?.[1] || "";
+}
+
+function parseDescriptorSelectionId(raw = "") {
+  const text = String(raw || "");
+  const patterns = [
+    /\b(?:use|select|choose|switch to|change to)\s+([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/i,
+    /(?:选择|选用|改用|使用|用)\s*([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return "";
+}
+
+function parseWorkspaceDraftSpecPatch(raw = "") {
+  const text = String(raw || "");
+  const id = "[a-z][a-z0-9]*(?:_[a-z0-9]+)+";
+  const patterns = [
+    new RegExp(`\\b(?:apply|fill|patch|update)\\s+(?:specs?\\s+)?(?:to\\s+)?(?:workspace\\s+)?(?:descriptor\\s+)?draft\\s+(${id})\\b`, "i"),
+    new RegExp(`\\b(?:apply|fill|patch|update)\\s+(${id})\\s+(?:workspace\\s+)?(?:descriptor\\s+)?draft\\s+(?:specs?|from\\s+specs?)\\b`, "i"),
+    new RegExp(`(?:填充|写入|更新)\\s*(?:规格|specs?)?\\s*(?:到|进)?\\s*(?:零件|descriptor)?\\s*(?:草稿|draft)\\s*(${id})\\b`, "i")
+  ];
+  let draftId = "";
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      draftId = match[1];
+      break;
+    }
+  }
+  if (!draftId) return null;
+  const specsText = text.includes(":")
+    ? text.slice(text.indexOf(":") + 1).trim()
+    : text;
+  const baseMatch = text.match(/\bbase(?:ComponentId| component)?\s*[:=]?\s*([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/i);
+  return {
+    draftId,
+    specsText,
+    baseComponentId: baseMatch?.[1] || "",
+    markReviewable: /\breviewable\b/i.test(text) || /可审核|可提升|已审核|reviewed/i.test(text)
+  };
+}
+
+function parseWorkspaceDraftInspectionId(raw = "") {
+  const text = String(raw || "");
+  const id = "[a-z][a-z0-9]*(?:_[a-z0-9]+)+";
+  const patterns = [
+    new RegExp(`\\b(?:inspect|check|scan|review)\\s+(?:workspace\\s+)?(?:descriptor\\s+)?draft\\s+(${id})\\b`, "i"),
+    new RegExp(`\\b(?:inspect|check|scan|review)\\s+(${id})\\s+(?:workspace\\s+)?(?:descriptor\\s+)?draft\\b`, "i"),
+    new RegExp(`(?:检查|扫描|查看|审核)\\s*(?:零件|descriptor)?\\s*(?:草稿|draft)\\s*(${id})\\b`, "i"),
+    new RegExp(`(${id})\\s*(?:零件)?(?:草稿|draft)\\s*(?:检查|扫描|查看|审核)`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return "";
+}
+
+function parseWorkspaceDraftPromotionId(raw = "") {
+  const text = String(raw || "");
+  const id = "[a-z][a-z0-9]*(?:_[a-z0-9]+)+";
+  const patterns = [
+    new RegExp(`\\b(?:promote|import)\\s+(?:workspace\\s+)?(?:descriptor\\s+)?draft\\s+(${id})\\b`, "i"),
+    new RegExp(`\\b(?:promote|import)\\s+(${id})\\s+(?:workspace\\s+)?(?:descriptor\\s+)?draft\\b`, "i"),
+    new RegExp(`\\badd\\s+(?:workspace\\s+)?(?:descriptor\\s+)?draft\\s+(${id})\\s+to\\s+(?:the\\s+)?(?:component\\s+)?library\\b`, "i"),
+    new RegExp(`(?:提升|导入|加入(?:零件库)?|放进(?:零件库)?)\\s*(?:零件|descriptor)?\\s*(?:草稿|draft)?\\s*(${id})\\b`, "i"),
+    new RegExp(`(${id})\\s*(?:零件)?(?:草稿|draft)\\s*(?:提升|导入|加入|放进)`, "i")
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return "";
+}
+
+function parseDraftReplaceIntent(raw = "") {
+  const text = String(raw || "");
+  return /\b(?:replace|replace-existing|overwrite|update)\b/i.test(text)
+    || /替换|覆盖|更新|重新提升/.test(text);
+}
+
+function parseSelectionQuantity(raw = "") {
+  const text = String(raw || "");
+  const explicit = text.match(/\b(?:quantity|qty|x)\s*[:=]?\s*(\d{1,2})\b/i)
+    || text.match(/(\d{1,2})\s*(?:pcs|pieces|buttons|button)\b/i)
+    || text.match(/(\d{1,2})\s*个/);
+  if (!explicit?.[1]) return 1;
+  return Math.max(1, Math.min(99, Number(explicit[1]) || 1));
 }
 
 function isUnsupported(lower, raw = "") {

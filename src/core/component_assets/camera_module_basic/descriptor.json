@@ -11,11 +11,17 @@
   "versioning": {
     "descriptorVersion": "0.2.0",
     "updated": "2026-06-04",
-    "compatibility": ["reference_build_001"]
+    "compatibility": [
+      "reference_build_001"
+    ]
   },
   "assetQuality": "mechanical_proxy",
   "validationStatus": "unverified_proxy",
-  "dimensionsMm": { "width": 16, "height": 14, "depth": 6 },
+  "dimensionsMm": {
+    "width": 16,
+    "height": 14,
+    "depth": 6
+  },
   "coordinateSystem": {
     "origin": "component_center",
     "units": "mm",
@@ -39,21 +45,39 @@
     {
       "id": "signal",
       "type": "fpc",
-      "positionLocalMm": [0, -7, -2],
+      "positionLocalMm": [
+        0,
+        -7,
+        -2
+      ],
       "orientation": "-y",
-      "mating": ["core_board_esp32_s3.gpio"]
+      "mating": [
+        "core_board_esp32_s3.gpio"
+      ]
     }
   ],
   "interfaces": [
-    { "id": "camera_signal", "connectorId": "signal", "signalType": "camera_fpc", "requiredClearanceMm": 5 }
+    {
+      "id": "camera_signal",
+      "connectorId": "signal",
+      "signalType": "camera_fpc",
+      "requiredClearanceMm": 5
+    }
   ],
   "externalFeatures": [
     {
       "id": "camera_window",
       "type": "camera_window",
       "face": "front",
-      "positionLocalMm": [0, 0, 3],
-      "openingSizeMm": [8, 8],
+      "positionLocalMm": [
+        0,
+        0,
+        3
+      ],
+      "openingSizeMm": [
+        8,
+        8
+      ],
       "privacyReviewRequired": true
     }
   ],
@@ -61,26 +85,48 @@
     {
       "id": "camera_field_of_view",
       "type": "optical_path",
-      "positionLocalMm": [0, 0, 8],
-      "sizeMm": [24, 24, 24]
+      "positionLocalMm": [
+        0,
+        0,
+        8
+      ],
+      "sizeMm": [
+        24,
+        24,
+        24
+      ]
     }
   ],
   "accessVolumes": [
     {
       "id": "camera_fpc_access",
+      "type": "fpc_service_access",
       "connectorId": "signal",
-      "positionLocalMm": [0, -12, -3],
-      "sizeMm": [18, 12, 8]
+      "positionLocalMm": [
+        0,
+        -12,
+        -3
+      ],
+      "sizeMm": [
+        18,
+        12,
+        8
+      ]
     }
   ],
   "cableExitDirections": [
-    { "connectorId": "signal", "direction": "-y_to_core_board" }
+    {
+      "connectorId": "signal",
+      "direction": "-y_to_core_board"
+    }
   ],
   "riskFlags": {
     "requiresManualValidation": true,
     "severity": "warning",
     "reason": "Camera placement requires human privacy and product-safety review.",
-    "warnings": ["Camera module is review-only in the standard MVP path."]
+    "warnings": [
+      "Camera module is review-only in the standard MVP path."
+    ]
   },
   "assetPaths": {
     "proxyVisualGlb": null,
@@ -92,5 +138,19 @@
     "summary": "Proxy camera module envelope for review-risk visualization.",
     "sourcesFile": "sources.md",
     "confidence": "proxy_seed"
+  },
+  "trustLevel": "proxy_seed",
+  "reviewStatus": "reviewable",
+  "sourceEvidence": {
+    "sourceType": "proxy_seed",
+    "sourceConfidence": "proxy_seed",
+    "measurementBasis": "descriptor_proxy_dimensions",
+    "lastReviewed": "2026-06-06",
+    "references": [
+      {
+        "kind": "local_source_note",
+        "path": "sources.md"
+      }
+    ]
   }
 }

@@ -1,15 +1,24 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerAsset } from "./assets.mjs";
 import { createComponentAssetManifest } from "./component_asset_manifest.mjs";
+import { createLayoutExplanationReport } from "./layout_explanation.mjs";
 import { selectComponents } from "./component_selection.mjs";
 import { generateLayout } from "./layout_engine.mjs";
 import { addProceduralProxyGeometry } from "./proxy_geometry_builder.mjs";
-import { validatePrototypeGeometry } from "./validation_engine.mjs";
+import {
+  MIN_PREVIEW_SOLID_THICKNESS_MM,
+  collectPreviewSolidDimensionErrors,
+  validatePrototypeGeometry
+} from "./validation_engine.mjs";
 import { productPlanFromSpecModules } from "./workspace_state.mjs";
 
 const modelRoot = fileURLToPath(new URL("../../data/models/", import.meta.url));
+const PREVIEW_SURFACE_THICKNESS_MM = 1.8;
+const PREVIEW_MARKER_THICKNESS_MM = 1.2;
+const ROUTE_PREVIEW_RADIUS_MM = 1.15;
 
 export function createGeometrySpec({ spec = {}, modules = [], riskReport = {}, productPlan: inputProductPlan = null } = {}) {
   const productPlan = inputProductPlan
@@ -26,6 +35,12 @@ export function createGeometrySpec({ spec = {}, modules = [], riskReport = {}, p
   const prototypeValidation = validatePrototypeGeometry({
     productPlan,
     componentSelection,
+    layout
+  });
+  const mechanicalConstraints = prototypeValidation.mechanicalConstraintReport;
+  const layoutExplanation = createLayoutExplanationReport({
+    productPlan,
+    componentDescriptors: componentSelection.componentDescriptors,
     layout
   });
   const screenSize = Number(productPlan.requirements?.displaySizeInches || spec.enclosure?.screen_size_in || 3.5);
@@ -106,7 +121,7 @@ export function createGeometrySpec({ spec = {}, modules = [], riskReport = {}, p
       disallowed: ["drag_parts", "edit_holes", "edit_geometry", "cad_export_for_user"],
       modificationPath: "conversation_revision_only"
     },
-    requiredArtifacts: ["component_descriptors", "component_asset_manifest", "glb", "stl", "step", "validation_report"],
+    requiredArtifacts: ["component_descriptors", "component_asset_manifest", "glb", "stl", "step", "validation_report", "generation_evidence_report"],
     productPlan,
     componentSelections: {
       selectedComponentIds: componentSelection.selectedComponentIds,
@@ -117,6 +132,8 @@ export function createGeometrySpec({ spec = {}, modules = [], riskReport = {}, p
     },
     componentDescriptors: componentSelection.componentDescriptors,
     componentAssetManifest,
+    mechanicalConstraints,
+    layoutExplanation,
     enclosure,
     modules: moduleGeometry,
     placements: moduleGeometry,
@@ -136,9 +153,12 @@ export function createGeometrySpec({ spec = {}, modules = [], riskReport = {}, p
         componentId: component.componentId,
         assetQuality: component.assetQuality,
         validationStatus: component.validationStatus,
+        trustLevel: component.mechanicalConstraints?.trustLevel || "unknown",
         resolvedPreviewType: component.preview.resolvedType,
         resolvedMechanicalType: component.mechanical.resolvedType
       })),
+      mechanicalConstraintSummary: mechanicalConstraints?.coverage || {},
+      layoutExplanationSummary: layoutExplanation?.coverage || {},
       directEditingAllowed: false
     },
     riskReport: {
@@ -161,6 +181,12 @@ export function validateGeometrySpec(geometrySpec = {}) {
   const modules = geometrySpec.modules || [];
   const enclosure = geometrySpec.enclosure || {};
   const dimensions = enclosure.dimensionsMm || {};
+  const previewSolidDimensionErrors = collectPreviewSolidDimensionErrors({
+    enclosure,
+    placements: geometrySpec.placements || modules,
+    features: geometrySpec.features || [],
+    routes: geometrySpec.routes || geometrySpec.cableRoutes || []
+  });
 
   for (const error of geometrySpec.validationErrors || []) {
     issues.push({
@@ -177,6 +203,21 @@ export function validateGeometrySpec(geometrySpec = {}) {
       code: warning.type || "geometry_warning",
       moduleId: warning.moduleId || "",
       message: warning.message || "Geometry requires human validation."
+    });
+  }
+
+  for (const error of previewSolidDimensionErrors) {
+    issues.push({
+      level: "block",
+      code: error.type || "preview_solid_dimension_error",
+      moduleId: error.moduleId || error.componentId || "",
+      componentId: error.componentId || "",
+      featureId: error.featureId || "",
+      routeId: error.routeId || "",
+      axis: error.axis || "",
+      actualMm: error.actualMm ?? null,
+      minimumMm: error.minimumMm ?? MIN_PREVIEW_SOLID_THICKNESS_MM,
+      message: error.message || "Preview geometry contains a zero-thickness or near-zero-thickness solid."
     });
   }
 
@@ -246,10 +287,17 @@ export function validateGeometrySpec(geometrySpec = {}) {
       "interface_markers",
       "descriptor_route_endpoints",
       "asset_quality_status",
+      "mechanical_constraints_report",
+      "mechanical_constraint_trust_status",
+      "layout_explanation_report",
+      "layout_explanation_coverage",
+      "preview_solid_dimensions",
       "semantic_shell_features",
       "shell_front_stl",
       "shell_back_stl"
     ],
+    mechanicalConstraints: geometrySpec.mechanicalConstraints || null,
+    layoutExplanation: geometrySpec.layoutExplanation || null,
     userEditingAllowed: false,
     note: blocked
       ? "No GLB/STL/STEP artifacts are emitted for blocked or incomplete geometry."
@@ -266,6 +314,7 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
     componentDescriptors: null,
     componentAssetManifest: null,
     validationReport: null,
+    generationEvidenceReport: null,
     designSummary: null,
     cadqueryScript: null,
     glb: null,
@@ -298,6 +347,7 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
   const componentDescriptorsPath = join(outputDir, "component_descriptors.json");
   const componentAssetManifestPath = join(outputDir, "component_asset_manifest.json");
   const validationPath = join(outputDir, "validation_report.json");
+  const generationEvidenceReportPath = join(outputDir, "generation_evidence_report.json");
   const designSummaryPath = join(outputDir, "design_summary.md");
   const cadQueryPath = join(outputDir, "generate_model.py");
   writeFileSync(productPlanPath, JSON.stringify(geometrySpec.productPlan || {}, null, 2));
@@ -361,6 +411,23 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
   };
 
   if (!validation.canGenerateArtifacts) {
+    const generationEvidence = createGenerationEvidenceReport({
+      artifactId,
+      status: "blocked",
+      provider: "cadquery_adapter_reserved",
+      targetProvider: "cadquery_open_cascade",
+      geometrySpec,
+      validation,
+      artifactAssets: assets,
+      generatedArtifactKeys: []
+    });
+    writeFileSync(generationEvidenceReportPath, JSON.stringify(generationEvidence, null, 2));
+    assets.generationEvidenceReport = artifactAsset({
+      type: "generation_evidence_report",
+      path: generationEvidenceReportPath,
+      url: `/data/models/${artifactId}/generation_evidence_report.json`,
+      caption: "Generation evidence report linking source inputs, validation, and generated artifact integrity"
+    });
     return {
       status: "blocked",
       provider: "cadquery_adapter_reserved",
@@ -372,6 +439,7 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
         componentDescriptors: assets.componentDescriptors,
         componentAssetManifest: assets.componentAssetManifest,
         validationReport: assets.validationReport,
+        generationEvidenceReport: assets.generationEvidenceReport,
         designSummary: assets.designSummary,
         cadqueryScript: assets.cadqueryScript,
         glb: null,
@@ -380,6 +448,7 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
         shellBack: null,
         step: null
       },
+      generationEvidence,
       validation
     };
   }
@@ -427,6 +496,23 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
     url: `/data/models/${artifactId}/model.step`,
     caption: "Internal STEP handoff target for engineering and SolidWorks review"
   });
+  const generationEvidence = createGenerationEvidenceReport({
+    artifactId,
+    status: "generated",
+    provider: "internal_parametric_v1",
+    targetProvider: "cadquery_open_cascade",
+    geometrySpec,
+    validation,
+    artifactAssets: assets,
+    generatedArtifactKeys: ["glb", "stl", "shellFront", "shellBack", "step"]
+  });
+  writeFileSync(generationEvidenceReportPath, JSON.stringify(generationEvidence, null, 2));
+  assets.generationEvidenceReport = artifactAsset({
+    type: "generation_evidence_report",
+    path: generationEvidenceReportPath,
+    url: `/data/models/${artifactId}/generation_evidence_report.json`,
+    caption: "Generation evidence report linking source inputs, validation, and generated artifact integrity"
+  });
 
   return {
     status: "generated",
@@ -434,6 +520,7 @@ export function generateModelArtifacts({ geometrySpec, planId = "", revisionId =
     targetProvider: "cadquery_open_cascade",
     artifactDir: outputDir,
     artifacts: assets,
+    generationEvidence,
     validation
   };
 }
@@ -719,6 +806,642 @@ function artifactAsset({ type, path, url, caption }) {
   });
 }
 
+function createGenerationEvidenceReport({
+  artifactId,
+  status,
+  provider,
+  targetProvider,
+  geometrySpec,
+  validation,
+  artifactAssets = {},
+  generatedArtifactKeys = []
+} = {}) {
+  const issueCounts = (validation.issues || []).reduce((counts, issue) => {
+    const level = issue.level || issue.severity || "info";
+    counts[level] = (counts[level] || 0) + 1;
+    return counts;
+  }, {});
+  const sourceArtifactKeys = [
+    "productPlan",
+    "geometrySpec",
+    "componentSelections",
+    "componentDescriptors"
+  ];
+  const evidenceArtifactKeys = [
+    "componentAssetManifest",
+    "validationReport",
+    "designSummary",
+    "cadqueryScript"
+  ];
+  const artifactIntegrity = Object.fromEntries(
+    [...sourceArtifactKeys, ...evidenceArtifactKeys, ...generatedArtifactKeys]
+      .filter((key, index, keys) => keys.indexOf(key) === index)
+      .map((key) => [key, artifactIntegrityForAsset(artifactAssets[key])])
+  );
+  const generatedArtifactsPresent = generatedArtifactKeys.length > 0
+    && generatedArtifactKeys.every((key) => artifactIntegrity[key]?.present);
+  const artifactAudit = auditGeneratedArtifacts({
+    status,
+    artifactAssets,
+    artifactIntegrity,
+    generatedArtifactKeys,
+    geometrySpec
+  });
+  return {
+    version: "generation_evidence_report_v1",
+    artifactId,
+    status,
+    provider,
+    targetProvider,
+    source: "product_plan_revision_and_geometry_spec",
+    sourceChain: [
+      "ProductPlan revision",
+      "ComponentDescriptor v2 selection",
+      "mechanical constraint report",
+      "layout explanation report",
+      "GeometrySpec validation",
+      "confirmed deterministic artifact writer"
+    ],
+    sourceOfTruth: {
+      productPlan: "product_plan.json",
+      geometrySpec: "geometry-spec.json",
+      componentSelections: "component_selections.json",
+      componentDescriptors: "component_descriptors.json",
+      generatedFromRawChat: false,
+      directEditingAllowed: false
+    },
+    productPlan: {
+      planId: geometrySpec.productPlan?.planId || "",
+      productName: geometrySpec.productPlan?.productName || geometrySpec.productPlan?.title || "",
+      productCategory: geometrySpec.productPlan?.productCategory || "",
+      revisionSource: geometrySpec.source || ""
+    },
+    geometry: {
+      version: geometrySpec.version,
+      units: geometrySpec.units,
+      coordinateSystem: geometrySpec.coordinateSystem,
+      requiredArtifacts: geometrySpec.requiredArtifacts || [],
+      placedModuleCount: geometrySpec.metadata?.placedModuleCount || 0,
+      featureCount: (geometrySpec.features || []).length,
+      routeCount: (geometrySpec.routes || geometrySpec.cableRoutes || []).length
+    },
+    descriptorEvidence: {
+      descriptorVersion: geometrySpec.metadata?.componentDescriptorVersion || "component_descriptor_v2",
+      selectedComponentIds: geometrySpec.componentSelections?.selectedComponentIds || [],
+      componentOrigins: componentOriginsForEvidence(geometrySpec.componentDescriptors || []),
+      assetQualitySummary: geometrySpec.metadata?.assetQualitySummary || [],
+      mechanicalConstraintCoverage: geometrySpec.mechanicalConstraints?.coverage || {},
+      componentAssetManifestCoverage: geometrySpec.componentAssetManifest?.mechanicalConstraintCoverage || {}
+    },
+    layoutEvidence: {
+      version: geometrySpec.layoutExplanation?.version || "",
+      coverage: geometrySpec.layoutExplanation?.coverage || {},
+      directEditingAllowed: geometrySpec.layoutExplanation?.directEditingAllowed === true
+    },
+    validation: {
+      status: validation.status || "",
+      canGenerateArtifacts: Boolean(validation.canGenerateArtifacts),
+      checks: validation.checks || [],
+      issueCounts
+    },
+    artifactGroups: {
+      sourceOfTruth: sourceArtifactKeys,
+      evidence: evidenceArtifactKeys,
+      generated: generatedArtifactKeys
+    },
+    artifactIntegrity,
+    artifactAudit,
+    generatedArtifactsPresent,
+    directEditingAllowed: false,
+    userFacingCadExport: false,
+    note: "This report links Forge source-of-truth inputs, descriptor/layout/validation evidence, and generated artifact file integrity. It is review evidence, not an editable CAD model."
+  };
+}
+
+function componentOriginsForEvidence(componentDescriptors = []) {
+  return componentDescriptors.map((descriptor) => ({
+    componentId: descriptor.id || descriptor.identity?.id || "",
+    descriptorPath: descriptor.descriptorPath || "",
+    sourcesPath: descriptor.sourcesPath || "",
+    libraryScope: descriptor.libraryScope || "",
+    sourceType: descriptor.librarySource?.type || descriptor.sourceEvidence?.sourceType || "",
+    workspaceDraft: descriptor.librarySource?.workspaceDraft
+      ? {
+        draftId: descriptor.librarySource.workspaceDraft.draftId || "",
+        packagePath: descriptor.librarySource.workspaceDraft.packagePath || "",
+        descriptorPath: descriptor.librarySource.workspaceDraft.descriptorPath || "",
+        sourcesPath: descriptor.librarySource.workspaceDraft.sourcesPath || "",
+        descriptorSha256: descriptor.librarySource.workspaceDraft.descriptorSha256 || "",
+        sourcesSha256: descriptor.librarySource.workspaceDraft.sourcesSha256 || "",
+        descriptorBytes: Number(descriptor.librarySource.workspaceDraft.descriptorBytes || 0),
+        sourcesBytes: Number(descriptor.librarySource.workspaceDraft.sourcesBytes || 0),
+        specPatch: compactSpecPatch(descriptor.librarySource.workspaceDraft.specPatch)
+      }
+      : null,
+    replacement: compactDescriptorReplacement(descriptor.libraryReplacement),
+    replacementHistory: compactDescriptorReplacementHistory(descriptor.libraryReplacementHistory)
+  })).filter((item) => item.componentId);
+}
+
+function compactDescriptorReplacement(replacement = null) {
+  if (!replacement) {
+    return {
+      replacedExisting: false,
+      replacementCount: 0,
+      directEditingAllowed: false
+    };
+  }
+  return {
+    replacedExisting: replacement.replacedExisting === true,
+    replacedAt: replacement.replacedAt || "",
+    replacementCount: Number(replacement.replacementCount || 0),
+    previous: compactDescriptorReplacementPrevious(replacement.previous),
+    directEditingAllowed: false
+  };
+}
+
+function compactDescriptorReplacementHistory(history = []) {
+  return Array.isArray(history)
+    ? history.map((item) => ({
+      replacedAt: item.replacedAt || "",
+      previous: compactDescriptorReplacementPrevious(item.previous),
+      directEditingAllowed: false
+    }))
+    : [];
+}
+
+function compactDescriptorReplacementPrevious(previous = null) {
+  if (!previous) return null;
+  return {
+    componentId: previous.componentId || "",
+    componentType: previous.componentType || "",
+    displayName: previous.displayName || "",
+    descriptorVersion: previous.descriptorVersion || "",
+    status: previous.status || "",
+    active: previous.active === true,
+    promotedAt: previous.promotedAt || "",
+    sourceType: previous.sourceType || "",
+    workspaceDraft: previous.workspaceDraft
+      ? {
+        draftId: previous.workspaceDraft.draftId || "",
+        packagePath: previous.workspaceDraft.packagePath || "",
+        descriptorPath: previous.workspaceDraft.descriptorPath || "",
+        sourcesPath: previous.workspaceDraft.sourcesPath || "",
+        descriptorSha256: previous.workspaceDraft.descriptorSha256 || "",
+        sourcesSha256: previous.workspaceDraft.sourcesSha256 || "",
+        descriptorBytes: Number(previous.workspaceDraft.descriptorBytes || 0),
+        sourcesBytes: Number(previous.workspaceDraft.sourcesBytes || 0),
+        specPatch: compactSpecPatch(previous.workspaceDraft.specPatch)
+      }
+      : null,
+    directEditingAllowed: false
+  };
+}
+
+function compactSpecPatch(specPatch = null) {
+  if (!specPatch) {
+    return {
+      applied: false
+    };
+  }
+  return {
+    applied: specPatch.applied === true,
+    eventId: specPatch.eventId || "",
+    timestamp: specPatch.timestamp || "",
+    draftId: specPatch.draftId || "",
+    componentId: specPatch.componentId || "",
+    componentType: specPatch.componentType || "",
+    baseComponentId: specPatch.baseComponentId || "",
+    specsSourcePath: specPatch.specsSourcePath || "",
+    extractedFields: Array.isArray(specPatch.extractedFields) ? [...specPatch.extractedFields] : [],
+    readyForLibraryPromotion: specPatch.readyForLibraryPromotion === true,
+    blockingIssueCount: Number(specPatch.blockingIssueCount || 0),
+    directGeometryMutationAllowed: false,
+    rawArtifactMutationAllowed: false
+  };
+}
+
+function artifactIntegrityForAsset(asset) {
+  if (!asset?.localPath) {
+    return {
+      present: false,
+      type: asset?.type || "",
+      url: asset?.url || "",
+      bytes: 0,
+      sha256: ""
+    };
+  }
+  try {
+    const buffer = readFileSync(asset.localPath);
+    const stats = statSync(asset.localPath);
+    return {
+      present: true,
+      type: asset.type || "",
+      url: asset.url || "",
+      bytes: stats.size,
+      sha256: createHash("sha256").update(buffer).digest("hex")
+    };
+  } catch {
+    return {
+      present: false,
+      type: asset.type || "",
+      url: asset.url || "",
+      bytes: 0,
+      sha256: ""
+    };
+  }
+}
+
+function auditGeneratedArtifacts({
+  status = "",
+  artifactAssets = {},
+  artifactIntegrity = {},
+  generatedArtifactKeys = [],
+  geometrySpec = {}
+} = {}) {
+  if (generatedArtifactKeys.length === 0) {
+    return {
+      version: "artifact_post_write_audit_v1",
+      status: status === "blocked" ? "not_required_blocked" : "not_required",
+      passed: status !== "generated",
+      generatedArtifactKeys: [],
+      checks: {},
+      findings: []
+    };
+  }
+
+  const checks = {};
+  for (const key of generatedArtifactKeys) {
+    if (key === "glb") checks[key] = auditGlbArtifact(artifactAssets[key], artifactIntegrity[key], geometrySpec);
+    else if (key === "stl" || key === "shellFront" || key === "shellBack") checks[key] = auditStlArtifact(artifactAssets[key], artifactIntegrity[key]);
+    else if (key === "step") checks[key] = auditStepArtifact(artifactAssets[key], artifactIntegrity[key]);
+    else checks[key] = auditGenericArtifact(artifactAssets[key], artifactIntegrity[key]);
+  }
+
+  const findings = Object.entries(checks).flatMap(([artifactKey, check]) => (
+    check.findings || []
+  ).map((finding) => ({ artifactKey, ...finding })));
+  const failed = findings.some((finding) => finding.level === "error")
+    || generatedArtifactKeys.some((key) => checks[key]?.passed !== true);
+  return {
+    version: "artifact_post_write_audit_v1",
+    status: failed ? "failed" : "passed",
+    passed: !failed,
+    generatedArtifactKeys: [...generatedArtifactKeys],
+    checks,
+    findings
+  };
+}
+
+function auditGenericArtifact(asset, integrity) {
+  const findings = [];
+  const base = baseArtifactAudit(asset, integrity, findings);
+  return {
+    ...base,
+    passed: findings.length === 0,
+    findings
+  };
+}
+
+function auditGlbArtifact(asset, integrity, geometrySpec) {
+  const findings = [];
+  const base = baseArtifactAudit(asset, integrity, findings);
+  const result = {
+    ...base,
+    format: {
+      glbMagic: false,
+      version: 0,
+      jsonChunkPresent: false,
+      binaryChunkPresent: false,
+      parsedJson: false
+    },
+    semanticNodePrefixes: {},
+    requiredNodePrefixes: requiredGlbNodePrefixes(geometrySpec),
+    linePrimitiveCount: 0,
+    vec3AccessorMissingBoundsCount: 0,
+    thinMeshPrimitiveCount: 0,
+    minimumMeshSpanMm: MIN_PREVIEW_SOLID_THICKNESS_MM,
+    meshPrimitiveCount: 0,
+    passed: false,
+    findings
+  };
+
+  if (!asset?.localPath) {
+    result.passed = false;
+    return result;
+  }
+
+  try {
+    const buffer = readFileSync(asset.localPath);
+    result.format.glbMagic = buffer.slice(0, 4).toString("utf8") === "glTF";
+    result.format.version = buffer.length >= 8 ? buffer.readUInt32LE(4) : 0;
+    const jsonLength = buffer.length >= 16 ? buffer.readUInt32LE(12) : 0;
+    const jsonType = buffer.length >= 20 ? buffer.readUInt32LE(16) : 0;
+    result.format.jsonChunkPresent = jsonType === 0x4e4f534a && jsonLength > 0;
+    if (!result.format.glbMagic) findings.push(errorFinding("glb_magic_missing", "GLB file does not start with glTF magic."));
+    if (result.format.version !== 2) findings.push(errorFinding("glb_version_invalid", "GLB file is not version 2."));
+    if (!result.format.jsonChunkPresent) findings.push(errorFinding("glb_json_missing", "GLB JSON chunk is missing."));
+    if (result.format.jsonChunkPresent) {
+      const jsonEnd = 20 + jsonLength;
+      const glbJson = JSON.parse(buffer.slice(20, jsonEnd).toString("utf8"));
+      result.format.parsedJson = true;
+      const nextChunkType = buffer.length >= jsonEnd + 8 ? buffer.readUInt32LE(jsonEnd + 4) : 0;
+      result.format.binaryChunkPresent = nextChunkType === 0x004e4942;
+      result.semanticNodePrefixes = countGlbNodePrefixes(glbJson);
+      result.linePrimitiveCount = countLinePrimitives(glbJson);
+      result.thinMeshPrimitiveCount = countThinMeshPrimitives(glbJson, MIN_PREVIEW_SOLID_THICKNESS_MM);
+      result.vec3AccessorMissingBoundsCount = (glbJson.accessors || [])
+        .filter((accessor) => accessor.type === "VEC3" && (!Array.isArray(accessor.min) || !Array.isArray(accessor.max)))
+        .length;
+      result.meshPrimitiveCount = (glbJson.meshes || [])
+        .reduce((count, mesh) => count + (mesh.primitives || []).length, 0);
+      for (const prefix of result.requiredNodePrefixes) {
+        if (!result.semanticNodePrefixes[prefix]) {
+          findings.push(errorFinding("glb_semantic_prefix_missing", `GLB is missing required semantic node prefix ${prefix}.`));
+        }
+      }
+      if (result.linePrimitiveCount > 0) {
+        findings.push(errorFinding("glb_line_primitives_present", "GLB preview must use non-zero-thickness meshes instead of GL_LINES."));
+      }
+      if (result.vec3AccessorMissingBoundsCount > 0) {
+        findings.push(errorFinding("glb_accessor_bounds_missing", "GLB VEC3 accessors must include min/max bounds for auditability."));
+      }
+      if (result.thinMeshPrimitiveCount > 0) {
+        findings.push(errorFinding("glb_thin_mesh_primitives_present", `GLB preview meshes must keep every visible axis at least ${MIN_PREVIEW_SOLID_THICKNESS_MM} mm thick.`));
+      }
+      if (result.meshPrimitiveCount === 0) {
+        findings.push(errorFinding("glb_meshes_missing", "GLB contains no mesh primitives."));
+      }
+    }
+  } catch (error) {
+    findings.push(errorFinding("glb_parse_failed", error instanceof Error ? error.message : "Could not parse GLB."));
+  }
+
+  result.passed = findings.every((finding) => finding.level !== "error");
+  return result;
+}
+
+function auditStlArtifact(asset, integrity) {
+  const findings = [];
+  const base = baseArtifactAudit(asset, integrity, findings);
+  const result = {
+    ...base,
+    format: {
+      startsWithSolid: false,
+      hasEndSolid: false,
+      facetCount: 0
+    },
+    geometry: {
+      vertexCount: 0,
+      degenerateFacetCount: 0,
+      bounds: null,
+      spanMm: null,
+      thinAxisCount: 0,
+      minimumSpanMm: MIN_PREVIEW_SOLID_THICKNESS_MM
+    },
+    passed: false,
+    findings
+  };
+  if (!asset?.localPath) {
+    result.passed = false;
+    return result;
+  }
+  try {
+    const text = readFileSync(asset.localPath, "utf8");
+    result.format.startsWithSolid = text.startsWith("solid ");
+    result.format.hasEndSolid = text.includes("endsolid ");
+    result.format.facetCount = (text.match(/facet normal/g) || []).length;
+    const geometryAudit = auditAsciiStlGeometry(text, MIN_PREVIEW_SOLID_THICKNESS_MM);
+    result.geometry = geometryAudit.geometry;
+    if (!result.format.startsWithSolid) findings.push(errorFinding("stl_solid_header_missing", "STL file is missing a solid header."));
+    if (!result.format.hasEndSolid) findings.push(errorFinding("stl_endsolid_missing", "STL file is missing an endsolid footer."));
+    if (result.format.facetCount <= 0) findings.push(errorFinding("stl_facets_missing", "STL file contains no facets."));
+    if (geometryAudit.geometry.vertexCount <= 0) findings.push(errorFinding("stl_vertices_missing", "STL file contains no parseable vertices."));
+    if (geometryAudit.geometry.degenerateFacetCount > 0) findings.push(errorFinding("stl_degenerate_facets_present", "STL file contains degenerate facets that suggest collapsed or zero-thickness geometry."));
+    if (geometryAudit.geometry.thinAxisCount > 0) findings.push(errorFinding("stl_thin_bounds_present", `STL shell artifact bounds must span at least ${MIN_PREVIEW_SOLID_THICKNESS_MM} mm on every axis.`));
+  } catch (error) {
+    findings.push(errorFinding("stl_read_failed", error instanceof Error ? error.message : "Could not read STL."));
+  }
+  result.passed = findings.every((finding) => finding.level !== "error");
+  return result;
+}
+
+function auditStepArtifact(asset, integrity) {
+  const findings = [];
+  const base = baseArtifactAudit(asset, integrity, findings);
+  const result = {
+    ...base,
+    format: {
+      hasStepHeader: false,
+      hasStepFooter: false,
+      hasShellDimensions: false,
+      hasModulePlacements: false,
+      hasComponentAssetManifest: false,
+      hasMechanicalConstraints: false,
+      hasLayoutExplanation: false
+    },
+    metadata: {
+      shellDimensionsMm: null,
+      shellDimensionsPositive: false,
+      directEditingBoundaryPresent: false
+    },
+    passed: false,
+    findings
+  };
+  if (!asset?.localPath) {
+    result.passed = false;
+    return result;
+  }
+  try {
+    const text = readFileSync(asset.localPath, "utf8");
+    result.format.hasStepHeader = text.includes("ISO-10303-21");
+    result.format.hasStepFooter = text.includes("END-ISO-10303-21");
+    result.format.hasShellDimensions = text.includes("shell_dimensions_mm");
+    result.format.hasModulePlacements = text.includes("module_placements");
+    result.format.hasComponentAssetManifest = text.includes("component_asset_manifest");
+    result.format.hasMechanicalConstraints = text.includes("mechanical_constraints");
+    result.format.hasLayoutExplanation = text.includes("layout_explanation");
+    result.metadata.shellDimensionsMm = parseStepShellDimensions(text);
+    result.metadata.shellDimensionsPositive = hasPositiveStepDimensions(result.metadata.shellDimensionsMm);
+    result.metadata.directEditingBoundaryPresent = text.includes("no direct geometry editing");
+    if (!result.format.hasStepHeader) findings.push(errorFinding("step_header_missing", "STEP handoff is missing ISO-10303-21 header."));
+    if (!result.format.hasStepFooter) findings.push(errorFinding("step_footer_missing", "STEP handoff is missing END-ISO-10303-21 footer."));
+    if (!result.format.hasShellDimensions) findings.push(errorFinding("step_shell_dimensions_missing", "STEP handoff is missing shell dimension metadata."));
+    if (!result.format.hasModulePlacements) findings.push(errorFinding("step_module_placements_missing", "STEP handoff is missing module placement metadata."));
+    if (!result.format.hasComponentAssetManifest) findings.push(errorFinding("step_component_asset_manifest_missing", "STEP handoff is missing component asset manifest metadata."));
+    if (!result.format.hasMechanicalConstraints) findings.push(errorFinding("step_mechanical_constraints_missing", "STEP handoff is missing mechanical constraint metadata."));
+    if (!result.format.hasLayoutExplanation) findings.push(errorFinding("step_layout_explanation_missing", "STEP handoff is missing layout explanation metadata."));
+    if (!result.metadata.shellDimensionsPositive) findings.push(errorFinding("step_shell_dimensions_invalid", "STEP handoff shell dimensions must be positive."));
+    if (!result.metadata.directEditingBoundaryPresent) findings.push(errorFinding("step_direct_editing_boundary_missing", "STEP handoff must preserve the no-direct-geometry-editing boundary."));
+  } catch (error) {
+    findings.push(errorFinding("step_read_failed", error instanceof Error ? error.message : "Could not read STEP."));
+  }
+  result.passed = findings.every((finding) => finding.level !== "error");
+  return result;
+}
+
+function auditAsciiStlGeometry(text = "", minimumSpanMm = MIN_PREVIEW_SOLID_THICKNESS_MM) {
+  const vertices = [];
+  const vertexPattern = /^\s*vertex\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)/gim;
+  let match;
+  while ((match = vertexPattern.exec(text))) {
+    vertices.push([
+      Number(match[1]),
+      Number(match[2]),
+      Number(match[3])
+    ]);
+  }
+  const bounds = boundsForVertices(vertices);
+  const spanMm = bounds
+    ? {
+      width: Number((bounds.max[0] - bounds.min[0]).toFixed(3)),
+      height: Number((bounds.max[1] - bounds.min[1]).toFixed(3)),
+      depth: Number((bounds.max[2] - bounds.min[2]).toFixed(3))
+    }
+    : null;
+  const thinAxisCount = spanMm
+    ? ["width", "height", "depth"].filter((axis) => Number(spanMm[axis]) < minimumSpanMm).length
+    : 0;
+  return {
+    geometry: {
+      vertexCount: vertices.length,
+      degenerateFacetCount: countDegenerateStlFacets(vertices),
+      bounds: bounds
+        ? {
+          min: bounds.min.map((value) => Number(value.toFixed(3))),
+          max: bounds.max.map((value) => Number(value.toFixed(3)))
+        }
+        : null,
+      spanMm,
+      thinAxisCount,
+      minimumSpanMm
+    }
+  };
+}
+
+function boundsForVertices(vertices = []) {
+  if (!vertices.length) return null;
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const vertex of vertices) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = Number(vertex[axis]);
+      min[axis] = Math.min(min[axis], value);
+      max[axis] = Math.max(max[axis], value);
+    }
+  }
+  return { min, max };
+}
+
+function countDegenerateStlFacets(vertices = []) {
+  let count = 0;
+  for (let index = 0; index < vertices.length; index += 3) {
+    const a = vertices[index];
+    const b = vertices[index + 1];
+    const c = vertices[index + 2];
+    if (!a || !b || !c || triangleArea(a, b, c) < 0.000001) count += 1;
+  }
+  return count;
+}
+
+function triangleArea(a, b, c) {
+  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const crossProduct = [
+    ab[1] * ac[2] - ab[2] * ac[1],
+    ab[2] * ac[0] - ab[0] * ac[2],
+    ab[0] * ac[1] - ab[1] * ac[0]
+  ];
+  return Math.hypot(crossProduct[0], crossProduct[1], crossProduct[2]) / 2;
+}
+
+function parseStepShellDimensions(text = "") {
+  const match = text.match(/CARTESIAN_POINT\('shell_dimensions_mm',\(([^,]+),([^,]+),([^)]+)\)\)/);
+  if (!match) return null;
+  return {
+    width: Number(match[1]),
+    height: Number(match[2]),
+    depth: Number(match[3])
+  };
+}
+
+function hasPositiveStepDimensions(dimensions = null) {
+  return Number(dimensions?.width) > 0
+    && Number(dimensions?.height) > 0
+    && Number(dimensions?.depth) > 0;
+}
+
+function baseArtifactAudit(asset, integrity = {}, findings = []) {
+  const present = Boolean(integrity?.present);
+  const bytes = Number(integrity?.bytes || 0);
+  const sha256 = String(integrity?.sha256 || "");
+  if (!present) findings.push(errorFinding("artifact_missing", "Artifact file is missing."));
+  if (present && bytes <= 0) findings.push(errorFinding("artifact_empty", "Artifact file is empty."));
+  if (present && !/^[a-f0-9]{64}$/.test(sha256)) {
+    findings.push(errorFinding("artifact_sha256_invalid", "Artifact SHA-256 hash is missing or invalid."));
+  }
+  return {
+    present,
+    type: asset?.type || integrity?.type || "",
+    bytes,
+    sha256,
+    sha256Recorded: /^[a-f0-9]{64}$/.test(sha256),
+    directEditingAllowed: false
+  };
+}
+
+function requiredGlbNodePrefixes(geometrySpec = {}) {
+  const prefixes = ["shell.", "module.", "feature.", "interface."];
+  if ((geometrySpec.routes || geometrySpec.cableRoutes || []).length > 0) prefixes.push("route.");
+  return prefixes;
+}
+
+function countGlbNodePrefixes(glbJson = {}) {
+  const prefixes = ["shell.", "module.", "feature.", "interface.", "route."];
+  const counts = Object.fromEntries(prefixes.map((prefix) => [prefix, 0]));
+  for (const node of glbJson.nodes || []) {
+    for (const prefix of prefixes) {
+      if (String(node.name || "").startsWith(prefix)) counts[prefix] += 1;
+    }
+  }
+  return counts;
+}
+
+function countLinePrimitives(glbJson = {}) {
+  let count = 0;
+  for (const mesh of glbJson.meshes || []) {
+    for (const primitive of mesh.primitives || []) {
+      if ((primitive.mode ?? 4) === 1) count += 1;
+    }
+  }
+  return count;
+}
+
+function countThinMeshPrimitives(glbJson = {}, minimumSpanMm = MIN_PREVIEW_SOLID_THICKNESS_MM) {
+  let count = 0;
+  for (const mesh of glbJson.meshes || []) {
+    for (const primitive of mesh.primitives || []) {
+      if ((primitive.mode ?? 4) !== 4) continue;
+      const accessor = glbJson.accessors?.[primitive.attributes?.POSITION];
+      if (!Array.isArray(accessor?.min) || !Array.isArray(accessor?.max)) continue;
+      const thin = accessor.max.some((max, index) => {
+        const spanMm = (Number(max) - Number(accessor.min[index])) * 100;
+        return spanMm < minimumSpanMm;
+      });
+      if (thin) count += 1;
+    }
+  }
+  return count;
+}
+
+function errorFinding(code, message) {
+  return {
+    level: "error",
+    code,
+    message
+  };
+}
+
 function safeFileName(value) {
   return String(value || "model").replace(/[^a-zA-Z0-9._-]/g, "_");
 }
@@ -770,15 +1493,13 @@ function createGlb(geometrySpec) {
     const points = route.pathMm || (route.pointsMm || []).map((point) => [point.x, point.y, point.z]);
     if (points.length < 2) continue;
     const routeName = route.id || `route.${safeNodeName(route.connectorId)}`;
-    builder.addLineNode({
-      name: routeName,
-      pointsMm: points,
-      material: 8,
-      extras: {
-        routeType: route.routeType || "coarse_internal_path",
-        type: route.type || "signal",
-        editable: false
-      }
+    builder.addEmptyNode(routeName, {
+      pointCount: points.length,
+      visiblePreview: "thick_route_segments",
+      routeType: route.routeType || "coarse_internal_path",
+      type: route.type || "signal",
+      editable: false,
+      directEditingAllowed: false
     });
     addRoutePreviewGeometry(builder, routeName, points, route);
   }
@@ -805,6 +1526,8 @@ function createGlb(geometrySpec) {
       placedModuleCount: placedModules.length,
       riskModuleIds,
       componentAssetManifest: geometrySpec.componentAssetManifest,
+      mechanicalConstraintCoverage: geometrySpec.mechanicalConstraints?.coverage || {},
+      layoutExplanationCoverage: geometrySpec.layoutExplanation?.coverage || {},
       moduleNodeNames: placedModules.map((module) => `module.${safeNodeName(module.moduleId)}`),
       featureNodeNames: (geometrySpec.features || []).map((feature) => feature.id),
       directEditingAllowed: false
@@ -834,6 +1557,17 @@ function createGltfBuilder() {
       const geometry = cylinderGeometry(radiusMm, heightMm, segments);
       return this.addTriangleNode({ name, geometry, centerMm, material, extras });
     },
+    addTubeNode({ name, startMm, endMm, radiusMm, material = 8, extras = {}, segments = 12 }) {
+      const start = pointArrayToObject(startMm);
+      const end = pointArrayToObject(endMm);
+      const centerMm = {
+        x: (start.x + end.x) / 2,
+        y: (start.y + end.y) / 2,
+        z: (start.z + end.z) / 2
+      };
+      const geometry = tubeGeometryBetween(start, end, radiusMm, segments);
+      return this.addTriangleNode({ name, geometry, centerMm, material, extras });
+    },
     addTriangleNode({ name, geometry, centerMm = { x: 0, y: 0, z: 0 }, material = 0, extras = {} }) {
       const positionAccessor = this.addPositionAccessor(geometry.positions);
       const indexAccessor = this.addIndexAccessor(geometry.indices);
@@ -853,22 +1587,6 @@ function createGltfBuilder() {
         translation: mmVector(centerMm),
         extras
       });
-      this.binary = Buffer.concat(chunks);
-      return this.nodes.length - 1;
-    },
-    addLineNode({ name, pointsMm, material = 8, extras = {} }) {
-      const positions = pointsMm.flatMap((point) => Array.isArray(point) ? point.map((value) => Number(value) / 100) : mmVector(point));
-      const positionAccessor = this.addPositionAccessor(positions);
-      const meshIndex = this.meshes.length;
-      this.meshes.push({
-        name: `${name}.mesh`,
-        primitives: [{
-          attributes: { POSITION: positionAccessor },
-          material,
-          mode: 1
-        }]
-      });
-      this.nodes.push({ name, mesh: meshIndex, extras });
       this.binary = Buffer.concat(chunks);
       return this.nodes.length - 1;
     },
@@ -1013,75 +1731,194 @@ function addShellPreviewGeometry(builder, geometrySpec) {
     material: 0,
     extras: { role: "bottom_side_wall" }
   });
+  addShellJoinOverlapGeometry(builder, geometrySpec);
+}
+
+function addShellJoinOverlapGeometry(builder, geometrySpec) {
+  const dimensions = geometrySpec.enclosure.dimensionsMm;
+  const wall = Number(geometrySpec.enclosure.wallThicknessMm || 2.4);
+  const halfZ = dimensions.depth / 2;
+  const lipDepth = Math.max(4, wall * 1.7);
+  const lipWidth = Math.max(1.6, wall * 0.72);
+  const rearLipZ = -halfZ + wall + lipDepth / 2;
+  const frontSeatDepth = Math.max(PREVIEW_SURFACE_THICKNESS_MM, wall * 0.9);
+  const frontSeatZ = halfZ - wall - frontSeatDepth / 2;
+  const railHeight = Math.max(1, dimensions.height - wall * 4);
+  const railWidth = Math.max(1, dimensions.width - wall * 4);
+
+  builder.addEmptyNode("shell.join.front_back_overlap", {
+    role: "front_back_shell_overlap",
+    overlapDepthMm: lipDepth,
+    clearanceMm: geometrySpec.enclosure.manufacturing?.clearanceMm ?? 0.5,
+    directEditingAllowed: false
+  });
+  [
+    {
+      name: "left",
+      sizeMm: { width: lipWidth, height: railHeight, depth: lipDepth },
+      centerMm: { x: -dimensions.width / 2 + wall + lipWidth / 2, y: 0, z: rearLipZ }
+    },
+    {
+      name: "right",
+      sizeMm: { width: lipWidth, height: railHeight, depth: lipDepth },
+      centerMm: { x: dimensions.width / 2 - wall - lipWidth / 2, y: 0, z: rearLipZ }
+    },
+    {
+      name: "top",
+      sizeMm: { width: railWidth, height: lipWidth, depth: lipDepth },
+      centerMm: { x: 0, y: dimensions.height / 2 - wall - lipWidth / 2, z: rearLipZ }
+    },
+    {
+      name: "bottom",
+      sizeMm: { width: railWidth, height: lipWidth, depth: lipDepth },
+      centerMm: { x: 0, y: -dimensions.height / 2 + wall + lipWidth / 2, z: rearLipZ }
+    }
+  ].forEach((lip) => {
+    builder.addBoxNode({
+      name: `shell.join.lip.${lip.name}`,
+      sizeMm: lip.sizeMm,
+      centerMm: lip.centerMm,
+      material: 0,
+      extras: {
+        role: "rear_tray_overlap_lip",
+        overlapDepthMm: lipDepth,
+        directEditingAllowed: false
+      }
+    });
+  });
+  [
+    {
+      name: "left",
+      sizeMm: { width: lipWidth, height: railHeight, depth: frontSeatDepth },
+      centerMm: { x: -dimensions.width / 2 + wall + lipWidth / 2, y: 0, z: frontSeatZ }
+    },
+    {
+      name: "right",
+      sizeMm: { width: lipWidth, height: railHeight, depth: frontSeatDepth },
+      centerMm: { x: dimensions.width / 2 - wall - lipWidth / 2, y: 0, z: frontSeatZ }
+    },
+    {
+      name: "top",
+      sizeMm: { width: railWidth, height: lipWidth, depth: frontSeatDepth },
+      centerMm: { x: 0, y: dimensions.height / 2 - wall - lipWidth / 2, z: frontSeatZ }
+    },
+    {
+      name: "bottom",
+      sizeMm: { width: railWidth, height: lipWidth, depth: frontSeatDepth },
+      centerMm: { x: 0, y: -dimensions.height / 2 + wall + lipWidth / 2, z: frontSeatZ }
+    }
+  ].forEach((seat) => {
+    builder.addBoxNode({
+      name: `shell.join.front_seat.${seat.name}`,
+      sizeMm: seat.sizeMm,
+      centerMm: seat.centerMm,
+      material: 11,
+      extras: {
+        role: "front_shell_overlap_seat",
+        overlapDepthMm: frontSeatDepth,
+        directEditingAllowed: false
+      }
+    });
+  });
 }
 
 function addFeaturePreviewGeometry(builder, geometrySpec) {
   for (const feature of geometrySpec.features || []) {
     const position = pointArrayToObject(feature.positionMm || [0, 0, 0]);
     if (feature.type === "screen_opening") {
-      builder.addBoxNode({
+      addFaceBoxNode(builder, {
         name: "feature.opening.screen",
-        sizeMm: { width: feature.sizeMm[0], height: feature.sizeMm[1], depth: 0.8 },
-        centerMm: { ...position, z: Number(position.z || 0) + 0.45 },
+        face: feature.face,
+        position,
+        sizeMm: { width: feature.sizeMm[0], height: feature.sizeMm[1] },
+        thicknessMm: PREVIEW_SURFACE_THICKNESS_MM,
         material: 12,
         extras: featureExtras(feature)
       });
       continue;
     }
+    if (feature.type === "captured_panel_retention") {
+      addScreenRetentionFrame(builder, geometrySpec, feature);
+      continue;
+    }
     if (feature.type === "usb_cutout") {
-      builder.addBoxNode({
+      addFaceBoxNode(builder, {
         name: "feature.opening.usb_c",
-        sizeMm: { width: feature.sizeMm[0] + 3, height: feature.sizeMm[1] + 3, depth: 1.2 },
-        centerMm: { ...position, z: Number(position.z || 0) - 0.7 },
+        face: feature.face,
+        position,
+        sizeMm: { width: feature.sizeMm[0] + 3, height: feature.sizeMm[1] + 3 },
+        thicknessMm: PREVIEW_SURFACE_THICKNESS_MM,
         material: 7,
         extras: featureExtras(feature)
       });
+      addUsbInsertionClearance(builder, geometrySpec, feature);
       continue;
     }
     if (feature.type === "sensor_window") {
-      builder.addCylinderNode({
+      addFaceCylinderNode(builder, {
         name: "feature.opening.ambient_sensor",
-        radiusMm: 3.8,
-        heightMm: 1.2,
-        centerMm: { ...position, z: Number(position.z || 0) + 0.7 },
+        face: feature.face,
+        position,
+        radiusMm: Math.max(Number(feature.sizeMm?.[0] || 6), Number(feature.sizeMm?.[1] || 4)) / 2,
+        thicknessMm: PREVIEW_SURFACE_THICKNESS_MM,
         material: 9,
         extras: featureExtras(feature)
       });
       continue;
     }
     if (feature.type === "camera_window") {
-      builder.addCylinderNode({
+      addFaceCylinderNode(builder, {
         name: "feature.opening.camera",
-        radiusMm: 5,
-        heightMm: 1.2,
-        centerMm: { ...position, z: Number(position.z || 0) + 0.7 },
+        face: feature.face,
+        position,
+        radiusMm: Math.max(Number(feature.sizeMm?.[0] || 8), Number(feature.sizeMm?.[1] || 8)) / 2,
+        thicknessMm: PREVIEW_SURFACE_THICKNESS_MM,
         material: 4,
         extras: featureExtras(feature)
       });
       continue;
     }
+    if (feature.type === "optical_window_retention") {
+      addOpticalWindowRetention(builder, feature);
+      continue;
+    }
     if (feature.type === "speaker_vents") {
       const ventCount = Number(feature.ventCount || 5);
+      const ventWidthMm = Number(feature.sizeMm?.[0] || 24);
+      const ventHeightMm = Number(feature.sizeMm?.[1] || 12);
+      const slotWidthMm = Math.max(1.5, Math.min(3, ventWidthMm / Math.max(ventCount * 2, 1)));
+      const spacingMm = ventCount > 1 ? ventWidthMm / (ventCount - 1) : 0;
       for (let index = 0; index < ventCount; index += 1) {
-        builder.addBoxNode({
+        addFaceBoxNode(builder, {
           name: `feature.opening.speaker_vents.${index + 1}`,
-          sizeMm: { width: 2, height: 10, depth: 1.2 },
-          centerMm: { x: position.x - 8 + index * 4, y: position.y, z: position.z - 0.7 },
+          face: feature.face,
+          position: offsetPointOnFace(position, feature.face, -ventWidthMm / 2 + index * spacingMm, 0),
+          sizeMm: { width: slotWidthMm, height: ventHeightMm },
+          thicknessMm: PREVIEW_SURFACE_THICKNESS_MM,
           material: 12,
           extras: featureExtras(feature)
         });
       }
       continue;
     }
+    if (feature.type === "grille_mount_retention") {
+      addGrilleMountRetention(builder, feature);
+      continue;
+    }
     if (feature.type === "button_hole") {
-      builder.addCylinderNode({
+      addFaceCylinderNode(builder, {
         name: feature.id,
+        face: feature.face,
+        position,
         radiusMm: Number(feature.sizeMm?.[0] || 6) / 2,
-        heightMm: 1.4,
-        centerMm: position,
+        thicknessMm: PREVIEW_SURFACE_THICKNESS_MM,
         material: 7,
         extras: featureExtras(feature)
       });
+      continue;
+    }
+    if (feature.type === "panel_button_retention") {
+      addPanelButtonRetention(builder, feature);
       continue;
     }
     if (feature.type === "decorative_cat_ear") {
@@ -1095,42 +1932,452 @@ function addFeaturePreviewGeometry(builder, geometrySpec) {
       continue;
     }
     if (feature.type === "standoff") {
+      const heightMm = Number(feature.heightMm || 8);
       builder.addCylinderNode({
         name: feature.id,
         radiusMm: Number(feature.outerDiameterMm || 5) / 2,
-        heightMm: Number(feature.heightMm || 8),
+        heightMm,
         centerMm: {
           x: position.x,
           y: position.y,
-          z: position.z + Number(feature.heightMm || 8) / 2
+          z: position.z + heightMm / 2
         },
         material: 11,
         extras: featureExtras(feature)
       });
       builder.addCylinderNode({
-        name: `${feature.id}.screw_marker`,
-        radiusMm: Number(feature.holeDiameterMm || 2.4) / 2,
-        heightMm: 0.8,
+        name: `${feature.id}.board_contact`,
+        radiusMm: Number(feature.outerDiameterMm || 5) / 2 + 0.6,
+        heightMm: PREVIEW_MARKER_THICKNESS_MM,
         centerMm: {
           x: position.x,
           y: position.y,
-          z: position.z + Number(feature.heightMm || 8) + 0.45
+          z: position.z + heightMm + PREVIEW_MARKER_THICKNESS_MM / 2
+        },
+        material: 11,
+        extras: { ...featureExtras(feature), role: "pcb_standoff_board_contact" }
+      });
+      builder.addCylinderNode({
+        name: `${feature.id}.screw_marker`,
+        radiusMm: Number(feature.holeDiameterMm || 2.4) / 2,
+        heightMm: PREVIEW_MARKER_THICKNESS_MM,
+        centerMm: {
+          x: position.x,
+          y: position.y,
+          z: position.z + heightMm + PREVIEW_MARKER_THICKNESS_MM * 1.5
         },
         material: 14,
         extras: { ...featureExtras(feature), role: "screw_marker" }
       });
       continue;
     }
+    if (feature.type === "edge_capture_retention") {
+      addEdgeCaptureRetention(builder, geometrySpec, feature);
+      continue;
+    }
     if (feature.type === "battery_bay") {
-      builder.addBoxNode({
-        name: "feature.battery_bay",
-        sizeMm: { width: feature.sizeMm[0], height: feature.sizeMm[1], depth: 1.2 },
-        centerMm: position,
-        material: 12,
-        extras: featureExtras(feature)
-      });
+      addBatteryReviewBay(builder, feature);
+      continue;
     }
   }
+}
+
+function addEdgeCaptureRetention(builder, geometrySpec, feature) {
+  const position = pointArrayToObject(feature.positionMm || [0, 0, 0]);
+  const module = findPlacedModule(geometrySpec, (item) => {
+    const componentId = item.componentId || item.moduleId;
+    return componentId === feature.targetComponentId || componentId === feature.targetModuleId;
+  });
+  const dimensions = module?.dimensionsMm || {};
+  const width = Number(feature.sizeMm?.[0] || dimensions.width || 14);
+  const height = Number(feature.sizeMm?.[1] || dimensions.height || 9);
+  const depth = Number(feature.depthMm || dimensions.depth || 7);
+  const lip = Number(feature.retentionLipMm || 1.2);
+  const railDepth = Math.max(PREVIEW_SURFACE_THICKNESS_MM, depth + lip);
+  const extras = {
+    ...featureExtras(feature),
+    role: "edge_capture_retention_lip",
+    mountingMethod: feature.mountingMethod || "edge_capture",
+    retentionLipMm: lip,
+    directEditingAllowed: false
+  };
+  [
+    {
+      name: "left",
+      sizeMm: { width: lip, height: height + lip * 2, depth: railDepth },
+      centerMm: { x: position.x - width / 2 - lip / 2, y: position.y, z: position.z }
+    },
+    {
+      name: "right",
+      sizeMm: { width: lip, height: height + lip * 2, depth: railDepth },
+      centerMm: { x: position.x + width / 2 + lip / 2, y: position.y, z: position.z }
+    },
+    {
+      name: "top",
+      sizeMm: { width: width + lip * 2, height: lip, depth: railDepth },
+      centerMm: { x: position.x, y: position.y + height / 2 + lip / 2, z: position.z }
+    },
+    {
+      name: "bottom",
+      sizeMm: { width: width + lip * 2, height: lip, depth: railDepth },
+      centerMm: { x: position.x, y: position.y - height / 2 - lip / 2, z: position.z }
+    }
+  ].forEach((rail) => {
+    builder.addBoxNode({
+      name: `feature.retention.${safeNodeName(feature.targetComponentId || feature.targetModuleId || "component")}_edge_capture.${rail.name}`,
+      sizeMm: rail.sizeMm,
+      centerMm: rail.centerMm,
+      material: 11,
+      extras
+    });
+  });
+}
+
+function addGrilleMountRetention(builder, feature) {
+  addFaceRetentionRails(builder, feature, {
+    nodeBaseName: `feature.retention.${safeNodeName(feature.targetComponentId || feature.targetModuleId || "speaker")}_grille_mount`,
+    width: Number(feature.sizeMm?.[0] || 24),
+    height: Number(feature.sizeMm?.[1] || 12),
+    railWidth: Number(feature.rimWidthMm || 1.8),
+    depth: Number(feature.depthMm || 4),
+    material: 11,
+    extras: {
+      ...featureExtras(feature),
+      role: "speaker_grille_mount_rim",
+      mountingMethod: feature.mountingMethod || "grille_mount",
+      rimWidthMm: feature.rimWidthMm,
+      directEditingAllowed: false
+    }
+  });
+}
+
+function addPanelButtonRetention(builder, feature) {
+  addFaceRetentionRails(builder, feature, {
+    nodeBaseName: `feature.retention.${safeNodeName(feature.targetInstanceLabel || feature.id || "button")}_panel_button`,
+    width: Number(feature.sizeMm?.[0] || 6),
+    height: Number(feature.sizeMm?.[1] || 6),
+    railWidth: Number(feature.collarWidthMm || 1.2),
+    depth: Number(feature.depthMm || feature.buttonTravelMm || 5),
+    material: 11,
+    extras: {
+      ...featureExtras(feature),
+      role: "panel_button_retention_collar",
+      mountingMethod: feature.mountingMethod || "panel_button",
+      collarWidthMm: feature.collarWidthMm,
+      buttonTravelMm: feature.buttonTravelMm,
+      directEditingAllowed: false
+    }
+  });
+}
+
+function addOpticalWindowRetention(builder, feature) {
+  addFaceRetentionRails(builder, feature, {
+    nodeBaseName: `feature.retention.${safeNodeName(feature.targetComponentId || feature.targetModuleId || "optical")}_${safeNodeName(feature.mountingMethod || "front_window")}`,
+    width: Number(feature.sizeMm?.[0] || 8),
+    height: Number(feature.sizeMm?.[1] || 8),
+    railWidth: Number(feature.rimWidthMm || 1.2),
+    depth: Number(feature.depthMm || 3),
+    material: feature.reviewOnly ? 4 : 11,
+    extras: {
+      ...featureExtras(feature),
+      role: "optical_window_retention_frame",
+      mountingMethod: feature.mountingMethod || "front_window",
+      visibilityConeDeg: feature.visibilityConeDeg,
+      privacyReviewRequired: Boolean(feature.privacyReviewRequired),
+      reviewOnly: Boolean(feature.reviewOnly),
+      humanReviewRequired: Boolean(feature.humanReviewRequired),
+      rimWidthMm: feature.rimWidthMm,
+      directEditingAllowed: false
+    }
+  });
+}
+
+function addBatteryReviewBay(builder, feature) {
+  const position = pointArrayToObject(feature.positionMm || [0, 0, 0]);
+  const width = Number(feature.sizeMm?.[0] || 64);
+  const height = Number(feature.sizeMm?.[1] || 42);
+  const lip = Math.max(1.8, Number(feature.retentionLipMm || 1.8));
+  const depth = Math.max(PREVIEW_SURFACE_THICKNESS_MM, Number(feature.depthMm || 8));
+  const extras = {
+    ...featureExtras(feature),
+    role: "review_only_battery_bay",
+    mountingMethod: feature.mountingMethod || "review_only_retained_bay",
+    reviewOnly: true,
+    humanReviewRequired: true,
+    retentionLipMm: lip,
+    bayClearanceMm: feature.bayClearanceMm,
+    directEditingAllowed: false
+  };
+  builder.addBoxNode({
+    name: "feature.battery_bay",
+    sizeMm: { width, height, depth: PREVIEW_SURFACE_THICKNESS_MM },
+    centerMm: position,
+    material: 12,
+    extras: {
+      ...extras,
+      role: "review_only_battery_bay_base"
+    }
+  });
+  addFaceRetentionRails(builder, feature, {
+    nodeBaseName: "feature.battery_bay.rail",
+    width,
+    height,
+    railWidth: lip,
+    depth,
+    material: 11,
+    extras: {
+      ...extras,
+      role: "review_only_battery_bay_retention_lip"
+    }
+  });
+}
+
+function addFaceRetentionRails(builder, feature, { nodeBaseName, width, height, railWidth, depth, material, extras }) {
+  const position = pointArrayToObject(feature.positionMm || [0, 0, 0]);
+  const rail = Math.max(1.2, Number(railWidth || 1.2));
+  const thicknessMm = Math.max(PREVIEW_SURFACE_THICKNESS_MM, Number(depth || PREVIEW_SURFACE_THICKNESS_MM));
+  [
+    {
+      name: "left",
+      offsetHorizontalMm: -width / 2 - rail / 2,
+      offsetVerticalMm: 0,
+      sizeMm: { width: rail, height: height + rail * 2 }
+    },
+    {
+      name: "right",
+      offsetHorizontalMm: width / 2 + rail / 2,
+      offsetVerticalMm: 0,
+      sizeMm: { width: rail, height: height + rail * 2 }
+    },
+    {
+      name: "top",
+      offsetHorizontalMm: 0,
+      offsetVerticalMm: height / 2 + rail / 2,
+      sizeMm: { width: width + rail * 2, height: rail }
+    },
+    {
+      name: "bottom",
+      offsetHorizontalMm: 0,
+      offsetVerticalMm: -height / 2 - rail / 2,
+      sizeMm: { width: width + rail * 2, height: rail }
+    }
+  ].forEach((item) => {
+    addFaceBoxNode(builder, {
+      name: `${nodeBaseName}.${item.name}`,
+      face: feature.face,
+      position: offsetPointOnFace(position, feature.face, item.offsetHorizontalMm, item.offsetVerticalMm),
+      sizeMm: item.sizeMm,
+      thicknessMm,
+      material,
+      extras
+    });
+  });
+}
+
+function addScreenRetentionFrame(builder, geometrySpec, feature) {
+  const display = findPlacedModule(geometrySpec, (module) => {
+    const componentId = module.componentId || module.moduleId;
+    return componentId === feature.targetComponentId || module.category === "Display" || module.descriptorCategory === "display";
+  });
+  if (!display?.dimensionsMm) return;
+  const position = pointArrayToObject(display.placement?.positionMm || display.positionMm || [0, 0, 0]);
+  const dimensions = display.dimensionsMm;
+  const descriptor = findComponentDescriptor(geometrySpec, display.componentId || display.moduleId);
+  const bezelMm = Number(feature.bezelMm || descriptor?.mechanicalProxy?.bezelMm || 4);
+  const retainerWidth = Number(feature.retainerWidthMm || Math.max(1.8, bezelMm * 0.55));
+  const retainerDepth = Math.max(PREVIEW_SURFACE_THICKNESS_MM, Number(geometrySpec.enclosure.wallThicknessMm || 2.4) * 0.75);
+  const z = Number(position.z || 0) - Number(dimensions.depth || 4) / 2 - retainerDepth / 2;
+  const outerWidth = Number(dimensions.width || 1) + retainerWidth * 2;
+  const outerHeight = Number(dimensions.height || 1) + retainerWidth * 2;
+  [
+    {
+      name: "top",
+      sizeMm: { width: outerWidth, height: retainerWidth, depth: retainerDepth },
+      centerMm: { x: position.x, y: Number(position.y || 0) + Number(dimensions.height || 1) / 2 + retainerWidth / 2, z }
+    },
+    {
+      name: "bottom",
+      sizeMm: { width: outerWidth, height: retainerWidth, depth: retainerDepth },
+      centerMm: { x: position.x, y: Number(position.y || 0) - Number(dimensions.height || 1) / 2 - retainerWidth / 2, z }
+    },
+    {
+      name: "left",
+      sizeMm: { width: retainerWidth, height: Number(dimensions.height || 1), depth: retainerDepth },
+      centerMm: { x: Number(position.x || 0) - Number(dimensions.width || 1) / 2 - retainerWidth / 2, y: position.y, z }
+    },
+    {
+      name: "right",
+      sizeMm: { width: retainerWidth, height: Number(dimensions.height || 1), depth: retainerDepth },
+      centerMm: { x: Number(position.x || 0) + Number(dimensions.width || 1) / 2 + retainerWidth / 2, y: position.y, z }
+    }
+  ].forEach((rail) => {
+    builder.addBoxNode({
+      name: `feature.retention.screen.${rail.name}`,
+      sizeMm: rail.sizeMm,
+      centerMm: rail.centerMm,
+      material: 11,
+      extras: {
+        ...featureExtras(feature),
+        role: "screen_retention_frame",
+        mountingMethod: feature.mountingMethod || descriptor?.mechanicalProxy?.mountingMethod || "captured_panel",
+        bezelMm,
+        retainerWidthMm: retainerWidth,
+        directEditingAllowed: false
+      }
+    });
+  });
+}
+
+function addUsbInsertionClearance(builder, geometrySpec, feature) {
+  const position = pointArrayToObject(feature.positionMm || [0, 0, 0]);
+  const descriptor = findComponentDescriptor(geometrySpec, feature.targetComponentId || feature.targetModuleId || "usb_c_breakout");
+  const descriptorFeature = (descriptor?.externalFeatures || []).find((item) => {
+    return item.id === feature.targetFeatureId || item.type === "usb_cutout";
+  });
+  const insertionClearanceMm = Number(descriptorFeature?.insertionClearanceMm || 8);
+  addFaceBoxNode(builder, {
+    name: "feature.clearance.usb_c_plug_access",
+    face: feature.face,
+    position,
+    sizeMm: {
+      width: Number(feature.sizeMm?.[0] || descriptorFeature?.openingSizeMm?.[0] || 11) + 7,
+      height: Number(feature.sizeMm?.[1] || descriptorFeature?.openingSizeMm?.[1] || 5) + 7
+    },
+    thicknessMm: insertionClearanceMm + PREVIEW_SURFACE_THICKNESS_MM,
+    material: 15,
+    extras: {
+      ...featureExtras(feature),
+      role: "usb_c_plug_insertion_clearance",
+      clearanceType: "external_plug_insertion",
+      insertionClearanceMm,
+      directEditingAllowed: false
+    }
+  });
+}
+
+function findPlacedModule(geometrySpec, predicate) {
+  return (geometrySpec.modules || geometrySpec.placements || []).find(predicate);
+}
+
+function findComponentDescriptor(geometrySpec, componentId) {
+  return (geometrySpec.componentDescriptors || []).find((descriptor) => descriptor.id === componentId);
+}
+
+function addFaceBoxNode(builder, {
+  name,
+  face = "front",
+  position,
+  sizeMm,
+  thicknessMm = PREVIEW_SURFACE_THICKNESS_MM,
+  material,
+  extras = {}
+}) {
+  const normal = faceNormal(face);
+  const centerMm = offsetPoint(position, normal, thicknessMm / 2);
+  builder.addBoxNode({
+    name,
+    sizeMm: faceBoxSize(face, sizeMm, thicknessMm),
+    centerMm,
+    material,
+    extras: {
+      ...extras,
+      previewThicknessMm: thicknessMm,
+      previewNormal: normalFace(face)
+    }
+  });
+}
+
+function addFaceCylinderNode(builder, {
+  name,
+  face = "front",
+  position,
+  radiusMm,
+  thicknessMm = PREVIEW_SURFACE_THICKNESS_MM,
+  material,
+  extras = {}
+}) {
+  const normal = faceNormal(face);
+  const center = offsetPoint(position, normal, thicknessMm / 2);
+  builder.addTubeNode({
+    name,
+    startMm: offsetPoint(center, normal, -thicknessMm / 2),
+    endMm: offsetPoint(center, normal, thicknessMm / 2),
+    radiusMm,
+    material,
+    extras: {
+      ...extras,
+      previewThicknessMm: thicknessMm,
+      previewNormal: normalFace(face)
+    },
+    segments: 18
+  });
+}
+
+function faceBoxSize(face, sizeMm = {}, thicknessMm = PREVIEW_SURFACE_THICKNESS_MM) {
+  const width = Number(sizeMm.width || sizeMm[0] || 1);
+  const height = Number(sizeMm.height || sizeMm[1] || 1);
+  const normalized = normalFace(face);
+  if (normalized === "left" || normalized === "right") {
+    return { width: thicknessMm, height, depth: width };
+  }
+  if (normalized === "top" || normalized === "bottom") {
+    return { width, height: thicknessMm, depth: height };
+  }
+  return { width, height, depth: thicknessMm };
+}
+
+function offsetPointOnFace(position, face = "front", horizontalMm = 0, verticalMm = 0) {
+  const normalized = normalFace(face);
+  if (normalized === "left" || normalized === "right") {
+    return {
+      ...position,
+      y: Number(position.y || 0) + verticalMm,
+      z: Number(position.z || 0) + horizontalMm
+    };
+  }
+  if (normalized === "top" || normalized === "bottom") {
+    return {
+      ...position,
+      x: Number(position.x || 0) + horizontalMm,
+      z: Number(position.z || 0) + verticalMm
+    };
+  }
+  return {
+    ...position,
+    x: Number(position.x || 0) + horizontalMm,
+    y: Number(position.y || 0) + verticalMm
+  };
+}
+
+function faceNormal(face = "front") {
+  const map = {
+    front: { x: 0, y: 0, z: 1 },
+    back: { x: 0, y: 0, z: -1 },
+    left: { x: -1, y: 0, z: 0 },
+    right: { x: 1, y: 0, z: 0 },
+    top: { x: 0, y: 1, z: 0 },
+    bottom: { x: 0, y: -1, z: 0 }
+  };
+  return map[normalFace(face)] || map.front;
+}
+
+function normalFace(face = "front") {
+  const value = String(face || "front");
+  if (value.startsWith("front")) return "front";
+  if (value.startsWith("back") || value.includes("internal_back")) return "back";
+  if (value === "left" || value.startsWith("left_") || value.endsWith("_left")) return "left";
+  if (value === "right" || value.startsWith("right_") || value.endsWith("_right")) return "right";
+  if (value === "top" || value.startsWith("top_")) return "top";
+  if (value === "bottom" || value.startsWith("bottom_")) return "bottom";
+  return "front";
+}
+
+function offsetPoint(point = {}, normal = { x: 0, y: 0, z: 1 }, distanceMm = 0) {
+  return {
+    x: Number(point.x || 0) + normal.x * distanceMm,
+    y: Number(point.y || 0) + normal.y * distanceMm,
+    z: Number(point.z || 0) + normal.z * distanceMm
+  };
 }
 
 function addModulePreviewGeometry(builder, module) {
@@ -1302,11 +2549,12 @@ function addInterfacePreviewGeometry(builder, geometrySpec, placedModules) {
 }
 
 function addRoutePreviewGeometry(builder, routeName, points, route) {
+  const radiusMm = route.type === "power" ? ROUTE_PREVIEW_RADIUS_MM * 1.25 : ROUTE_PREVIEW_RADIUS_MM;
   points.forEach((point, index) => {
-    builder.addCylinderNode({
+    const diameterMm = radiusMm * 2;
+    builder.addBoxNode({
       name: `${routeName}.node.${index + 1}`,
-      radiusMm: route.type === "power" ? 1.9 : 1.35,
-      heightMm: 1.2,
+      sizeMm: { width: diameterMm, height: diameterMm, depth: diameterMm },
       centerMm: pointArrayToObject(point),
       material: 8,
       extras: {
@@ -1317,20 +2565,11 @@ function addRoutePreviewGeometry(builder, routeName, points, route) {
     });
   });
   for (let index = 0; index < points.length - 1; index += 1) {
-    const start = pointArrayToObject(points[index]);
-    const end = pointArrayToObject(points[index + 1]);
-    builder.addBoxNode({
+    builder.addTubeNode({
       name: `${routeName}.segment.${index + 1}`,
-      sizeMm: {
-        width: Math.max(Math.abs(end.x - start.x), 2.2),
-        height: Math.max(Math.abs(end.y - start.y), 2.2),
-        depth: Math.max(Math.abs(end.z - start.z), route.type === "power" ? 2.4 : 1.8)
-      },
-      centerMm: {
-        x: (start.x + end.x) / 2,
-        y: (start.y + end.y) / 2,
-        z: (start.z + end.z) / 2
-      },
+      startMm: points[index],
+      endMm: points[index + 1],
+      radiusMm,
       material: 8,
       extras: {
         routeType: route.routeType || "coarse_internal_path",
@@ -1398,6 +2637,89 @@ function cylinderGeometry(radiusMm = 2.5, heightMm = 6, segments = 16) {
     indices.push(bottom, nextBottom, nextTop, bottom, nextTop, top);
   }
   return { positions, indices };
+}
+
+function tubeGeometryBetween(startMm, endMm, radiusMm = 1.2, segments = 12) {
+  const start = pointArrayToObject(startMm);
+  const end = pointArrayToObject(endMm);
+  const axisMm = {
+    x: end.x - start.x,
+    y: end.y - start.y,
+    z: end.z - start.z
+  };
+  const lengthMm = Math.hypot(axisMm.x, axisMm.y, axisMm.z);
+  if (lengthMm < 0.001) {
+    return cylinderGeometry(radiusMm, radiusMm * 2, segments);
+  }
+  const axis = {
+    x: axisMm.x / lengthMm,
+    y: axisMm.y / lengthMm,
+    z: axisMm.z / lengthMm
+  };
+  const reference = Math.abs(axis.z) < 0.9 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
+  const radialA = normalizeVector(cross(axis, reference));
+  const radialB = normalizeVector(cross(axis, radialA));
+  const radius = Number(radiusMm || 1.2) / 100;
+  const bottomCenter = scaleVector(axis, -lengthMm / 200);
+  const topCenter = scaleVector(axis, lengthMm / 200);
+  const positions = [bottomCenter.x, bottomCenter.y, bottomCenter.z, topCenter.x, topCenter.y, topCenter.z];
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (Math.PI * 2 * index) / segments;
+    const radial = addVector(scaleVector(radialA, Math.cos(angle) * radius), scaleVector(radialB, Math.sin(angle) * radius));
+    positions.push(
+      bottomCenter.x + radial.x,
+      bottomCenter.y + radial.y,
+      bottomCenter.z + radial.z,
+      topCenter.x + radial.x,
+      topCenter.y + radial.y,
+      topCenter.z + radial.z
+    );
+  }
+  const indices = [];
+  for (let index = 0; index < segments; index += 1) {
+    const next = (index + 1) % segments;
+    const bottom = 2 + index * 2;
+    const top = bottom + 1;
+    const nextBottom = 2 + next * 2;
+    const nextTop = nextBottom + 1;
+    indices.push(0, bottom, nextBottom);
+    indices.push(1, nextTop, top);
+    indices.push(bottom, top, nextTop, bottom, nextTop, nextBottom);
+  }
+  return { positions, indices };
+}
+
+function cross(a, b) {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x
+  };
+}
+
+function normalizeVector(vector) {
+  const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+    z: vector.z / length
+  };
+}
+
+function scaleVector(vector, amount) {
+  return {
+    x: vector.x * amount,
+    y: vector.y * amount,
+    z: vector.z * amount
+  };
+}
+
+function addVector(a, b) {
+  return {
+    x: a.x + b.x,
+    y: a.y + b.y,
+    z: a.z + b.z
+  };
 }
 
 function vectorMinMax(values) {
@@ -1492,7 +2814,8 @@ function glbMaterials(finish) {
     material("standoff_plastic", [0.78, 0.73, 0.64, 1]),
     material("opening_marker", [0.05, 0.05, 0.045, 0.78], "BLEND"),
     material("battery_review", [0.86, 0.62, 0.22, 1]),
-    material("screw_marker", [0.12, 0.12, 0.12, 1])
+    material("screw_marker", [0.12, 0.12, 0.12, 1]),
+    material("clearance_volume", [0.35, 0.64, 0.92, 0.28], "BLEND")
   ];
 }
 
@@ -1516,6 +2839,8 @@ function createDesignSummary(geometrySpec, validation) {
   const productPlan = geometrySpec.productPlan || {};
   const selected = geometrySpec.componentDescriptors || [];
   const modules = selected.map((descriptor) => `- ${descriptor.displayName}`).join("\n");
+  const mechanicalCoverage = geometrySpec.mechanicalConstraints?.coverage || {};
+  const layoutCoverage = geometrySpec.layoutExplanation?.coverage || {};
   const warningLines = (validation.issues || [])
     .filter((issue) => issue.level === "warn")
     .map((issue) => `- ${issue.message}`)
@@ -1538,6 +2863,7 @@ ${modules || "- No components selected"}
 - USB-C interface exposed through the rear cutout
 - Sensor/camera/speaker/battery modules appear only when selected
 - Simple visual cable routes show semantic connections
+- Layout explanation evidence records why placements, shell features, and cable routes were selected.
 
 ## Generated Artifacts
 - component_descriptors.json
@@ -1554,6 +2880,23 @@ ${modules || "- No components selected"}
 - Component bodies, connectors, keepouts, access volumes, openings, and standoffs are generated from ComponentDescriptor v2 proxy data.
 - Asset quality and validation status are preserved in GeometrySpec and component_asset_manifest.json.
 - This is not production ready until the selected real components and their supplier mechanical assets are reviewed.
+
+## Mechanical Constraint Evidence
+- Constraint report: ${geometrySpec.mechanicalConstraints?.version || "not_available"}
+- Components covered: ${mechanicalCoverage.componentCount ?? 0}
+- Connectors covered: ${mechanicalCoverage.connectorCount ?? 0}
+- External features covered: ${mechanicalCoverage.externalFeatureCount ?? 0}
+- Keepout/access volumes covered: ${(mechanicalCoverage.keepoutVolumeCount ?? 0) + (mechanicalCoverage.accessVolumeCount ?? 0)}
+- Vendor asset components: ${mechanicalCoverage.vendorAssetCount ?? 0}
+- Proxy components requiring review: ${mechanicalCoverage.unverifiedProxyCount ?? 0}
+
+## Layout Explanation Evidence
+- Layout report: ${geometrySpec.layoutExplanation?.version || "not_available"}
+- Placements explained: ${layoutCoverage.explainedPlacementCount ?? 0}/${layoutCoverage.placementCount ?? 0}
+- Features explained: ${layoutCoverage.explainedFeatureCount ?? 0}/${layoutCoverage.featureCount ?? 0}
+- Routes explained: ${layoutCoverage.explainedRouteCount ?? 0}/${layoutCoverage.routeCount ?? 0}
+- Descriptor-driven shell features: ${layoutCoverage.descriptorDrivenFeatureCount ?? 0}
+- Preference-driven placements: ${layoutCoverage.preferenceDrivenPlacementCount ?? 0}
 
 ## Warnings
 ${warningLines || "- Prototype preview. Electrical, mechanical, thermal, and safety validation are required before real manufacturing."}
@@ -1729,6 +3072,8 @@ endsolid forge_standard_shell
 function createStepHandoff(geometrySpec) {
   const dimensions = geometrySpec.enclosure.dimensionsMm;
   const moduleNames = geometrySpec.modules.map((module) => module.name).join(", ");
+  const constraintCoverage = geometrySpec.mechanicalConstraints?.coverage || {};
+  const layoutCoverage = geometrySpec.layoutExplanation?.coverage || {};
   const assetSummary = (geometrySpec.componentAssetManifest?.components || [])
     .map((component) => `${component.componentId}:${component.assetQuality}/${component.validationStatus}/${component.preview.resolvedType}`)
     .join("; ");
@@ -1752,6 +3097,8 @@ DATA;
 #50 = PROPERTY_DEFINITION('solidworks_role','internal STEP handoff target',#20);
 #60 = PROPERTY_DEFINITION('module_placements','${stepString(placementSummary)}',#20);
 #70 = PROPERTY_DEFINITION('component_asset_manifest','${stepString(assetSummary)}',#20);
+#80 = PROPERTY_DEFINITION('mechanical_constraints','${stepString(JSON.stringify(constraintCoverage))}',#20);
+#90 = PROPERTY_DEFINITION('layout_explanation','${stepString(JSON.stringify(layoutCoverage))}',#20);
 ENDSEC;
 END-ISO-10303-21;
 `;

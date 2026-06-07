@@ -20,6 +20,874 @@ Use this as the lightweight routing layer for Forge work. It should point to the
 
 ## Work Blocks
 
+### 2026-06-07 - 3D Descriptor Mounting Hole Envelope Gate V3 P48
+
+- Scope: add a descriptor package readiness gate for mounting-hole diameters that exceed the descriptor body planar envelope. `componentPackageReport` now emits `descriptor_mounting_hole_exceeds_body_envelope` when `mountingHoles[].diameterMm` is larger than the smaller of `dimensionsMm.width` and `dimensionsMm.height`. This keeps normal PCB standoff holes valid while blocking schema-valid but mechanically impossible drafts, such as a 52 x 30 x 8 mm core board with a 40 mm mounting hole, before ProductPlan selection or GLB/STL/STEP generation.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-mounting-hole-envelope-gate-v3-p48.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, mountingHoles, diameterMm, descriptor_mounting_hole_exceeds_body_envelope, standoffs, no fake model output.
+- Verification: targeted `node --test tests/forge_actions.test.mjs` passes with 15 tests, including a schema-valid core-board draft whose first mounting hole diameter is `40 mm` and is blocked from promotion.
+- Boundary: this is a prototype mounting-anchor plausibility gate, not production tolerance validation. It does not parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-07 - 3D Descriptor Local Position Gate V3 P47
+
+- Scope: add a descriptor package readiness gate for connector, mounting-hole, and external-feature local positions that are implausibly outside the descriptor body envelope. `componentPackageReport` now emits `descriptor_local_position_outside_body_envelope` when those anchor points exceed the body half-extent plus a 2.5 mm review allowance. Keepout and access-volume positions are intentionally not covered by this gate because they can legitimately extend outside the part body as optical paths, service volumes, plug insertion clearance, or wire access space.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-local-position-gate-v3-p47.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, positionLocalMm, connectors, mountingHoles, externalFeatures, descriptor_local_position_outside_body_envelope, no fake model output.
+- Verification: targeted `node --test tests/forge_actions.test.mjs` passes with 14 tests, including a schema-valid button draft whose connector is at `x=100 mm` and is blocked from promotion.
+- Boundary: this is a prototype descriptor-anchor plausibility gate, not production tolerance validation. It does not constrain keepout/access-volume positions, parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-07 - 3D Descriptor Opening Envelope Gate V3 P46
+
+- Scope: add a descriptor package readiness gate for external openings that are implausibly larger than the component body envelope. The gate keeps existing display/speaker bezel or grille allowances valid by comparing `externalFeatures[].openingSizeMm` against the descriptor body's maximum axis plus an 8 mm review allowance, but blocks source specs such as a 10 x 10 x 6 mm button declaring a 40 x 40 mm opening. Oversized openings produce `descriptor_external_opening_exceeds_body_envelope`, keep `readyForLibraryPromotion: false`, and make `descriptor-promote` fail before ProductPlan selection or GLB/STL/STEP generation.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-opening-envelope-gate-v3-p46.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, externalFeatures, openingSizeMm, opening envelope, descriptor_external_opening_exceeds_body_envelope, descriptor-specs, source-specs.md, no fake model output.
+- Verification: targeted `node --test tests/project_workspace.test.mjs` passes with 21 tests, including a 40 x 40 mm opening on a 10 x 10 x 6 mm workspace spec-file button that is recorded as source material but blocked from promotion.
+- Boundary: this is a prototype preview plausibility gate, not production tolerance validation; it does not reject every opening larger than the component body because display bezels and grille features need controlled allowance. It does not parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-07 - 3D Descriptor Thin Dimension Gate V3 P45
+
+- Scope: move zero/near-zero solid dimension blocking earlier into descriptor package readiness. `componentPackageReport` now adds `descriptor_preview_solid_dimension_too_thin` blocking issues when descriptor body dimensions, external opening sizes, keepout volumes, or access volumes fall below the shared `MIN_PREVIEW_SOLID_THICKNESS_MM` threshold used by GeometrySpec preview validation. Workspace spec-file intake can still record the source text into a draft package, but thin dimensions keep `readyForLibraryPromotion: false`, make `descriptor-promote` fail, and prevent later selection/generation.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-thin-dimension-gate-v3-p45.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, zero thickness, near-zero thickness, MIN_PREVIEW_SOLID_THICKNESS_MM, descriptor_preview_solid_dimension_too_thin, descriptor-specs, source-specs.md, no fake model output.
+- Verification: targeted `node --test tests/project_workspace.test.mjs` passes with 21 tests, including a `0.5 mm` spec-file descriptor that remains a draft source record but is blocked from promotion.
+- Boundary: this is a prototype preview geometry gate, not production tolerance validation; it does not parse arbitrary PDFs, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-07 - 3D Descriptor Spec Context Boundary V3 P44
+
+- Scope: lock the runtime-context boundary for workspace-local descriptor spec files. `ContextPack.exclusions` now explicitly lists raw descriptor source/spec text, and `generationEvidenceSummary.descriptorEvidence.componentOrigins` is built through a whitelist compactor rather than directly copying the persisted evidence object. The spec-file flow continues to carry only compact metadata such as `specsSourcePath`, extracted field names, hashes, byte counts, readiness, and artifact audit summaries. Regression coverage uses a unique raw source sentinel in `component-drafts/<draftId>/source-specs.md` and confirms it remains in local source files but is absent from ContextPack, prompt sections, `revision_ledger.json`, and `generation_evidence_report.json`; it also injects a raw field into the persisted generation evidence report to prove ContextPack does not forward future accidental raw-origin fields.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-spec-context-boundary-v3-p44.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/prompt_sections.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, ContextPack, prompt sections, descriptor spec files, raw descriptor source/spec text, source-specs.md, generation_evidence_report, no raw spec text.
+- Verification: targeted `node --test tests/project_workspace.test.mjs` passes with 21 tests, including a future-leak guard that injects raw origin text into `generation_evidence_report.json` and confirms ContextPack/prompt still exclude it.
+- Boundary: this does not hide or delete raw source notes; parse arbitrary PDFs into trusted geometry; promote drafts automatically; select descriptors automatically; create ProductPlan revisions; mutate GeometrySpec directly; write GLB/STL/STEP artifacts; validate electrical design; claim production readiness; or enable CAD/model editing.
+
+### 2026-06-07 - 3D Workspace Draft Guard V3 P43
+
+- Scope: tighten guarded-file detection around workspace descriptor draft packages. `component-drafts/<draftId>/descriptor.json` and `component-drafts/<draftId>/sources.md` are now guarded canonical draft package files, so direct writes are reported as `GUARD_VIOLATION`. `component_descriptor_draft_scaffolded` authorizes the initial scaffold writes and `component_descriptor_draft_specs_applied` authorizes controlled spec-patch writes. Raw source notes such as `component-drafts/<draftId>/source-specs.md` remain writable source material so Codex/humans can place specs before applying them through `forge-tool descriptor-specs --specs-file`. Codex-runtime regression coverage verifies that direct canonical draft package rewrites are rejected during project-bound Codex turns.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-workspace-draft-guard-v3-p43.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/guarded_files.mjs`
+  - `src/core/project_workspace.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, guarded files, component-drafts, descriptor.json, sources.md, source-specs.md, component_descriptor_draft_scaffolded, component_descriptor_draft_specs_applied, no direct ProductPlan mutation.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes with 21 tests. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 30 tests, including the Codex runtime guarded draft package write rejection. Full `npm run check` passes with 98 tests.
+- Boundary: this does not prevent raw source-note capture; make draft descriptors trusted; promote drafts automatically; select descriptors automatically; create ProductPlan revisions; mutate GeometrySpec directly; write GLB/STL/STEP artifacts; validate electrical design; claim production readiness; or enable CAD/model editing.
+
+### 2026-06-07 - 3D Workspace Draft Spec File V3 P42
+
+- Scope: make workspace-local source spec notes a first-class input to the descriptor draft spec patch path. `forge-tool descriptor-specs` now supports kebab-case `--specs-file`, rejects files outside the Forge project workspace, reads the file into the existing `applyWorkspaceDescriptorDraftSpecs` action, and passes only a safe workspace-relative `specsSourcePath` as compact metadata. The action appends that source path to `sources.md`, returns it, records it in `component_descriptor_draft_specs_applied`, and downstream compact `specPatch` summaries carry it through draft scans, ProductPlan component-library source metadata, ContextPack, `revision_ledger.json`, and `generation_evidence_report.json` component origins. Regression coverage now proves the spec-file descriptor can continue through CLI promotion, CLI descriptor selection, CLI confirmed generation, CLI artifact retrieval, and a Codex-runtime forge-tool workflow without direct ProductPlan or GeometrySpec mutation.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-workspace-draft-spec-file-v3-p42.md`
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `scripts/forge-tool.mjs`
+  - `src/core/forge_actions.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/workspace_draft_integrity.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/tool_registry.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft specs, specs-file, specsSourcePath, component-drafts, source-specs.md, no arbitrary file read, no ProductPlan revision, no artifact generation.
+- Verification: targeted syntax checks pass for changed code/test files. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes with 19 tests, including the full CLI `--specs-file -> descriptor-promote -> descriptor-select -> generate -> artifacts` path and direct `generation_evidence_report.json` source-path verification. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 29 tests, including a Codex runtime `forge-tool` spec-file onboarding flow. Full `npm run check` passes with 95 tests.
+- Boundary: this does not parse arbitrary PDFs into trusted geometry; grant backend file-read access; read files outside the project workspace; promote drafts automatically; select descriptors automatically; create ProductPlan revisions; mutate GeometrySpec directly; write GLB/STL/STEP artifacts; validate electrical design; claim production readiness; or enable CAD/model editing.
+
+### 2026-06-07 - 3D Workspace Draft Spec Patch Evidence V3 P41
+
+- Scope: propagate compact `specPatch` metadata from controlled workspace draft spec patches through the trusted generation evidence chain. `workspaceDraftReport` now summarizes the latest `component_descriptor_draft_specs_applied` event for each draft; promotion stores that summary under `source.workspaceDraft.specPatch`; `workspaceDraftIntegritySnapshot`, ContextPack component-library summaries, `revision_ledger.json`, and `generation_evidence_report.json` component origins carry the same compact metadata. The metadata includes event id, timestamp, extracted field names, readiness, and blocking issue count, but not raw spec text.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-workspace-draft-spec-patch-evidence-v3-p41.md`
+- Main docs: `README.md`, `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/workspace_draft_integrity.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/query_engine.test.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft specs, specPatch, component_descriptor_draft_specs_applied, ContextPack, revision ledger, generation_evidence_report, componentOrigins, no raw spec text.
+- Verification: targeted `node --check` for changed code/test files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 28 tests. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes with 19 tests. Full `npm run check` passes with 94 tests.
+- Boundary: this does not expose raw spec text in ContextPack, revision ledger, or generation evidence; promote drafts automatically; select descriptors automatically; create ProductPlan revisions; mutate GeometrySpec directly; write GLB/STL/STEP artifacts; validate electrical design; claim production readiness; or enable CAD/model editing.
+
+### 2026-06-07 - 3D Workspace Draft Spec Patch V3 P40
+
+- Scope: add a narrow controlled path from explicit source-spec text into an existing workspace `component-drafts/<draftId>/` package. `applyWorkspaceDescriptorDraftSpecs` writes supported fields into `descriptor.json`, appends raw source text to `sources.md`, returns extracted fields plus updated draft readiness, and records `component_descriptor_draft_specs_applied`. It is exposed through Tool Protocol metadata, `forge-tool descriptor-specs`, `POST /api/workspaces/:workspaceId/components/drafts/:draftId/specs`, generated project tool guidance, and deterministic QueryEngine wording such as `Apply specs to descriptor draft <draft_id>`. Current extraction is intentionally limited to dimensions, opening size, manufacturer, part number, display name, measurement basis, and reviewable proxy status, optionally reusing a same-type seed descriptor as the supported mechanical proxy template.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-workspace-draft-spec-patch-v3-p40.md`
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/model_adapters.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/tool_registry.mjs`
+  - `src/core/permission_gate.mjs`
+  - `src/core/project_workspace.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/query_engine.test.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft specs, applyWorkspaceDescriptorDraftSpecs, descriptor-specs, explicit source text, dimensions, opening size, reviewable proxy, no ProductPlan revision, no artifact generation.
+- Verification: targeted `node --check` for changed code/test files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 28 tests. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` passes with 19 tests. Full `npm run check` passes with 94 tests.
+- Boundary: this does not parse arbitrary PDFs or loose prose into trusted geometry, promote drafts automatically, select descriptors automatically, create ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-07 - 3D Workspace Draft Chat V3 P39
+
+- Scope: make explicit workspace descriptor draft inspection and promotion reachable through the deterministic local QueryEngine chat path. `MockModelAdapter` now maps clear `inspect/check/scan/review descriptor draft <draft_id>` messages to `inspectWorkspaceComponentDescriptorDrafts`, and `promote/import descriptor draft <draft_id>` plus equivalent Chinese wording to `promoteWorkspaceComponentDescriptorDraft`. `permission_gate` allows explicit workspace draft promotion as a user-requested mutation, while direct arbitrary descriptor JSON promotion is not added to that auto-allow path. Tool summaries and final adapter copy now distinguish draft inspection, draft promotion, descriptor selection, and generation.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-workspace-draft-chat-v3-p39.md`
+- Main docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/model_adapters.mjs`
+  - `src/core/permission_gate.mjs`
+  - `src/core/tool_executor.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, QueryEngine, MockModelAdapter, workspace descriptor draft chat, inspectWorkspaceComponentDescriptorDrafts, promoteWorkspaceComponentDescriptorDraft, component-drafts, button_8mm_chat, no artifact generation.
+- Verification: targeted `node --check` for changed code/test files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes with 27 tests. Full `npm run check` passes with 93 tests.
+- Boundary: this does not parse arbitrary loose specs into descriptors, promote `reviewStatus: "draft"` packages, infer component ids from vague language, auto-select promoted descriptors, mutate GeometrySpec directly, or write GLB/STL/STEP artifacts. Confirmed generation remains a separate explicit action after descriptor selection.
+
+### 2026-06-07 - 3D Descriptor Selection Chat V3 P38
+
+- Scope: make explicit descriptor-id selection reachable through the deterministic local QueryEngine chat path. `MockModelAdapter` now maps clear `use/select/choose/switch to/change to <component_id>` and Chinese `选择` / `选用` / `改用` / `使用` / `用 <component_id>` messages to `selectComponentDescriptor`. The parser requires a descriptor-like id such as `button_6mm`, so vague "use it" messages keep the existing proposal/commit behavior. `permission_gate`, tool result summaries, and QueryEngine revision extraction now treat descriptor selection as an explicit revision-producing action while keeping generated artifacts pending.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-selection-chat-v3-p38.md`
+- Main docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/model_adapters.mjs`
+  - `src/core/permission_gate.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/forge_query_engine.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, QueryEngine, MockModelAdapter, natural language descriptor selection, selectComponentDescriptor, Use button_6mm, pending revision, no artifact generation.
+- Verification: targeted `node --check` for changed code/test files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` passes. Full `npm run check` passes with 92 tests.
+- Boundary: this does not infer component ids from vague language, promote drafts, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, or make selected descriptors production ready. Confirmed generation remains a separate explicit action.
+
+### 2026-06-07 - 3D Descriptor Selection V3 P37
+
+- Scope: add a narrow promoted/loaded ComponentDescriptor selection route so a valid descriptor can enter a normal pending ProductPlan revision without hand-writing raw patch JSON. `selectComponentDescriptor` checks package readiness, creates a pending revision that sets the correct `ProductPlan.componentPreferences.<type>`, and keeps `modelArtifacts.status: "pending_confirmation"`. The route is exposed through `forge-tool descriptor-select --componentId <id>` and `POST /api/workspaces/:workspaceId/components/:componentId/select`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-descriptor-selection-v3-p37.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/tool_registry.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `src/core/project_workspace.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor selection, descriptor-select, selectComponentDescriptor, ProductPlan componentPreferences, pending revision, no artifact generation.
+- Verification: targeted `node --check` for changed code/test files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: descriptor selection does not promote draft packages, auto-fill specs, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, claim production readiness, or enable CAD/model editing. Confirmed generation remains a separate explicit action.
+
+### 2026-06-07 - 3D Workspace Draft Scaffold V3 P36
+
+- Scope: add a controlled authoring entry for new same-type component packages. `scaffoldWorkspaceComponentDescriptorDraft` now creates `component-drafts/<draftId>/descriptor.json` plus `sources.md` through the Forge action layer, `forge-tool descriptor-scaffold`, and `POST /api/workspaces/:workspaceId/components/drafts/scaffold`. The generated scaffold is intentionally not promotable: it uses `reviewStatus: "draft"`, zero dimensions, TODO fields, and explicit manual-review warnings. `componentPackageReport` now blocks `reviewStatus: "draft"` descriptors from library promotion until the descriptor is filled and marked reviewable.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-workspace-draft-scaffold-v3-p36.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/tool_registry.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `src/core/project_workspace.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, workspace descriptor draft scaffold, descriptor-scaffold, reviewStatus draft, component-drafts, no direct GeometrySpec mutation.
+- Verification: targeted `node --check` for changed code/test files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` and `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: scaffold creates authoring files only. It does not auto-convert datasheets/prose, promote descriptors, select parts, create revisions, mutate GeometrySpec, write GLB/STL/STEP, add new component categories, validate electrical design, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-07 - 3D Artifact Audit Context Diagnostics V3 P35
+
+- Scope: propagate P34 format-specific artifact audit evidence into compact runtime context without exposing raw model bytes. `ContextPack.generationEvidenceSummary.artifactAudit` now carries `findingCodes`, top-level `diagnostics`, and per-artifact `checks.<artifactKey>.diagnostics` for GLB thin/line/accessor counters, STL degenerate/thin-axis geometry counters, and STEP shell-dimension / component-asset-manifest / no-direct-editing boundary flags. `currentRevisionSummary.generationEvidence.artifactAudit` includes the same compact diagnostic shape.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-artifact-audit-context-diagnostics-v3-p35.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/context_pack_builder.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, ContextPack, generationEvidenceSummary, artifactAudit diagnostics, thinMeshPrimitiveCount, degenerateFacetCount, thinAxisCount, shellDimensionsPositive, raw artifact bytes excluded.
+- Verification: targeted `node --check src/core/context_pack_builder.mjs`, `node --check tests/project_workspace.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: diagnostics are prompt/review metadata only. They do not expose raw GLB/STL/STEP bytes, authorize direct GeometrySpec/artifact mutation, make generated STL/STEP production ready, or turn the preview into an editor.
+
+### 2026-06-07 - 3D STL STEP Artifact Audit Hardening V3 P34
+
+- Scope: strengthen post-write audit for confirmed STL and STEP artifacts. STL audit now parses ASCII STL vertices and reports geometry bounds, span, `vertexCount`, `degenerateFacetCount`, `thinAxisCount`, and `minimumSpanMm`; it fails on missing vertices, degenerate facets, or too-thin shell artifact bounds. STEP audit now requires positive `shell_dimensions_mm`, `component_asset_manifest`, mechanical constraints, layout explanation, and the no-direct-geometry-editing boundary.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-stl-step-artifact-audit-hardening-v3-p34.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/geometry_generation.mjs`
+  - `tests/trusted_generation_regression.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, STL audit, STEP audit, artifact_post_write_audit, degenerateFacetCount, thinAxisCount, shellDimensionsPositive, directEditingBoundaryPresent.
+- Verification: targeted `node --check src/core/geometry_generation.mjs`, `node --check tests/trusted_generation_regression.test.mjs`, `node --check tests/core_pipeline.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/trusted_generation_regression.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: artifact audit hardening is review evidence for the deterministic prototype generator. It does not make STL production ready, replace human DFM review, add user-facing CAD export, or enable direct geometry editing.
+
+### 2026-06-07 - 3D Preview Solid Dimension Validation V3 P33
+
+- Scope: block zero-thickness and near-zero-thickness preview geometry before trusted artifact generation. `validatePrototypeGeometry` now checks enclosure dimensions, placement dimensions, shell feature sizes/depths/retention fields, standoff dimensions, and route path segment lengths through shared `preview_solid_dimensions` validation. `validateGeometrySpec` repeats that guard before artifact writing so malformed GeometrySpec inputs cannot emit fake GLB/STL/STEP success. GLB post-write audit now reports `thinMeshPrimitiveCount` / `minimumMeshSpanMm` and fails generated artifacts with too-thin visible mesh spans.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-07-3d-preview-solid-dimension-validation-v3-p33.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/validation_engine.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `tests/trusted_generation_regression.test.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, zero thickness, preview_solid_dimensions, preview_solid_dimension_too_thin, thinMeshPrimitiveCount, route_segment_too_short, GeometrySpec validation.
+- Verification: targeted `node --check src/core/validation_engine.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check tests/trusted_generation_regression.test.mjs`, `node --check tests/core_pipeline.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/trusted_generation_regression.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: this is a prototype-preview trust guard. It does not make proxy parts production ready, validate electrical design, infer geometry from arbitrary meshes, or expose CAD editing/direct GeometrySpec mutation.
+
+### 2026-06-06 - 3D Generation Replacement Lineage V3 P32
+
+- Scope: carry promoted descriptor replacement audit into generated model evidence. ProductPlan-scoped selected descriptors now carry `libraryReplacement` / `libraryReplacementHistory` into GeometrySpec, and `generation_evidence_report.json` `descriptorEvidence.componentOrigins[]` includes compact `replacement` and `replacementHistory` fields. A generated revision after `--replace-existing` now records both the new workspace draft hash and the previous workspace draft hash in component-origin evidence, and ContextPack receives that lineage through `generationEvidenceSummary`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-generation-replacement-lineage-v3-p32.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/component_selection.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, generation replacement lineage, generation_evidence_report, componentOrigins replacement, previous workspaceDraft hash, ComponentDescriptor replacement, ContextPack.
+- Verification: targeted `node --check src/core/component_selection.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check tests/project_workspace.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs` pass. Targeted `tests/forge_actions.test.mjs`, `tests/query_engine.test.mjs`, and `tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: replacement lineage in generation evidence is read-only metadata. It does not rewrite previous revisions, mutate GeometrySpec directly, auto-regenerate artifacts, or expose raw descriptor/source text.
+
+### 2026-06-06 - 3D Promoted Descriptor Replacement Audit V3 P31
+
+- Scope: preserve compact audit metadata when a ProductPlan-scoped promoted descriptor is replaced. `promoteComponentDescriptorDraft` now writes `replacement` and `replacementHistory` with previous descriptor identity, descriptor version, source type, promoted time, and workspace draft path/hash/byte metadata. Promotion results and `component_descriptor_promoted` events include the replacement payload, while ContextPack and `revision_ledger.json` summarize it without raw descriptor JSON or `sourcesText`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-promoted-descriptor-replacement-audit-v3-p31.md`
+- Main docs: `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `scripts/forge-tool.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, promoted descriptor replacement audit, replacement, replacementHistory, previous workspaceDraft hash, component_descriptor_promoted, ContextPack, revision ledger.
+- Verification: targeted `node --check` for changed code files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `tests/forge_actions.test.mjs`, `tests/query_engine.test.mjs`, and `tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: replacement audit does not rewrite old revision evidence, mutate GeometrySpec, regenerate artifacts, or make a descriptor production ready.
+
+### 2026-06-06 - 3D Workspace Draft Replace V3 P30
+
+- Scope: close the changed-draft resync loop for promoted workspace descriptor drafts. The CLI now supports `forge-tool descriptor-promote --draft-id <id> --replace-existing`, and regression coverage proves that after a promoted draft reports `workspaceDraftIntegrity.status: "changed"`, re-promoting with replacement returns scan/package evidence to `matched`; then a new ProductPlan revision selecting the same component id and confirmed generation produce `generation_evidence_report.json` component-origin hashes from the replacement package.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-workspace-draft-replace-v3-p30.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `scripts/forge-tool.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft replace, replaceExisting, replace-existing, re-promote, workspaceDraftIntegrity matched, ProductPlan revision, generation evidence.
+- Verification: targeted `node --check scripts/forge-tool.mjs` and changed core-file syntax checks pass. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `tests/forge_actions.test.mjs`, `tests/query_engine.test.mjs`, and `tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: replacement does not rewrite existing revision evidence, auto-regenerate artifacts, mutate GeometrySpec directly, or validate production readiness. The new package affects generation only after explicit replacement, normal ProductPlan revision creation, and confirmed generation.
+
+### 2026-06-06 - 3D Workspace Draft Drift V3 P29
+
+- Scope: add current-file drift detection for promoted workspace descriptor draft packages. A shared `workspace_draft_integrity` helper compares the promoted `source.workspaceDraft` snapshot against current `component-drafts/<draftId>/descriptor.json` and `sources.md`. Draft scanning now reports `promotion.status` / `promotion.workspaceDraftIntegrity`, package/search evidence reports `sourceEvidence.workspaceDraftIntegrity`, and ContextPack plus `revision_ledger.json` component-library summaries expose compact `matched` / `changed` / `missing` status without raw source text.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-workspace-draft-drift-v3-p29.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/workspace_draft_integrity.mjs`
+  - `src/core/forge_actions.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft drift, workspaceDraftIntegrity, matched, changed, not_promoted, promoted descriptor snapshot, ContextPack, revision ledger.
+- Verification: targeted `node --check` for changed core files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `tests/forge_actions.test.mjs`, `tests/query_engine.test.mjs`, and `tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: drift detection is audit only. A changed draft does not automatically replace the promoted ProductPlan descriptor, mutate GeometrySpec, regenerate artifacts, or prove production readiness; using the changed package still requires controlled promotion/replacement and a normal ProductPlan revision.
+
+### 2026-06-06 - 3D Workspace Draft Integrity V3 P28
+
+- Scope: record compact file-integrity metadata for workspace descriptor draft packages. `inspectWorkspaceComponentDescriptorDrafts` now reports `packageIntegrity` with descriptor/source SHA-256 hashes and byte counts, promotion stores the same fields in `source.workspaceDraft`, and package evidence, ContextPack component-library summaries, `revision_ledger.json`, and `generation_evidence_report.json` `descriptorEvidence.componentOrigins` preserve those hashes when a promoted draft is selected and generated.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-workspace-draft-integrity-v3-p28.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft integrity, packageIntegrity, descriptorSha256, sourcesSha256, ContextPack, revision ledger, generation_evidence_report.
+- Verification: targeted `node --check` for changed core files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `tests/forge_actions.test.mjs`, `tests/query_engine.test.mjs`, and `tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: integrity hashes are traceability metadata only. They do not prove production readiness, supplier authenticity, electrical correctness, or battery/thermal safety; they do not auto-convert arbitrary source materials; and they do not authorize raw GeometrySpec, GLB/STL/STEP, or CAD/model edits.
+
+### 2026-06-06 - 3D Workspace Draft Origin Evidence V3 P27
+
+- Scope: preserve source-chain metadata when a workspace `component-drafts/<draftId>/` package is promoted and later selected/generated. ProductPlan component library entries now keep `source.type: workspace_descriptor_draft` plus compact `workspaceDraft` paths, ProductPlan-scoped descriptors carry `librarySource` through selection into GeometrySpec, package/search source evidence reports origin metadata, mechanical constraint summaries retain compact origin metadata, `generation_evidence_report.json` includes `descriptorEvidence.componentOrigins`, and ContextPack / `revision_ledger.json` summarize the origin without raw source text.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-workspace-draft-origin-evidence-v3-p27.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/component_selection.mjs`
+  - `src/core/mechanical_constraints.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, workspace descriptor draft origin, componentOrigins, generation_evidence_report, ContextPack, revision ledger, sourceEvidence, workspaceDraft.
+- Verification: targeted `node --check` for changed core files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `tests/forge_actions.test.mjs`, `tests/core_pipeline.test.mjs`, `tests/query_engine.test.mjs`, and `tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: origin evidence is metadata only. It does not make a descriptor production verified, authorize raw workspace file edits, mutate GeometrySpec directly, write artifacts by itself, or embed raw `sources.md` text into compact ContextPack or ledger summaries.
+
+### 2026-06-06 - 3D Workspace Descriptor Drafts V3 P26
+
+- Scope: add a workspace drop-in draft package path for new same-type parts. Forge now scans `component-drafts/<draftId>/descriptor.json` plus `sources.md` through read-only `inspectWorkspaceComponentDescriptorDrafts`, promotes a checked package through confirmation-required `promoteWorkspaceComponentDescriptorDraft`, supports `forge-tool descriptor-drafts --draft-id <id>` and `forge-tool descriptor-promote --draft-id <id>`, exposes `/api/workspaces/:workspaceId/components/drafts` and `/api/workspaces/:workspaceId/components/drafts/:draftId/promote`, and documents the commands in generated project `FORGE_TOOLS.md`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-workspace-descriptor-drafts-v3-p26.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/tool_registry.mjs`
+  - `src/core/project_workspace.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, workspace descriptor drafts, component-drafts, inspectWorkspaceComponentDescriptorDrafts, promoteWorkspaceComponentDescriptorDraft, descriptor-drafts, descriptor-promote draft-id.
+- Verification: targeted `node --check` for changed core/server/CLI files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, `tests/project_workspace.test.mjs`, and `tests/query_engine.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: workspace draft scanning is read-only; promotion is confirmation-required. This path does not auto-convert arbitrary datasheets/PDFs/prose, write `src/core/component_assets`, create revisions by itself, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, add new component categories/layout semantics, validate electrical design, prove supplier authenticity, or enable CAD/model editing, checkout, ordering, or production behavior.
+
+### 2026-06-06 - 3D Promoted Descriptor Retirement V3 P25
+
+- Scope: add a confirmation-required retirement path for ProductPlan-scoped promoted ComponentDescriptors. `retirePromotedComponentDescriptor` marks a promoted descriptor as `status: retired` / `active: false`, records `retiredAt` and `retirementReason`, optionally clears the matching `ProductPlan.componentPreferences.<type>`, appends `component_descriptor_retired`, and preserves historical revision snapshots. Future search, patch validation, component selection, GeometrySpec generation, and confirmed artifacts exclude retired descriptors while ContextPack and `revision_ledger.json` keep active/retired audit summaries without raw source text.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-promoted-descriptor-retirement-v3-p25.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `src/core/guarded_files.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/tool_registry.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, promoted descriptor retirement, retirePromotedComponentDescriptor, descriptor-retire, ProductPlan componentLibrary, retired descriptor, component_descriptor_retired, activeComponentIds, retiredComponentIds.
+- Verification: targeted `node --check` for changed core/server/CLI files passes. Targeted `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, `tests/project_workspace.test.mjs`, and `tests/query_engine.test.mjs` pass. Full `npm run check` passes with 91 tests.
+- Boundary: retirement does not delete descriptors, mutate historical revisions, create revisions, mutate GeometrySpec directly, write GLB/STL/STEP artifacts, validate electrical design, prove supplier authenticity, enable CAD/model editing, checkout, ordering, or production behavior.
+
+### 2026-06-06 - 3D Promoted Descriptor Audit V3 P24
+
+- Scope: make ProductPlan-level promoted descriptors visible in agent/runtime audit surfaces and guarded-file authorization. `component_descriptor_promoted` now authorizes root ProductPlan/runtime state writes, promotion appends that event before re-persisting the project so `revision_ledger.json` can include it, ContextPack summarizes `currentProductPlanSummary.componentLibrary` without raw source text, and the revision ledger records ProductPlan component library ids plus selected ProductPlan-scoped descriptor ids.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-promoted-descriptor-audit-v3-p24.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/guarded_files.mjs`
+  - `src/core/forge_actions.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/revision_ledger.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, promoted descriptor audit, ProductPlan componentLibrary, ContextPack, revision ledger, component_descriptor_promoted, guarded files.
+- Verification: targeted `node --check src/core/context_pack_builder.mjs`, `node --check src/core/revision_ledger.mjs`, `node --check src/core/guarded_files.mjs`, `node --check src/core/forge_actions.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 89 tests.
+- Boundary: this is an audit/summary/guard layer for ProductPlan-level descriptors. It does not add CAD editing, direct GeometrySpec mutation, direct artifact mutation, production validation, supplier ordering, checkout, or user-facing artifact export.
+
+### 2026-06-06 - 3D Descriptor Promotion V3 P23
+
+- Scope: add a confirmation-required promotion path that turns a valid ComponentDescriptor draft into a ProductPlan-level descriptor library entry without writing Forge source files. `promoteComponentDescriptorDraft` validates the same draft intake gate, stores descriptor/source text under `workspaceState.productPlan.componentLibrary.descriptors`, and keeps selection/generation gated through a later ProductPlan component patch. Component search, package inspection, patch validation, workspace patch application, deterministic component selection, revision snapshots, and confirmed artifact generation now merge global descriptors with ProductPlan-level promoted descriptors.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-promotion-v3-p23.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/component_selection.mjs`
+  - `src/core/workspace_state.mjs`
+  - `src/core/forge_actions.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/tool_executor.mjs`
+  - `src/core/tool_registry.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `src/core/project_workspace.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor promotion, promoteComponentDescriptorDraft, descriptor-promote, ProductPlan componentLibrary, promoted descriptor, same-type replacement, confirmed artifact generation.
+- Verification: targeted `node --check src/core/component_selection.mjs`, `node --check src/core/workspace_state.mjs`, `node --check src/core/forge_actions.mjs`, `node --check src/core/product_plan.mjs`, `node --check src/core/tool_registry.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 88 tests.
+- Boundary: promotion updates only the ProductPlan component library. It does not write `src/core/component_assets`, add arbitrary new categories, bypass ProductPlan revisions, mutate GeometrySpec directly, write GLB/STL/STEP by itself, validate electrical design, prove production readiness, order parts, run checkout, or enable CAD/model editing.
+
+### 2026-06-06 - Forge Product Repo & Revision Ledger V0
+
+- Scope: add a project-level revision ledger for conversation-driven hardware iteration. `revision_ledger.json` summarizes ProductPlan revision records, proposed patches, accepted/rejected changes, artifact manifests, diff metadata, and rollback history while keeping ProductPlan as the source of truth and GeometrySpec/validation/evidence/artifacts as derived revision outputs.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-forge-product-repo-revision-ledger-v0.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/revision_ledger.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/guarded_files.mjs`
+  - `server.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: Forge Product Repo, Revision Ledger V0, revision_ledger.json, ProductPlan source of truth, proposed patches, accepted changes, rejected changes, artifact manifest, diff metadata, rollback.
+- Verification: targeted syntax checks for changed core/test files pass. Full `npm run check` passes with 87 tests.
+- Boundary: this adds a read-only state model/index and route. It does not implement CAD editing, manufacturing, checkout, supplier ordering, production validation, or direct raw GeometrySpec/artifact mutation.
+
+### 2026-06-06 - Component Truth Registry V0
+
+- Scope: add a standalone read-only ComponentDescriptor truth registry for common hardware modules. `src/core/component_truth_registry.mjs` scans `src/core/component_assets/*/descriptor.json`, runs schema validation and registry lint, reports `sourceEvidence`, `trustLevel`, `reviewStatus`, missing fields, common module coverage, and explicit no-mutation boundaries. The descriptor schema now requires explicit registry evidence fields and blocks trust levels that conflict with `assetQuality` / `validationStatus`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-component-truth-registry-v0.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/PROJECT_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/component_truth_registry.mjs`
+  - `src/core/component_descriptor_schema.mjs`
+  - `src/core/mechanical_constraints.mjs`
+  - `src/core/component_assets/*/descriptor.json`
+  - `tests/component_truth_registry.test.mjs`
+- Retrieval handles: Component Truth Registry V0, ComponentDescriptor, sourceEvidence, trustLevel, reviewStatus, missing-field report, common hardware modules, read-only registry, descriptor contract.
+- Verification: targeted `node --check src/core/component_descriptor_schema.mjs`, `node --check src/core/component_truth_registry.mjs`, `node --check tests/component_truth_registry.test.mjs`, registry summary inspection, `node --import ./tests/setup_test_environment.mjs --test tests/component_truth_registry.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs tests/forge_actions.test.mjs` pass. Full `npm run check` passes with 87 tests.
+- Boundary: this adds a registry contract/readiness layer only. It does not modify `src/core/layout_engine.mjs`, `src/core/geometry_generation.mjs`, ProductPlan selection, GeometrySpec generation, GLB/STL/STEP writing, CAD editing/export, supplier ordering, checkout, production validation, or direct raw GeometrySpec/artifact mutation.
+
+### 2026-06-06 - Trusted Generation Regression Harness V0
+
+- Scope: add a test-only regression harness for the descriptor-backed 3D trusted generation loop. The golden case confirms a dense standard desktop display revision with display, core board, USB-C, ambient sensor, speaker, buttons, camera, and battery review modules, then asserts descriptor completeness, descriptor-backed feature-size consistency, layout explanation coverage, artifact provenance, confirmed artifact contracts, artifact audit trust, and read-only boundaries. Failure cases mutate copies to verify missing descriptors, mismatched feature sizes, missing descriptor-mated routes, and validation errors block artifact trust and GLB/STL/STEP output. Revision revalidation runs through the Forge action layer with `validateDesign`, `regenerateRevision`, and `getRevisionArtifacts`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-trusted-generation-regression-harness-v0.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `tests/trusted_generation_regression.test.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `src/core/forge_actions.mjs`
+- Retrieval handles: trusted generation regression harness, descriptor completeness, feature-size consistency, placement explanation coverage, validation blocking, artifact provenance, confirmed artifact contracts, revision revalidation, V3.
+- Verification: targeted `node --check tests/trusted_generation_regression.test.mjs` and `node --import ./tests/setup_test_environment.mjs --test tests/trusted_generation_regression.test.mjs` pass. Full `npm run check` passes with 87 tests.
+- Boundary: this adds regression safety only. It does not add product features, UI surface, new component categories, new generation behavior, CAD editing/export, supplier ordering, checkout, production validation, or direct raw GeometrySpec/artifact mutation.
+
+### 2026-06-06 - 3D Descriptor Draft Intake V3 P22
+
+- Scope: add a no-side-effect intake path for proposed new ComponentDescriptor packages before they enter the loaded component library. `inspectComponentDescriptorDraft` validates a structured descriptor draft plus source-note text, reports `readyForLibraryPromotion`, keeps `readyForSelection` and `readyForReviewableGeneration` false until the descriptor is actually loaded, denies direct GeometrySpec/artifact mutation, and exposes the same check through Tool Protocol metadata, `forge-tool descriptor-draft`, generated project tools guidance, and `/api/workspaces/:workspaceId/components/draft-package`. Seed descriptors now also carry the required `trustLevel`, `reviewStatus`, and `sourceEvidence` metadata used by the stricter descriptor intake gate.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-draft-intake-v3-p22.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_registry.mjs`
+  - `src/core/tool_executor.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/core/component_assets/*/descriptor.json`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor draft, inspectComponentDescriptorDraft, descriptor-draft, readyForLibraryPromotion, new part intake, sources.md.
+- Verification: targeted `node --check src/core/forge_actions.mjs`, `node --check src/core/tool_executor.mjs`, `node --check src/core/tool_registry.mjs`, `node --check scripts/forge-tool.mjs`, `node --check server.mjs`, descriptor validation inspection, `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/forge_actions.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/project_workspace.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 81 tests.
+- Boundary: this checks a structured descriptor draft before library promotion. It does not auto-convert arbitrary datasheets or supplier pages, add the draft to the loaded component library, make it selectable by ProductPlan, add new component categories, validate electrical design, prove supplier CAD authenticity, order parts, run checkout, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-06 - 3D Trusted Preview Status V3 P21
+
+- Scope: carry trusted-generation audit state into `modelPreview` and the compact right-inspector model status. `modelPreview.artifactTrust` now reports generated/trustedGenerated/auditStatus/auditPassed/findingCount, generated preview notes distinguish audit-passed from audit-not-passed artifacts, and `artifactSummary(revision)` shows audit-passed, audit-failed, or audit-pending status instead of treating file presence alone as a trusted generated model.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-trusted-preview-status-v3-p21.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/model_preview.mjs`
+  - `app.js`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, modelPreview artifactTrust, trustedGenerated, artifactSummary, generation audit passed, right inspector compact status, read-only preview.
+- Verification: targeted `node --check src/core/model_preview.mjs`, `node --check app.js`, `node --check tests/core_pipeline.test.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 80 tests.
+- Boundary: this changes compact result status only. It does not show generated artifact links in the default inspector, expose raw artifact bytes, enable CAD editing/export, claim production readiness, or make GLB/STL/STEP source of truth.
+
+### 2026-06-06 - 3D Artifact Audit Status Propagation V3 P20
+
+- Scope: propagate post-write artifact audit status into high-level summaries so upper layers can distinguish generated files from trusted generated artifacts. `artifactStatusForRevision` now reports `trustedGenerated`, `artifactAuditStatus`, `artifactAuditPassed`, and `artifactAuditFindingCount`; ContextPack current revision summaries include compact artifact audit status; Tool Protocol metadata and contracts document the fields.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-artifact-audit-status-propagation-v3-p20.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, artifactStatus, trustedGenerated, artifactAuditStatus, artifactAuditPassed, artifactAuditFindingCount, generation evidence, post-write audit.
+- Verification: targeted `node --check src/core/forge_actions.mjs`, `node --check src/core/context_pack_builder.mjs`, `node --check src/core/tool_registry.mjs`, `node --check tests/forge_actions.test.mjs`, `node --check tests/project_workspace.test.mjs`, `node --test tests/forge_actions.test.mjs`, and `node --test tests/project_workspace.test.mjs` pass. Full `npm run check` passes with 80 tests.
+- Boundary: this is a summary/status propagation layer. It does not change `modelArtifacts.status`, make GLB/STL/STEP editable source, expose raw artifact bytes, enable CAD editing/export, or claim production readiness.
+
+### 2026-06-06 - 3D Artifact Post-Write Audit V3 P19
+
+- Scope: add a compact post-write audit to `generation_evidence_report.json` so confirmed generated GLB/STL/STEP artifacts are checked after writing, not only hashed. `artifactAudit` now records artifact presence, byte/hash-record status, GLB magic/version/JSON parse status, semantic node prefix coverage, GL line primitive count, VEC3 bounds coverage, STL solid/facet checks, and STEP handoff marker checks. ContextPack exposes a compact `generationEvidenceSummary.artifactAudit` without loading raw GLB/STL/STEP bytes, and prompt sections tell chat runtimes to use post-write audit metadata when discussing file integrity.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-artifact-post-write-audit-v3-p19.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/geometry_generation.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `src/core/prompt_sections.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, artifact post-write audit, artifactAudit, generation_evidence_report, GLB audit, STL audit, STEP audit, semantic node prefixes, GL_LINES, raw artifact bytes excluded.
+- Verification: targeted `node --check src/core/geometry_generation.mjs`, `node --check src/core/context_pack_builder.mjs`, `node --check src/core/prompt_sections.mjs`, `node --check tests/core_pipeline.test.mjs`, `node --check tests/project_workspace.test.mjs`, `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs`, `node --test tests/project_workspace.test.mjs`, and `node --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 80 tests.
+- Boundary: this verifies generated derived artifacts after writing. It does not make GLB/STL/STEP editable source, expose raw artifact bytes, enable CAD editing/export, create production validation, or change ProductPlan/GeometrySpec as the source of truth.
+
+### 2026-06-06 - 3D Descriptor Package Readiness V3 P18
+
+- Scope: expose a read-only ComponentDescriptor package readiness report so same-type replacement parts can be reviewed before entering ProductPlan selection and trusted 3D generation. `inspectComponentPackage` now reports package status, selection/generation readiness, descriptor validation, source-note evidence, mechanical coverage, replacement policy, blocking issues, review warnings, and direct-mutation denial. `searchComponentLibrary` includes a compact readiness summary, `forge-tool component-package --componentId <id>` exposes the same report to Codex project workspaces, and `/api/workspaces/:workspaceId/components/:componentId/package` exposes it over HTTP.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-package-readiness-v3-p18.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_registry.mjs`
+  - `src/core/tool_executor.mjs`
+  - `scripts/forge-tool.mjs`
+  - `server.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `src/core/project_workspace.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor package readiness, inspectComponentPackage, component-package, packageStatus, readyForSelection, readyForReviewableGeneration, sourceEvidence, replacementPolicy, componentPreferences.
+- Verification: targeted `node --check src/core/forge_actions.mjs`, `node --check src/core/tool_registry.mjs`, `node --check src/core/tool_executor.mjs`, `node --check scripts/forge-tool.mjs`, `node --check server.mjs`, `node --test tests/forge_actions.test.mjs`, `node --test tests/project_workspace.test.mjs`, and `node --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 80 tests.
+- Boundary: this makes descriptor package readiness inspectable. It does not auto-convert raw datasheets or supplier pages, add new component categories, validate electrical design, prove supplier CAD authenticity, order parts, run checkout, claim production readiness, or enable CAD/model editing.
+
+### 2026-06-06 - 3D Descriptor Intake Gate V3 P17
+
+- Scope: strengthen ComponentDescriptor package validation so same-type replacement is backed by a real intake gate. Schema validation now checks supported categories, connector types/positions/mating arrays, cross-descriptor mating endpoints, local interface/access/cable-exit connector references, external feature/opening sizes, keepout/access-volume geometry, mounting-hole geometry, source-note metadata, and companion source-note file existence. Seed descriptors now include explicit `accessVolumes[].type` metadata.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-intake-gate-v3-p17.md`
+- Main docs: `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/component_descriptor_schema.mjs`
+  - `src/core/component_library.mjs`
+  - `src/core/component_assets/*/descriptor.json`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, descriptor intake, schema validation, mating endpoints, sources.md, accessVolumes type, connector references, validateComponentDescriptorV2.
+- Verification: targeted `node --check src/core/component_descriptor_schema.mjs`, `node --check src/core/component_library.mjs`, `node --check tests/core_pipeline.test.mjs`, and `node --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 80 tests.
+- Boundary: this hardens descriptor package intake. It does not auto-convert arbitrary raw part notes, add new component categories, validate electrical design, battery charging, camera privacy, supplier CAD authenticity, checkout, ordering, production readiness, or CAD editing.
+
+### 2026-06-06 - 3D Descriptor Variant Selection V3 P16
+
+- Scope: make same-type part replacement flow through ProductPlan and ComponentDescriptor metadata instead of seed-id-only selection. `ProductPlan.componentPreferences` now stores preferred component ids; component patches infer type from loaded descriptors when only `componentId` is provided; selection can choose descriptor variants such as `battery_18650_holder`; layout finds selected descriptors by descriptor type; and routes continue to derive endpoints from `connectors[].mating`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-variant-selection-v3-p16.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/COMPONENT_DESCRIPTOR_V2.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/component_selection.mjs`
+  - `src/core/layout_engine.mjs`
+  - `src/core/workspace_state.mjs`
+  - `src/core/forge_actions.mjs`
+  - `tests/core_pipeline.test.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, componentPreferences, descriptor variant, same-type replacement, battery_18650_holder, component selection, Forge actions, GeometrySpec, GLB.
+- Verification: targeted `node --check src/core/component_selection.mjs`, `node --check src/core/layout_engine.mjs`, `node --check src/core/workspace_state.mjs`, `node --check src/core/forge_actions.mjs`, `node --check tests/core_pipeline.test.mjs`, `node --check tests/forge_actions.test.mjs`, `node --test tests/core_pipeline.test.mjs`, and `node --test tests/forge_actions.test.mjs` pass. Full `npm run check` passes with 79 tests.
+- Boundary: this supports descriptor-backed same-type replacements. It does not make arbitrary raw part notes, new component categories, new mechanisms, PCB routing, electrical validation, supplier ordering, checkout, production validation, or CAD editing automatic.
+
+### 2026-06-06 - 3D Descriptor Cable Routes V3 P15
+
+- Scope: close the descriptor-backed route coverage gap for selected optional/review components. Speaker, camera, and battery placements now generate coarse internal routes from their ComponentDescriptor `connectors[].mating` metadata to real core-board connector endpoints. Validation now blocks selected placed components with internal descriptor mating when no matching route exists, using `missing_descriptor_connector_route`.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-cable-routes-v3-p15.md`
+- Main docs: `docs/PROJECT_PLAN.md`, `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, ComponentDescriptor, connectors, mating, coarse cable routes, speaker_to_core_board, camera_to_core_board, battery_to_core_board, missing_descriptor_connector_route, GeometrySpec, GLB, validation.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/validation_engine.mjs`, `node --check tests/core_pipeline.test.mjs`, and `node --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed read-only generated structure and validation. It does not add PCB routing, schematic generation, electrical validation, battery charging validation, camera privacy review implementation, CAD editing, raw GeometrySpec mutation, raw artifact mutation, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Optical Window Retention V3 P14
+
+- Scope: make sensor/camera front-window mounting explicit in the descriptor-backed generation chain. `front_window` and `front_window_review` descriptors now create `optical_window_retention` GeometrySpec features, generated GLB output includes non-zero optical retention rails, and validation blocks missing or mismatched optical window retention. Camera retention preserves review-only and privacy-review flags.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-optical-window-retention-v3-p14.md`
+- Main docs: `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/layout_explanation.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, front_window, front_window_review, optical_window_retention, ambient sensor, camera review, privacyReviewRequired, GeometrySpec, GLB, validation, missing_optical_window_retention.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/layout_explanation.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check src/core/validation_engine.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed read-only generated structure and validation. It does not add default evidence-report UI, CAD editing, raw GeometrySpec mutation, raw artifact mutation, real camera privacy review, certification, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Captured Panel Retention V3 P13
+
+- Scope: make display captured-panel retention explicit in the descriptor-backed generation chain. Display descriptors with `mechanicalProxy.mountingMethod: captured_panel` now create a `captured_panel_retention` GeometrySpec feature with descriptor-derived bezel and retainer metadata. The GLB writer generates `feature.retention.screen.*` rails from that explicit feature, layout explanation covers the retention rule, and validation blocks missing or mismatched captured-panel retention.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-captured-panel-retention-v3-p13.md`
+- Main docs: `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/layout_explanation.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, display, captured_panel, screen retention, GeometrySpec, GLB, validation, missing_captured_panel_retention.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/layout_explanation.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check src/core/validation_engine.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed read-only generated structure and validation. It does not add default evidence-report UI, CAD editing, raw GeometrySpec mutation, raw artifact mutation, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Review-Only Battery Bay Retention V3 P12
+
+- Scope: make battery review-risk geometry more structurally explicit without changing the human-review boundary. Battery descriptors with review mounting methods now require a `battery_bay` GeometrySpec feature that preserves `mountingMethod`, `reviewOnly`, `humanReviewRequired`, clearance, and retention-lip metadata. Generated GLB output now includes a non-zero-thickness bay base and retention rails, and validation blocks selected review batteries that lose the retained bay or review-only boundary.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-review-battery-bay-retention-v3-p12.md`
+- Main docs: `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/layout_explanation.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, battery, review_only_retained_bay, battery_bay, review-only bay, GeometrySpec, GLB, validation, missing_review_battery_bay.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/layout_explanation.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check src/core/validation_engine.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed read-only generated structure and validation for review-risk batteries. It does not validate battery safety, charging, thermal behavior, certification, production retention, supplier CAD assets, checkout, ordering, default evidence-report UI, CAD editing, or raw artifact mutation.
+
+### 2026-06-06 - 3D Descriptor Panel Button And Speaker Grille Retention V3 P11
+
+- Scope: extend descriptor-backed mounting structure beyond USB-C edge capture. `panel_button` descriptors now create per-instance `panel_button_retention` GeometrySpec collars and non-zero GLB retention rails for button holes; `grille_mount` descriptors now create `grille_mount_retention` GeometrySpec rims and non-zero GLB rails around speaker vents. Validation blocks missing button collars or missing speaker grille retention frames before artifacts can be treated as generatable.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-panel-grille-retention-v3-p11.md`
+- Main docs: `docs/WORK_INDEX.md`, `docs/source-materials/INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/layout_explanation.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, mountingMethod, panel_button, grille_mount, button retention, speaker grille, GeometrySpec, GLB, validation, missing_panel_button_retention, missing_grille_mount_retention.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/layout_explanation.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check src/core/validation_engine.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed read-only generated structure and validation. It does not add CAD editing, raw GeometrySpec mutation, raw artifact mutation, default evidence-report UI, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Descriptor Edge-Capture Retention V3 P10
+
+- Scope: make USB-C descriptor mounting metadata generate actual retention structure. The USB-C breakout `mechanicalProxy.mountingMethod: edge_capture` and `retentionLipMm` now create a `GeometrySpec` `edge_capture_retention` feature, GLB retention-lip rails around the placed USB-C board, layout explanation coverage, and validation that blocks missing or mismatched edge-capture retention.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-edge-capture-retention-v3-p10.md`
+- Main docs: `docs/WORK_INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/layout_explanation.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, mountingMethod, edge_capture, retentionLipMm, USB-C breakout, GeometrySpec, GLB, validation, missing_edge_capture_retention.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/layout_explanation.mjs`, `node --check src/core/geometry_generation.mjs`, `node --check src/core/validation_engine.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed read-only generated structure and validation. It does not add CAD editing, raw GeometrySpec mutation, raw artifact mutation, default evidence-report UI, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Descriptor Opening Validation V3 P9
+
+- Scope: add validation coverage for descriptor-backed shell opening dimensions. `validatePrototypeGeometry` now blocks a GeometrySpec when a generated feature's `sizeMm` does not match the matching ComponentDescriptor v2 `externalFeatures.openingSizeMm`, so functional openings cannot silently drift away from descriptor constraints.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-opening-validation-v3-p9.md`
+- Main docs: `docs/WORK_INDEX.md`
+- Key code handles:
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, validation, external_feature_opening_size_mismatch, openingSizeMm, ComponentDescriptor, GeometrySpec, shell openings.
+- Verification: targeted `node --check src/core/validation_engine.mjs` and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this is a validation gate for descriptor consistency. It does not add default evidence-report UI, CAD editing, raw GeometrySpec mutation, raw artifact mutation, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Descriptor Opening Geometry V3 P8
+
+- Scope: make functional shell openings derive their sizes from ComponentDescriptor v2 `externalFeatures.openingSizeMm` instead of duplicated layout/preview constants. Screen, USB-C, ambient sensor, speaker vents, buttons, and camera windows now carry descriptor opening sizes into `GeometrySpec.features`, and GLB feature preview consumes those GeometrySpec sizes for sensor/camera apertures and speaker vent slots.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-opening-geometry-v3-p8.md`
+- Main docs: `docs/WORK_INDEX.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, externalFeatures, openingSizeMm, shell openings, GeometrySpec, GLB, USB-C cutout, sensor window, speaker vents, button hole, camera window.
+- Verification: targeted `node --check src/core/layout_engine.mjs`, `node --check src/core/geometry_generation.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves descriptor-backed generated geometry only. It does not add default evidence-report UI, CAD editing, raw GeometrySpec mutation, raw artifact mutation, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Descriptor Access Volume Geometry V3 P7
+
+- Scope: make more ComponentDescriptor v2 access and keepout constraints visible in the generated GLB proxy geometry. Display, ambient sensor, speaker, and button proxies now emit descriptor-backed access volume markers; display also emits its viewing keepout. Access/keepout nodes carry descriptor source metadata and remain read-only, non-zero-thickness preview geometry.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-descriptor-access-volume-geometry-v3-p7.md`
+- Main docs: `docs/WORK_INDEX.md`
+- Key code handles:
+  - `src/core/proxy_geometry_builder.mjs`
+  - `src/core/layout_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, accessVolumes, keepouts, ComponentDescriptor, GLB, FPC bend volume, button wire access, speaker wire access, sensor wire access, non-zero thickness.
+- Verification: targeted `node --check src/core/proxy_geometry_builder.mjs`, `node --check src/core/layout_engine.mjs`, and `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves read-only generated preview geometry only. It does not add CAD editing, raw artifact mutation, default evidence-report UI, supplier CAD import, checkout, ordering, or production validation.
+
+### 2026-06-06 - 3D Component Search Constraint Visibility V3 P6
+
+- Scope: make `searchComponentLibrary` expose compact ComponentDescriptor-derived mechanical constraint metadata so chat/tool layers can choose and explain real or reviewable components using dimensions, mounting, connectors, shell features, keepouts/access volumes, descriptor source paths, trust level, production-readiness, and human-validation status.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-component-search-constraints-v3-p6.md`
+- Main docs: `docs/FORGE_ACTION_CONTRACT.md`, `docs/CONTRACTS.md`, `docs/WORK_INDEX.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/forge_actions.test.mjs`
+- Retrieval handles: 3D trusted generation, component search, ComponentDescriptor, mechanicalConstraints, trustLevel, sourceEvidence, proxy_seed, productionReady, right inspector boundary.
+- Verification: targeted `node --check src/core/forge_actions.mjs`, `node --check src/core/tool_registry.mjs`, and `node --test tests/forge_actions.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this is read-only tool/action metadata for component selection and explanation. It does not add default right-inspector report text, raw artifact bytes, direct GeometrySpec mutation, CAD editing, supplier ordering, checkout, or production validation claims.
+
+### 2026-06-06 - 3D Trusted Generation Loop V3 P5
+
+- Scope: make generation evidence visible to the model/tool prompt contract. Prompt sections now explicitly instruct chat runtimes to use `generationEvidenceSummary` and compact artifact metadata for source-chain, validation, descriptor/layout coverage, and file-integrity discussion while never requesting or editing raw GLB/STL/STEP bytes. Tool Protocol metadata for `getRevisionArtifacts` now names `generationEvidenceReport`, its path, and `artifactStatus.hasGenerationEvidenceReport` in the output schema.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-evidence-prompt-contract-v3-p5.md`
+- Main docs: `docs/FORGE_QUERY_ENGINE.md`, `docs/WORK_INDEX.md`
+- Key code handles:
+  - `src/core/prompt_sections.mjs`
+  - `src/core/tool_registry.mjs`
+  - `tests/project_workspace.test.mjs`
+- Retrieval handles: 3D trusted generation, prompt sections, Tool Protocol, generationEvidenceSummary, generationEvidenceReport, getRevisionArtifacts, no raw GLB/STL/STEP bytes.
+- Verification: targeted `node --test tests/project_workspace.test.mjs` passes. Full `npm run check` passes with 77 tests.
+- Boundary: this only clarifies prompt/tool metadata. It does not expose raw model bytes, allow artifact mutation, add CAD editing, or change generation behavior.
+
+### 2026-06-06 - 3D Trusted Generation Loop V3 P4
+
+- Scope: carry generation evidence reports through the conversation/tool context layer. `getRevisionArtifacts` now returns typed `generationEvidenceReport` metadata, artifact status reports `hasGenerationEvidenceReport`, and `ContextPack` includes compact generation evidence summaries with source-of-truth declarations, validation status, descriptor/mechanical coverage, layout coverage, artifact size/hash metadata, and read-only/export boundary flags without loading raw GLB/STL/STEP bytes.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-evidence-context-v3-p4.md`
+- Main docs: `docs/CONTRACTS.md`, `docs/FORGE_ACTION_CONTRACT.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/forge_actions.mjs`
+  - `src/core/context_pack_builder.mjs`
+  - `tests/forge_actions.test.mjs`
+  - `tests/project_workspace.test.mjs`
+  - `tests/query_engine.test.mjs`
+- Retrieval handles: 3D trusted generation, generation evidence report, getRevisionArtifacts, ContextPack, source chain, artifact integrity, SHA-256, no raw artifact bytes.
+- Verification: targeted `node --test tests/forge_actions.test.mjs`, `node --test tests/project_workspace.test.mjs`, and `node --test tests/query_engine.test.mjs` pass. Full `npm run check` passes with 77 tests.
+- Boundary: this improves chat/tool visibility into generated evidence only. It does not expose raw model bytes, direct artifact mutation, user-facing CAD export, manufacturing checkout, supplier ordering, or production validation claims.
+
+### 2026-06-06 - 3D Trusted Generation Loop V3 P3
+
+- Scope: add a stable generation evidence report to the 3D artifact chain. Generated and blocked artifact attempts now write `generation_evidence_report.json` with source-chain provenance, ProductPlan/GeometrySpec source-of-truth declarations, descriptor trust coverage, layout explanation coverage, validation status, artifact groups, file sizes, SHA-256 hashes, and read-only boundary flags. The report is returned as a typed `generation_evidence_report` asset and is persisted into workspace revision folders when available.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-generation-evidence-report-v3-p3.md`
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/geometry_generation.mjs`
+  - `src/core/product_plan.mjs`
+  - `src/core/project_workspace.mjs`
+  - `src/contracts/workbench_contract.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, generation evidence report, artifact integrity, SHA-256, ProductPlan, GeometrySpec, validation coverage, GLB, STL, STEP.
+- Verification: targeted `node --test tests/core_pipeline.test.mjs` passes. Full `npm run check` passes with 77 tests.
+- Boundary: this adds review evidence and artifact integrity metadata only. It does not expose user-facing CAD export, direct geometry editing, manufacturing checkout, supplier ordering, or production validation claims.
+
+### 2026-06-06 - 3D Trusted Generation Loop V3 P2
+
+- Scope: add explainable layout evidence to the descriptor-backed 3D generation loop. GeometrySpec now carries a layout explanation report that records why placements, shell features, and cable routes were selected, including rule ids, descriptor inputs, ProductPlan placement preferences, route endpoint connector evidence, and direct-editing denial. Validation, design summary, GLB extras, and STEP handoff metadata surface coverage so generated structure remains reviewable without turning the preview into a CAD editor.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-layout-explanation-v3-p2.md`
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/layout_explanation.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `src/core/validation_engine.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, layout explanation, explainable layout, GeometrySpec, ComponentDescriptor, placements, shell features, cable routes, validation report, STEP handoff.
+- Verification: targeted `node --test tests/core_pipeline.test.mjs` passes. Full `npm run check` passes with 77 tests.
+- Boundary: this explains deterministic placement/layout decisions and persists review evidence only. It does not add CAD editing, drag handles, manufacturing checkout, supplier CAD assets, or user-facing artifact export.
+
+### 2026-06-06 - 3D Trusted Generation Loop V3 P1
+
+- Scope: add the first executable layer for descriptor-backed 3D trust: a mechanical constraint report derived from ComponentDescriptor v2 dimensions, mounting, connectors, external features, keepouts, access volumes, cable exits, asset quality, validation status, and source evidence. This report now flows into GeometrySpec, component asset manifests, validation reports, design summaries, GLB extras coverage, and STEP handoff metadata.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-trusted-generation-v3-p1.md`
+- Main docs: `AGENTS.md`, `README.md`, `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/mechanical_constraints.mjs`
+  - `src/core/component_descriptor_schema.mjs`
+  - `src/core/component_asset_manifest.mjs`
+  - `src/core/validation_engine.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D trusted generation, mechanical constraints, ComponentDescriptor, GeometrySpec, validation report, component asset manifest, proxy trust, vendor asset future path.
+- Verification: targeted `node --test tests/core_pipeline.test.mjs` passes. Full `npm run check` passes with 77 tests.
+- Boundary: this does not add real supplier CAD assets, CAD editing, manufacturing checkout, or production validation. Current parts remain proxy/unverified, but their mechanical constraints are now explicit and traceable through generated artifacts.
+
+### 2026-06-06 - 3D Structure Credibility P2
+
+- Scope: make the generated standard desktop display GLB read as a more believable physical prototype without changing the ProductPlan/GeometrySpec/artifact contract. The preview now adds front/back shell overlap lips and front seats, a descriptor-derived screen retention frame, PCB standoff board-contact geometry, and a USB-C plug insertion-clearance volume under stable semantic node prefixes.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-structure-credibility-p2.md`
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/layout_engine.mjs`
+  - `src/core/geometry_generation.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D structure credibility, shell overlap, screen retention frame, PCB standoff, board contact, USB-C insertion clearance, GeometrySpec, GLB.
+- Verification: targeted `node --test tests/core_pipeline.test.mjs` passes. Full `npm run check` passes with 77 tests.
+- Boundary: this keeps `ProductPlan`, external `GeometrySpec` shape, artifact keys, generation confirmation, Codex runtime, and UI layout unchanged. It changes deterministic layout dimensions for core-board standoff height and adds read-only GLB preview geometry only.
+
+### 2026-06-06 - 3D Preview Non-Zero Thickness P1
+
+- Scope: harden the generated GLB preview so visible cable routes, openings, buttons, and small marker geometry no longer render as zero-thickness lines or wrongly oriented thin sheets. Route roots keep stable `route.*` semantic nodes, while visible route geometry is now generated as non-zero-thickness tube segments. Feature/opening/button markers now apply preview thickness along their actual face normal instead of always along the z axis.
+- Status: implemented in the current working tree.
+- Source note: `docs/source-materials/2026-06-06-3d-zero-thickness-feedback.md`
+- Main docs: `docs/PROJECT_PLAN.md`
+- Key code handles:
+  - `src/core/geometry_generation.mjs`
+  - `src/core/proxy_geometry_builder.mjs`
+  - `tests/core_pipeline.test.mjs`
+- Retrieval handles: 3D thickness, zero thickness, GLB, GL_LINES, route segments, feature openings, button holes, face normal, GeometrySpec.
+- Verification: targeted `node --import ./tests/setup_test_environment.mjs --test tests/core_pipeline.test.mjs` passes. Direct GLB parsing on both a local generation job and a latest-server workspace regeneration found `lineCount: 0` and `thinCount: 0` for visible meshes under the 1.15 mm threshold. Browser initially loaded `http://127.0.0.1:8783/?cacheBust=thickness-p1` with title `Forge` and no console warnings/errors, but a later Browser reload on the same port was blocked by Browser URL policy, so final visual reload evidence is limited to data-level GLB validation and the first page health check.
+- Boundary: this keeps `ProductPlan`, `GeometrySpec`, artifact keys, semantic node prefixes, STL/STEP generation, Codex runtime, and UI layout unchanged. It only changes the generated GLB preview geometry used to visualize existing route/feature/module semantics.
+
 ### 2026-06-06 - Forge Mac Right Inspector Bubble
 
 - Scope: make the Mac right inspector render as one large native/glass bubble matching the left-side large surface and remove the separate vertical system splitter between the center thread and right inspector. The 3D preview, plan summary, BOM, and risk sections now sit inside that shared bubble with natural spacing instead of divider lines or separate rounded cards on a gray pane.

@@ -1,3 +1,5 @@
+import { getComponentDescriptor } from "./component_library.mjs";
+import { componentTypeForProductPlanComponentId } from "./component_selection.mjs";
 import { matchModules } from "./module_catalog.mjs";
 import { createProductSpec } from "./product_spec.mjs";
 import { estimateQuote } from "./quote_estimator.mjs";
@@ -72,6 +74,11 @@ export function createEmptyProductPlan() {
         depthDeltaMm: 0,
         bezelDeltaMm: 0
       }
+    },
+    componentPreferences: {},
+    componentLibrary: {
+      version: "product_plan_component_library_v1",
+      descriptors: []
     },
     assumptions: [
       "Using off-the-shelf development board.",
@@ -464,8 +471,19 @@ function addStructuredRisks(riskReport, productPlan) {
 }
 
 function applyComponentChange(productPlan, item = {}, mode) {
-  const componentType = normalizeComponentType(item.componentType || item.type);
+  const componentType = normalizeComponentType(
+    item.componentType
+    || item.type
+    || componentTypeForProductPlanComponentId(item.componentId, productPlan)
+    || componentTypeForId(item.componentId)
+  );
   const quantity = Number.isFinite(Number(item.quantity)) ? Math.max(1, Number(item.quantity)) : 1;
+  const preferenceKey = componentPreferenceKey(componentType);
+  if (item.componentId && preferenceKey) {
+    productPlan.componentPreferences ||= {};
+    if (mode === "add") productPlan.componentPreferences[preferenceKey] = item.componentId;
+    else delete productPlan.componentPreferences[preferenceKey];
+  }
   if (componentType === "button") {
     productPlan.requirements.buttons = mode === "remove" ? 0 : quantity;
     return;
@@ -511,6 +529,7 @@ function normalizeComponentType(value) {
     ambient: "ambient_sensor",
     sensor: "ambient_sensor",
     ambient_light_sensor: "ambient_sensor",
+    interface: "usb_c",
     usb: "usb_c",
     usbc: "usb_c",
     usb_c_power: "usb_c",
@@ -518,6 +537,26 @@ function normalizeComponentType(value) {
     audio: "speaker"
   };
   return map[normalized] || normalized;
+}
+
+function componentTypeForId(componentId) {
+  const descriptor = getComponentDescriptor(componentId);
+  return descriptor?.identity?.category || descriptor?.type || descriptor?.category || "";
+}
+
+function componentPreferenceKey(componentType) {
+  const map = {
+    core_board: "core_board",
+    display: "display",
+    usb_c: "usb_c",
+    ambient_sensor: "ambient_sensor",
+    button: "button",
+    buzzer: "speaker",
+    speaker: "speaker",
+    camera: "camera",
+    battery: "battery"
+  };
+  return map[componentType] || "";
 }
 
 function assertSafePatch(patch = {}) {

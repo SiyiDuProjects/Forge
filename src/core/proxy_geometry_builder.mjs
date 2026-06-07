@@ -1,3 +1,5 @@
+const PROXY_MARKER_THICKNESS_MM = 1.2;
+
 export function buildDisplayProxy(builder, module) {
   const context = moduleContext(module);
   const position = context.position;
@@ -14,13 +16,15 @@ export function buildDisplayProxy(builder, module) {
     sizeMm: {
       width: Math.max(1, dimensions.width - 5),
       height: Math.max(1, dimensions.height - 5),
-      depth: 0.8
+      depth: PROXY_MARKER_THICKNESS_MM
     },
-    centerMm: { ...position, z: Number(position.z || 0) + dimensions.depth / 2 + 0.45 },
+    centerMm: { ...position, z: Number(position.z || 0) + dimensions.depth / 2 + PROXY_MARKER_THICKNESS_MM / 2 },
     material: 9,
     extras: { ...context.extras, role: "screen_glass" }
   });
   buildConnectorMarkers(builder, module);
+  buildKeepoutMarkers(builder, module);
+  buildAccessVolumeMarkers(builder, module);
 }
 
 export function buildPcbProxy(builder, module) {
@@ -97,13 +101,14 @@ export function buildSensorProxy(builder, module) {
   builder.addCylinderNode({
     name: `${context.name}.lens`,
     radiusMm: 2.2,
-    heightMm: 1,
-    centerMm: { ...position, z: Number(position.z || 0) + dimensions.depth / 2 + 0.5 },
+    heightMm: PROXY_MARKER_THICKNESS_MM,
+    centerMm: { ...position, z: Number(position.z || 0) + dimensions.depth / 2 + PROXY_MARKER_THICKNESS_MM / 2 },
     material: 9,
     extras: { ...context.extras, role: "sensor_lens" }
   });
   buildConnectorMarkers(builder, module);
   buildKeepoutMarkers(builder, module);
+  buildAccessVolumeMarkers(builder, module);
 }
 
 export function buildSpeakerProxy(builder, module) {
@@ -120,6 +125,7 @@ export function buildSpeakerProxy(builder, module) {
   });
   buildConnectorMarkers(builder, module);
   buildKeepoutMarkers(builder, module);
+  buildAccessVolumeMarkers(builder, module);
 }
 
 export function buildCameraProxy(builder, module) {
@@ -175,6 +181,7 @@ export function buildButtonProxy(builder, module) {
   });
   buildConnectorMarkers(builder, module);
   buildKeepoutMarkers(builder, module);
+  buildAccessVolumeMarkers(builder, module);
 }
 
 export function buildMountingHoleMarkers(builder, module) {
@@ -187,7 +194,7 @@ export function buildMountingHoleMarkers(builder, module) {
     builder.addCylinderNode({
       name: `${context.name}.mount.${safeNodeName(holeId)}`,
       radiusMm: Number(hole.diameterMm || module.mounting?.holeDiameterMm || 2.4) / 2,
-      heightMm: 0.8,
+      heightMm: PROXY_MARKER_THICKNESS_MM,
       centerMm: center,
       material: 14,
       extras: {
@@ -237,6 +244,7 @@ export function buildKeepoutMarkers(builder, module) {
       extras: {
         ...context.extras,
         role: "keepout_marker",
+        constraintSource: "component_descriptor_v2.keepouts",
         keepoutId: keepout.id,
         keepoutType: keepout.type,
         directEditingAllowed: false
@@ -258,6 +266,7 @@ export function buildAccessVolumeMarkers(builder, module) {
       extras: {
         ...context.extras,
         role: "access_volume_marker",
+        constraintSource: "component_descriptor_v2.accessVolumes",
         accessVolumeId: access.id,
         connectorId: access.connectorId,
         directEditingAllowed: false
@@ -297,6 +306,7 @@ function moduleContext(module) {
       moduleId: componentId,
       descriptorVersion: module.componentDescriptorVersion,
       descriptorPath: module.descriptorPath,
+      sourcesPath: module.sourcesPath,
       assetQuality: module.assetQuality,
       validationStatus: module.validationStatus,
       role: module.role,
